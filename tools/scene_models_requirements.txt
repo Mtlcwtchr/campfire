@@ -1,0 +1,4 @@
+# Offline model preparation; Python >= 3.12. Runtime C++ has no Python dependency.
+numpy==2.5.3
+Pillow==12.3.0
+

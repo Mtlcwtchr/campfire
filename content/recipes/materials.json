@@ -1,0 +1,38 @@
+[
+  {
+    "name": "bundle_thatch", "label": "Bundle thatch", "category": "crafting",
+    "inputs": [{ "item": "plant_fiber", "count": 5 }],
+    "outputs": [{ "item": "thatch", "count": 2 }],
+    "work": 55, "knowledge": "thatching"
+  },
+  {
+    "name": "weave_linen", "label": "Weave linen", "category": "crafting",
+    "inputs": [{ "item": "plant_fiber", "count": 6 }],
+    "outputs": [{ "item": "linen_cloth", "count": 2 }],
+    "work": 150, "knowledge": "weaving"
+  },
+  {
+    "name": "make_loincloth", "label": "Make a loincloth", "category": "crafting",
+    "inputs": [{ "item": "plant_fiber", "count": 2 }],
+    "outputs": [{ "item": "loincloth", "count": 1 }],
+    "work": 35, "knowledge": "sewing"
+  },
+  {
+    "name": "sew_tunic", "label": "Sew a tunic", "category": "crafting",
+    "inputs": [{ "item": "linen_cloth", "count": 2 }],
+    "outputs": [{ "item": "linen_tunic", "count": 1 }],
+    "work": 120, "tool": "needle", "knowledge": "sewing"
+  },
+  {
+    "name": "sew_hide_cloak", "label": "Sew a hide cloak", "category": "crafting",
+    "inputs": [{ "item": "hide", "count": 2 }, { "item": "plant_fiber", "count": 2 }],
+    "outputs": [{ "item": "hide_cloak", "count": 1 }],
+    "work": 140, "tool": "needle", "knowledge": "sewing"
+  },
+  {
+    "name": "split_planks", "label": "Split logs", "category": "crafting",
+    "inputs": [{ "item": "wood_log", "count": 1 }],
+    "outputs": [{ "item": "branch", "count": 4 }],
+    "work": 70, "tool": "axe", "knowledge": "carpentry"
+  }
+]

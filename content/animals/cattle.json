@@ -1,0 +1,42 @@
+[
+  {
+    "_comment": "Aurochs. The wild cattle the herds came out of - big, bad-tempered and worth four deer dead. A calf taken young is the beginning of a herd, which is the only reason anybody goes near one (D111).",
+    "name": "aurochs",
+    "label": "Aurochs",
+    "wild": true,
+    "wild_capacity": 18,
+    "size_metres": 1.5,
+    "adult_age_days": 700,
+    "max_age_days": 5000,
+    "breed_interval_days": 340,
+    "breeding_stock": 6,
+    "tames_into": "cattle",
+    "hunt": [
+      { "item": "beef_raw", "count": 30 },
+      { "item": "hide", "count": 4 }
+    ],
+    "hunt_work": 190,
+    "hunt_tool": "spear"
+  },
+  {
+    "_comment": "Cattle. Slow to breed and expensive to keep, and worth it: a cow gives milk through most of the year and one beast dead feeds a household for a fortnight. A herd is the largest thing a community owns.",
+    "name": "cattle",
+    "label": "Cattle",
+    "knowledge": "herding",
+    "size_metres": 1.4,
+    "adult_age_days": 640,
+    "max_age_days": 5000,
+    "milk_interval_days": 2,
+    "breed_interval_days": 320,
+    "breeding_stock": 4,
+    "milk": [
+      { "item": "sheep_milk", "count": 5 }
+    ],
+    "slaughter": [
+      { "item": "beef_raw", "count": 26 },
+      { "item": "hide", "count": 4 }
+    ],
+    "milk_work": 24,
+    "slaughter_work": 120
+  }
+]

@@ -1,0 +1,87 @@
+[
+  {
+    "_comment": "Wild horses on the open grass. Nothing on foot catches one, so they are hunted where the ground closes in - and a foal taken young is worth more than any number of them dead (D111).",
+    "name": "wild_horse",
+    "label": "Wild horse",
+    "wild": true,
+    "wild_capacity": 22,
+    "size_metres": 1.3,
+    "adult_age_days": 640,
+    "max_age_days": 5000,
+    "breed_interval_days": 340,
+    "breeding_stock": 8,
+    "tames_into": "horse",
+    "hunt": [
+      { "item": "beef_raw", "count": 20 },
+      { "item": "hide", "count": 3 }
+    ],
+    "hunt_work": 200,
+    "hunt_tool": "bow"
+  },
+  {
+    "_comment": "The horse of the steppe peoples: milked through the summer, eaten when it is old, and worth keeping through a winter that would kill a herd of anything else. A community with horses can hold ground no walking people can reach.",
+    "name": "horse",
+    "label": "Horse",
+    "knowledge": "herding",
+    "size_metres": 1.3,
+    "adult_age_days": 600,
+    "max_age_days": 5000,
+    "milk_interval_days": 3,
+    "breed_interval_days": 330,
+    "breeding_stock": 5,
+    "milk": [
+      { "item": "sheep_milk", "count": 3 }
+    ],
+    "slaughter": [
+      { "item": "beef_raw", "count": 20 },
+      { "item": "hide", "count": 3 }
+    ],
+    "milk_work": 26,
+    "slaughter_work": 110
+  },
+  {
+    "_comment": "Wild yak, on the cold high ground where nothing else grazes. Slow and heavy, and the one large animal a mountain country carries.",
+    "name": "wild_yak",
+    "label": "Wild yak",
+    "wild": true,
+    "wild_capacity": 14,
+    "size_metres": 1.4,
+    "adult_age_days": 700,
+    "max_age_days": 5000,
+    "breed_interval_days": 360,
+    "breeding_stock": 5,
+    "tames_into": "yak",
+    "hunt": [
+      { "item": "beef_raw", "count": 26 },
+      { "item": "hide", "count": 4 }
+    ],
+    "hunt_work": 200,
+    "hunt_tool": "spear"
+  },
+  {
+    "_comment": "The yak a highland people keeps: wool off it twice a year, milk enough for cheese, and it grazes ground where a sheep would find nothing. Everything a mountain community needs comes off one animal because nothing else lives up there.",
+    "name": "yak",
+    "label": "Yak",
+    "knowledge": "herding",
+    "size_metres": 1.35,
+    "adult_age_days": 660,
+    "max_age_days": 5000,
+    "shear_interval_days": 120,
+    "milk_interval_days": 3,
+    "breed_interval_days": 350,
+    "breeding_stock": 5,
+    "shear": [
+      { "item": "wool", "count": 6 }
+    ],
+    "milk": [
+      { "item": "sheep_milk", "count": 3 }
+    ],
+    "slaughter": [
+      { "item": "beef_raw", "count": 22 },
+      { "item": "hide", "count": 4 }
+    ],
+    "shear_work": 60,
+    "milk_work": 24,
+    "slaughter_work": 115
+  }
+]

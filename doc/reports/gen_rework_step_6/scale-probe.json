@@ -1,0 +1,303 @@
+{
+  "domain": "bounded macro composition and land coverage only",
+  "measurements": [
+    {
+      "belt_lipschitz_m_per_m": 11.63017966382022,
+      "cells": {
+        "land": 33857,
+        "mixed": 32585,
+        "open_water": 87222
+      },
+      "coarse_step_m": 256,
+      "composition_image": "build/step6/c-100km.ppm",
+      "continent_percentiles": {
+        "p05": 0.1601734161376953,
+        "p50": 0.32653722167015076,
+        "p95": 0.5890312194824219
+      },
+      "coverage_bytes": 1639592,
+      "descriptor_fingerprint": 2065194378269783844,
+      "elevation_ceiling_m": 2506.221942521502,
+      "elevation_percentiles_m": {
+        "p01": -179.22894287109375,
+        "p25": -122.51710510253906,
+        "p50": -77.48808288574219,
+        "p75": -19.31444549560547,
+        "p95": 907.5299682617188,
+        "p999": 1809.070068359375
+      },
+      "land_share": 0.3799979175343607,
+      "local_queries_answering_land": 20000,
+      "milliseconds": {
+        "classify_every_cell": 401.737875,
+        "coverage_pyramid": 0.467959,
+        "field": 0.050083,
+        "overview": 61.042125,
+        "twenty_thousand_local_queries": 0.153458
+      },
+      "open_water_share": 0.5676150562265723,
+      "overview": {
+        "bytes": 3073280,
+        "cell_m": [
+          255.10204081632654,
+          255.10204081632654
+        ],
+        "columns": 392,
+        "rows": 392
+      },
+      "sea_level_raw_m": -48.50112533569336,
+      "seed": 42,
+      "side_km": 100.0,
+      "streaming": {
+        "budget_bytes": 67108864,
+        "domain": "surface pages only; no mesh, no materials, no hydrology",
+        "field_samples": 107973656,
+        "held_within_budget": true,
+        "horizon_level": 4,
+        "horizon_page_extent_m": 8192,
+        "milliseconds": 13297.117458,
+        "overview_and_pyramid_bytes": 4712872,
+        "page_requests": 33050,
+        "pages_derived": 6104,
+        "pages_evicted": 5630,
+        "pages_hit": 26946,
+        "pages_refused_open_water": 0,
+        "peak_resident_page_bytes": 67107024,
+        "steps": 200,
+        "teleports": 4,
+        "total_bytes": 71819896
+      },
+      "total_resident_bytes": 4712872,
+      "transects": {
+        "coast_crossings": 9,
+        "lines": 5,
+        "samples_per_line": 3001,
+        "uplift_systems": 3
+      }
+    },
+    {
+      "belt_lipschitz_m_per_m": 5.841793531942129,
+      "cells": {
+        "land": 322530,
+        "mixed": 65117,
+        "open_water": 568837
+      },
+      "coarse_step_m": 256,
+      "composition_image": "build/step6/c-250km.ppm",
+      "continent_percentiles": {
+        "p05": 0.16249999403953552,
+        "p50": 0.331119179725647,
+        "p95": 0.5939863920211792
+      },
+      "coverage_bytes": 10207240,
+      "descriptor_fingerprint": 4891138397772246282,
+      "elevation_ceiling_m": 2540.2209966044993,
+      "elevation_percentiles_m": {
+        "p01": -301.10498046875,
+        "p25": -268.6259460449219,
+        "p50": -154.28067016601563,
+        "p75": -30.866466522216797,
+        "p95": 524.2738037109375,
+        "p999": 1876.6103515625
+      },
+      "land_share": 0.3800000836396636,
+      "local_queries_answering_land": 20000,
+      "milliseconds": {
+        "classify_every_cell": 2522.420667,
+        "coverage_pyramid": 5.922291,
+        "field": 0.001333,
+        "overview": 568.764292,
+        "twenty_thousand_local_queries": 0.231542
+      },
+      "open_water_share": 0.5947166915494666,
+      "overview": {
+        "bytes": 19129680,
+        "cell_m": [
+          255.6237218813906,
+          255.6237218813906
+        ],
+        "columns": 978,
+        "rows": 978
+      },
+      "sea_level_raw_m": -94.02291107177734,
+      "seed": 42,
+      "side_km": 250.0,
+      "streaming": {
+        "budget_bytes": 67108864,
+        "domain": "surface pages only; no mesh, no materials, no hydrology",
+        "field_samples": 108751972,
+        "held_within_budget": true,
+        "horizon_level": 4,
+        "horizon_page_extent_m": 8192,
+        "milliseconds": 13092.076,
+        "overview_and_pyramid_bytes": 29336920,
+        "page_requests": 32987,
+        "pages_derived": 6148,
+        "pages_evicted": 5674,
+        "pages_hit": 26839,
+        "pages_refused_open_water": 0,
+        "peak_resident_page_bytes": 67107024,
+        "steps": 200,
+        "teleports": 4,
+        "total_bytes": 96443944
+      },
+      "total_resident_bytes": 29336920,
+      "transects": {
+        "coast_crossings": 10,
+        "lines": 5,
+        "samples_per_line": 3001,
+        "uplift_systems": 3
+      }
+    },
+    {
+      "belt_lipschitz_m_per_m": 2.149406292075665,
+      "cells": {
+        "land": 332189,
+        "mixed": 39781,
+        "open_water": 584514
+      },
+      "coarse_step_m": 1024,
+      "composition_image": "build/step6/c-1000km.ppm",
+      "continent_percentiles": {
+        "p05": 0.1741444319486618,
+        "p50": 0.33858832716941833,
+        "p95": 0.5936587452888489
+      },
+      "coverage_bytes": 10207240,
+      "descriptor_fingerprint": 18017039818044403936,
+      "elevation_ceiling_m": 2714.7436295566304,
+      "elevation_percentiles_m": {
+        "p01": -1173.7181396484375,
+        "p25": -973.5618896484375,
+        "p50": -540.1178588867188,
+        "p75": -76.30621337890625,
+        "p95": 352.5003356933594,
+        "p999": 2037.45751953125
+      },
+      "land_share": 0.3800000836396636,
+      "local_queries_answering_land": 5274,
+      "milliseconds": {
+        "classify_every_cell": 1314.969417,
+        "coverage_pyramid": 3.302875,
+        "field": 0.001208,
+        "overview": 367.672417,
+        "twenty_thousand_local_queries": 52.539
+      },
+      "open_water_share": 0.6111069291279311,
+      "overview": {
+        "bytes": 19129680,
+        "cell_m": [
+          1022.4948875255624,
+          1022.4948875255624
+        ],
+        "columns": 978,
+        "rows": 978
+      },
+      "sea_level_raw_m": -271.5698547363281,
+      "seed": 42,
+      "side_km": 1000.0,
+      "streaming": {
+        "budget_bytes": 67108864,
+        "domain": "surface pages only; no mesh, no materials, no hydrology",
+        "field_samples": 29505252,
+        "held_within_budget": true,
+        "horizon_level": 4,
+        "horizon_page_extent_m": 8192,
+        "milliseconds": 3482.785541,
+        "overview_and_pyramid_bytes": 29336920,
+        "page_requests": 32986,
+        "pages_derived": 1668,
+        "pages_evicted": 1194,
+        "pages_hit": 9631,
+        "pages_refused_open_water": 21687,
+        "peak_resident_page_bytes": 67107024,
+        "steps": 200,
+        "teleports": 4,
+        "total_bytes": 96443944
+      },
+      "total_resident_bytes": 29336920,
+      "transects": {
+        "coast_crossings": 9,
+        "lines": 5,
+        "samples_per_line": 3001,
+        "uplift_systems": 6
+      }
+    },
+    {
+      "belt_lipschitz_m_per_m": 0.6687762644647997,
+      "cells": {
+        "land": 315329,
+        "mixed": 101324,
+        "open_water": 631923
+      },
+      "coarse_step_m": 2048,
+      "composition_image": "build/step6/c-10000km.ppm",
+      "continent_percentiles": {
+        "p05": 0.14376747608184814,
+        "p50": 0.3586671054363251,
+        "p95": 0.5509805083274841
+      },
+      "coverage_bytes": 11184808,
+      "descriptor_fingerprint": 12894610832480924431,
+      "elevation_ceiling_m": 3260.0,
+      "elevation_percentiles_m": {
+        "p01": -3900.0,
+        "p25": -3443.395751953125,
+        "p50": -1294.807373046875,
+        "p75": -147.30433654785156,
+        "p95": 535.07177734375,
+        "p999": 2052.12109375
+      },
+      "land_share": 0.38000011444091797,
+      "local_queries_answering_land": 0,
+      "milliseconds": {
+        "classify_every_cell": 1682.524875,
+        "coverage_pyramid": 3.507959,
+        "field": 0.001125,
+        "overview": 742.160791,
+        "twenty_thousand_local_queries": 60.607125
+      },
+      "open_water_share": 0.6026487350463867,
+      "overview": {
+        "bytes": 20971520,
+        "cell_m": [
+          9765.625,
+          9765.625
+        ],
+        "columns": 1024,
+        "rows": 1024
+      },
+      "sea_level_raw_m": -564.1138916015625,
+      "seed": 42,
+      "side_km": 10000.0,
+      "streaming": {
+        "budget_bytes": 67108864,
+        "domain": "surface pages only; no mesh, no materials, no hydrology",
+        "field_samples": 35749469,
+        "held_within_budget": true,
+        "horizon_level": 4,
+        "horizon_page_extent_m": 8192,
+        "milliseconds": 5717.742625,
+        "overview_and_pyramid_bytes": 32156328,
+        "page_requests": 33023,
+        "pages_derived": 2021,
+        "pages_evicted": 1547,
+        "pages_hit": 8952,
+        "pages_refused_open_water": 22050,
+        "peak_resident_page_bytes": 67107024,
+        "steps": 200,
+        "teleports": 4,
+        "total_bytes": 99263352
+      },
+      "total_resident_bytes": 32156328,
+      "transects": {
+        "coast_crossings": 11,
+        "lines": 5,
+        "samples_per_line": 3001,
+        "uplift_systems": 12
+      }
+    }
+  ],
+  "not_measured": "terrain generation, erosion, meshes, streaming",
+  "overview_side_limit": 1024
+}

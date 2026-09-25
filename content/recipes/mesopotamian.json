@@ -1,0 +1,105 @@
+[
+  {
+    "_comment": "Moulded from silt and chopped reed, then fired. The kiln is what stands between a community and a brick house: until one is built, the roof over anybody is reed.",
+    "name": "make_mudbrick",
+    "label": "Mould mud brick",
+    "category": "crafting",
+    "inputs": [
+      {
+        "item": "clay",
+        "count": 4
+      },
+      {
+        "item": "reed",
+        "count": 2
+      }
+    ],
+    "outputs": [
+      {
+        "item": "mudbrick",
+        "count": 6
+      }
+    ],
+    "work": 95,
+    "knowledge": "brickmaking",
+    "workplace": "kiln"
+  },
+  {
+    "name": "thresh_emmer",
+    "label": "Thresh emmer",
+    "category": "farming",
+    "inputs": [
+      {
+        "item": "emmer_ears",
+        "count": 20
+      }
+    ],
+    "outputs": [
+      {
+        "item": "grain",
+        "count": 15
+      }
+    ],
+    "work": 55,
+    "knowledge": "threshing"
+  },
+  {
+    "name": "weave_reed_mat",
+    "label": "Weave reed matting",
+    "category": "crafting",
+    "inputs": [
+      {
+        "item": "reed",
+        "count": 6
+      }
+    ],
+    "outputs": [
+      {
+        "item": "thatch",
+        "count": 3
+      }
+    ],
+    "work": 50,
+    "knowledge": "reedwork"
+  },
+  {
+    "name": "fire_clay_sickle",
+    "label": "Fire a clay sickle",
+    "category": "crafting",
+    "inputs": [
+      {
+        "item": "clay",
+        "count": 3
+      }
+    ],
+    "outputs": [
+      {
+        "item": "clay_sickle",
+        "count": 1
+      }
+    ],
+    "work": 110,
+    "workplace": "kiln",
+    "knowledge": "pottery"
+  },
+  {
+    "name": "shape_quern_from_clay",
+    "label": "Fire a grinding stone",
+    "category": "crafting",
+    "inputs": [
+      {
+        "item": "clay",
+        "count": 8
+      }
+    ],
+    "outputs": [
+      {
+        "item": "quern_stone",
+        "count": 1
+      }
+    ],
+    "work": 200,
+    "workplace": "kiln",
+    "knowledge": "pottery"
+  }
+]

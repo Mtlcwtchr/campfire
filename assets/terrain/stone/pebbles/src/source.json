@@ -1,0 +1,24 @@
+{
+  "site": "polyhaven",
+  "asset_id": "clean_pebbles",
+  "asset_url": "https://polyhaven.com/a/clean_pebbles",
+  "license": "CC0",
+  "authors": [
+    "Charlotte Baglioni",
+    "Dario Barresi"
+  ],
+  "attribution_required": false,
+  "original_physical_metres": [
+    2.0,
+    2.0
+  ],
+  "runtime_world_scale": 1.6,
+  "resolution": "2k",
+  "files": {
+    "diffuse": "river_pebbles_diffuse.png",
+    "normal": "river_pebbles_normal.png",
+    "displacement": "river_pebbles_displacement.png",
+    "rough": "river_pebbles_rough.png",
+    "ao": "river_pebbles_ao.png"
+  }
+}

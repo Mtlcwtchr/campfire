@@ -1,0 +1,24 @@
+{
+  "site": "polyhaven",
+  "asset_id": "leafy_grass",
+  "asset_url": "https://polyhaven.com/a/leafy_grass",
+  "license": "CC0",
+  "authors": [
+    "Charlotte Baglioni"
+  ],
+  "attribution_required": false,
+  "original_physical_metres": [
+    2.0,
+    2.0
+  ],
+  "runtime_world_scale": 2.4,
+  "resolution": "2k",
+  "files": {
+    "diffuse": "grass_lush_diffuse.png",
+    "normal": "grass_lush_normal.png",
+    "displacement": "grass_lush_displacement.png",
+    "rough": "grass_lush_rough.png",
+    "ao": "grass_lush_ao.png",
+    "mask": "grass_lush_mask.png"
+  }
+}

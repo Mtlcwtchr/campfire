@@ -1,0 +1,14 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Headless (10 years)" type="CMakeRunConfiguration" factoryName="Application"
+                 PROGRAM_PARAMS="--days 600 --seed 11 --map 140 --status-every 3600 --no-invariants"
+                 REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false"
+                 EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true"
+                 PROJECT_NAME="ancient_settlement" TARGET_NAME="sim_runner"
+                 CONFIG_NAME="RelWithDebInfo"
+                 RUN_TARGET_PROJECT_NAME="ancient_settlement" RUN_TARGET_NAME="sim_runner"
+                 WORKING_DIR="$PROJECT_DIR$">
+    <method v="2">
+      <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+    </method>
+  </configuration>
+</component>

@@ -1,0 +1,652 @@
+[
+  {
+    "_comment": "The library of physical surfaces the world is made of. A biome is not a texture here - it is a handful of these mixed by weight, tinted, and pushed about by moisture, height, slope and macro noise (see content/config/biomes.json). That is the whole reason there are twenty-six of these and not one for each of the eighteen biomes: a hundred and eighty unique paintings is a memory bill and a style that drifts, and it still would not cover the ground between two biomes.\n\nEach entry says where the picture came from, how big a piece of the world it is a picture of, and how the renderer is allowed to bend it. `source` is what the downloader (tools/fetch_terrain.py) needs and what the licence audit reads; everything after it is look, and look is meant to be moved without touching a shader.\n\nWhat the numbers mean:\n  world_scale          metres of ground one turn of the texture covers. Start it near the asset's own physical size - the downloader records that in source.json - or the ground reads at the wrong scale and no amount of tinting fixes it.\n  tint                 multiplied into the albedo. A biome tints on top of this.\n  saturation           pulled towards grey. Poly Haven scans are photographs and photographs are more colourful than a game world can afford beside its own units.\n  normal_strength      how far the surface is allowed to tilt the light. Terrain is the quietest thing in the picture on purpose.\n  ao_strength          how much of the baked occlusion is used.\n  roughness_multiplier scales the roughness channel.\n  height_strength      how hard this material's own relief competes for the surface where two materials meet. Sand fills the hollows between stones because stone's height wins on the high ground and loses in the dips.\n  slope_preference     nought lies flat, one clings to steep ground. What brings rock out on a hillside without anybody painting it there.\n  moisture_response    how much being wet darkens it and drops its roughness.\n  snow_compatibility   how readily snow settles on it. Steep rock keeps less than flat moss.",
+    "id": "grass_lush",
+    "group": "grass/lush",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "leafy_grass",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 2.4,
+    "tint": [
+      0.94,
+      1.06,
+      0.9
+    ],
+    "saturation": 0.98,
+    "normal_strength": 0.42,
+    "ao_strength": 0.35,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.55,
+    "slope_preference": 0.05,
+    "moisture_response": 0.55,
+    "snow_compatibility": 0.9
+  },
+  {
+    "_comment": "The one material the most of the world is made of. Steppe, forest-steppe, tundra out of snow, the Mediterranean, savanna, and every fade from grass to bare soil.",
+    "id": "grass_sparse",
+    "group": "grass/sparse",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "sparse_grass",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 2.6,
+    "tint": [
+      0.97,
+      1.04,
+      0.92
+    ],
+    "saturation": 0.95,
+    "normal_strength": 0.5,
+    "ao_strength": 0.4,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.45,
+    "slope_preference": 0.2,
+    "moisture_response": 0.5,
+    "snow_compatibility": 0.95
+  },
+  {
+    "_comment": "Dry grass, once. A second and a third dry grass would be three paintings of the same thing; the season and the biome move the tint instead.",
+    "id": "grass_dry",
+    "group": "grass/dry",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "withered_grass",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 2.4,
+    "tint": [
+      1.04,
+      1.0,
+      0.86
+    ],
+    "saturation": 0.94,
+    "normal_strength": 0.45,
+    "ao_strength": 0.35,
+    "roughness_multiplier": 1.05,
+    "height_strength": 0.45,
+    "slope_preference": 0.2,
+    "moisture_response": 0.6,
+    "snow_compatibility": 0.9
+  },
+  {
+    "id": "soil_base",
+    "group": "soil/base",
+    "_comment": "The neutral bare earth: paths, settlements, the floor under everything else, and what a worn-out pasture becomes.",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "dirt",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 2.0,
+    "tint": [
+      1.02,
+      1.0,
+      0.97
+    ],
+    "saturation": 0.94,
+    "normal_strength": 0.5,
+    "ao_strength": 0.4,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.4,
+    "slope_preference": 0.25,
+    "moisture_response": 0.7,
+    "snow_compatibility": 0.9
+  },
+  {
+    "id": "soil_fertile",
+    "group": "soil/fertile",
+    "_comment": "Darker than soil_base and meant to stay darker: river valleys, floodplain, the ground a broadleaf wood stands on. Moisture darkens it further and takes the roughness down.",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "forest_ground_06",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 2.2,
+    "tint": [
+      0.94,
+      0.9,
+      0.86
+    ],
+    "saturation": 0.94,
+    "normal_strength": 0.5,
+    "ao_strength": 0.45,
+    "roughness_multiplier": 0.95,
+    "height_strength": 0.4,
+    "slope_preference": 0.1,
+    "moisture_response": 0.85,
+    "snow_compatibility": 0.9
+  },
+  {
+    "id": "soil_tilled",
+    "group": "soil/tilled",
+    "_comment": "Worked ground where the working does not need a direction to it: garden plots and small fields.",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "raked_dirt",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 1.8,
+    "tint": [
+      1.0,
+      0.99,
+      0.97
+    ],
+    "saturation": 0.9,
+    "normal_strength": 0.55,
+    "ao_strength": 0.4,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.5,
+    "slope_preference": 0.0,
+    "moisture_response": 0.75,
+    "snow_compatibility": 0.9
+  },
+  {
+    "id": "soil_furrows",
+    "group": "soil/furrows",
+    "_comment": "And where it does: ploughed field, furrows readable. Laid with the direction of the field rather than with the world, which is why it is its own material and not a variant of soil_tilled.",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "farm_furrows",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 3.0,
+    "tint": [
+      1.0,
+      0.99,
+      0.97
+    ],
+    "saturation": 0.9,
+    "normal_strength": 0.6,
+    "ao_strength": 0.45,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.65,
+    "slope_preference": 0.0,
+    "moisture_response": 0.75,
+    "snow_compatibility": 0.9
+  },
+  {
+    "id": "mud_wet",
+    "group": "soil/mud_wet",
+    "_comment": "Marsh, the wet bank, the floodplain while the water is on it and for a while after. The material a flooded surface walks towards and walks back from (see the state machine in biomes.json).",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "mud_forest",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 2.0,
+    "tint": [
+      0.95,
+      0.95,
+      0.88
+    ],
+    "saturation": 0.92,
+    "normal_strength": 0.45,
+    "ao_strength": 0.4,
+    "roughness_multiplier": 0.7,
+    "height_strength": 0.35,
+    "slope_preference": 0.0,
+    "moisture_response": 1.0,
+    "snow_compatibility": 0.8
+  },
+  {
+    "id": "mud_cracked",
+    "group": "soil/mud_cracked",
+    "_comment": "Where water used to be and is not: seasonal lakes gone dry, an abandoned channel, clay pans. Not a desert material - a desert with cracked clay all over it is a desert that used to be a lake all over, which is a lie about the country.",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "mud_cracked_dry_riverbed_002",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 2.6,
+    "tint": [
+      1.0,
+      0.99,
+      0.96
+    ],
+    "saturation": 0.9,
+    "normal_strength": 0.55,
+    "ao_strength": 0.45,
+    "roughness_multiplier": 1.05,
+    "height_strength": 0.6,
+    "slope_preference": 0.0,
+    "moisture_response": 0.9,
+    "snow_compatibility": 0.85
+  },
+  {
+    "id": "sand_dry",
+    "group": "sand/dry",
+    "_comment": "Desert, sandy semi-desert, dunes, dry river wash.",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "sand_01",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 1.6,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 0.9,
+    "normal_strength": 0.35,
+    "ao_strength": 0.25,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.25,
+    "slope_preference": 0.0,
+    "moisture_response": 0.8,
+    "snow_compatibility": 0.9
+  },
+  {
+    "id": "sand_coast",
+    "group": "sand/coast",
+    "_comment": "The sea beach, and the best material in the set for open ground: it is an aerial scan, so one turn of it is tens of metres of world and the repeat is hard to find. Worth its world_scale being large.",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "aerial_beach_02",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 16.0,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 0.9,
+    "normal_strength": 0.3,
+    "ao_strength": 0.25,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.3,
+    "slope_preference": 0.0,
+    "moisture_response": 0.85,
+    "snow_compatibility": 0.9
+  },
+  {
+    "id": "sand_wet",
+    "group": "sand/wet",
+    "_comment": "The waterline itself and the sand the water has just been over.",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "sand_02",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 1.8,
+    "tint": [
+      0.94,
+      0.93,
+      0.9
+    ],
+    "saturation": 0.9,
+    "normal_strength": 0.35,
+    "ao_strength": 0.3,
+    "roughness_multiplier": 0.75,
+    "height_strength": 0.3,
+    "slope_preference": 0.0,
+    "moisture_response": 1.0,
+    "snow_compatibility": 0.85
+  },
+  {
+    "id": "sand_coast_rocky",
+    "group": "sand/coast_rocky",
+    "_comment": "The stonier shore, as an alternative to sand_coast rather than a companion to it. Both need not be resident at once. Another aerial scan - fifteen metres of real beach - so it is laid wide for the same reason sand_coast is.",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "coast_sand_01",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 12.0,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 0.9,
+    "normal_strength": 0.45,
+    "ao_strength": 0.35,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.45,
+    "slope_preference": 0.05,
+    "moisture_response": 0.9,
+    "snow_compatibility": 0.9
+  },
+  {
+    "id": "gravel",
+    "group": "stone/gravel",
+    "_comment": "Mountain ground, dry channels, worn paths, stony steppe, and the step between soil and rock.",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "gravel_ground_01",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 2.0,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 0.9,
+    "normal_strength": 0.6,
+    "ao_strength": 0.45,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.7,
+    "slope_preference": 0.5,
+    "moisture_response": 0.6,
+    "snow_compatibility": 0.7
+  },
+  {
+    "id": "river_pebbles",
+    "group": "stone/pebbles",
+    "_comment": "River beds, shingle banks, the bottom of shallow water. This one has to read through water, so its own contrast matters more than most.",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "clean_pebbles",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 1.6,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 0.9,
+    "normal_strength": 0.55,
+    "ao_strength": 0.45,
+    "roughness_multiplier": 0.9,
+    "height_strength": 0.7,
+    "slope_preference": 0.1,
+    "moisture_response": 0.95,
+    "snow_compatibility": 0.7
+  },
+  {
+    "id": "rock_ground",
+    "group": "stone/rock",
+    "_comment": "Mountains, high ground, rock plateaus, stony waste, and the last of the ground before a real cliff face starts.",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "rock_ground",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 2.6,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 0.9,
+    "normal_strength": 0.65,
+    "ao_strength": 0.5,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.85,
+    "slope_preference": 0.85,
+    "moisture_response": 0.5,
+    "snow_compatibility": 0.5
+  },
+  {
+    "id": "rock_ground_mossy",
+    "group": "stone/rock_mossy",
+    "_comment": "The same stone where it rains: taiga, tundra, alpine transitions, wet gorges.",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "rock_ground_02",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 2.6,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 0.9,
+    "normal_strength": 0.6,
+    "ao_strength": 0.5,
+    "roughness_multiplier": 0.95,
+    "height_strength": 0.8,
+    "slope_preference": 0.7,
+    "moisture_response": 0.7,
+    "snow_compatibility": 0.75
+  },
+  {
+    "id": "forest_floor_deciduous",
+    "group": "forest/deciduous",
+    "_comment": "Broadleaf and mixed wood, dry litter.",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "forrest_ground_01",
+      "license": "CC0",
+      "attribution_required": false,
+      "_comment": "The asset id really is spelled with two r's. It is not a typo here."
+    },
+    "world_scale": 2.2,
+    "tint": [
+      1.02,
+      1.0,
+      0.94
+    ],
+    "saturation": 0.95,
+    "normal_strength": 0.5,
+    "ao_strength": 0.45,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.5,
+    "slope_preference": 0.15,
+    "moisture_response": 0.7,
+    "snow_compatibility": 0.9
+  },
+  {
+    "id": "forest_floor_conifer",
+    "group": "forest/conifer",
+    "_comment": "Taiga and pine wood, and the fade from wood into tundra.",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "forrest_ground_03",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 2.2,
+    "tint": [
+      0.96,
+      1.02,
+      0.94
+    ],
+    "saturation": 0.94,
+    "normal_strength": 0.5,
+    "ao_strength": 0.45,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.5,
+    "slope_preference": 0.2,
+    "moisture_response": 0.7,
+    "snow_compatibility": 0.92
+  },
+  {
+    "id": "forest_floor_wet",
+    "group": "forest/wet",
+    "_comment": "Wet wood, temperate rainforest, jungle, shaded mossy ground.",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "forest_leaves_02",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 2.0,
+    "tint": [
+      0.92,
+      1.05,
+      0.92
+    ],
+    "saturation": 0.97,
+    "normal_strength": 0.5,
+    "ao_strength": 0.5,
+    "roughness_multiplier": 0.85,
+    "height_strength": 0.5,
+    "slope_preference": 0.1,
+    "moisture_response": 0.9,
+    "snow_compatibility": 0.85
+  },
+  {
+    "id": "snow_clean",
+    "group": "snow/clean",
+    "_comment": "Lying snow: the polar band, high mountains, tundra in winter.",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "snow_01",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 3.0,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 0.9,
+    "normal_strength": 0.3,
+    "ao_strength": 0.25,
+    "roughness_multiplier": 0.8,
+    "height_strength": 0.2,
+    "slope_preference": 0.0,
+    "moisture_response": 0.3,
+    "snow_compatibility": 1.0
+  },
+  {
+    "id": "snow_dirty",
+    "group": "snow/dirty",
+    "_comment": "Snow going: the snowline itself, spring tundra, snow anywhere people walk. What snow_clean fades through on its way to bare ground.",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "snow_03",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 3.0,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 0.9,
+    "normal_strength": 0.35,
+    "ao_strength": 0.3,
+    "roughness_multiplier": 0.85,
+    "height_strength": 0.3,
+    "slope_preference": 0.05,
+    "moisture_response": 0.5,
+    "snow_compatibility": 1.0
+  },
+  {
+    "id": "mesa_red_soil",
+    "group": "mesa/red_soil",
+    "_comment": "Mesa and badlands, red clay, dry subtropical ground.",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "cracked_red_ground",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 2.4,
+    "tint": [
+      1.08,
+      0.96,
+      0.9
+    ],
+    "saturation": 1.0,
+    "normal_strength": 0.5,
+    "ao_strength": 0.4,
+    "roughness_multiplier": 1.05,
+    "height_strength": 0.55,
+    "slope_preference": 0.1,
+    "moisture_response": 0.8,
+    "snow_compatibility": 0.9
+  },
+  {
+    "id": "mesa_red_gravel",
+    "group": "mesa/red_gravel",
+    "_comment": "The stony half of the same country: canyons, red plateaus, the step from red soil to a red cliff.",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "terrain_red_01",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 3.0,
+    "tint": [
+      1.06,
+      0.96,
+      0.92
+    ],
+    "saturation": 1.0,
+    "normal_strength": 0.6,
+    "ao_strength": 0.45,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.75,
+    "slope_preference": 0.6,
+    "moisture_response": 0.6,
+    "snow_compatibility": 0.7
+  },
+  {
+    "_comment": "The two cliff faces. A cliff is not rock_ground stretched up a wall: a vertical surface is looked at edge-on and its texture has to be built for that, which is why these have their own entries and their own geometry (see doc/DECISIONS.md on cliff strips). A biome changes a cliff's tint and its moss, not its picture.",
+    "id": "cliff_generic",
+    "group": "cliff/generic",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "rock_face_03",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 4.0,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 0.9,
+    "normal_strength": 0.7,
+    "ao_strength": 0.5,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.9,
+    "slope_preference": 1.0,
+    "moisture_response": 0.4,
+    "snow_compatibility": 0.2
+  },
+  {
+    "id": "cliff_mossy",
+    "group": "cliff/mossy",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "mossy_rock",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 4.0,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 0.9,
+    "normal_strength": 0.65,
+    "ao_strength": 0.5,
+    "roughness_multiplier": 0.95,
+    "height_strength": 0.85,
+    "slope_preference": 1.0,
+    "moisture_response": 0.6,
+    "snow_compatibility": 0.35
+  }
+]

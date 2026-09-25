@@ -1,0 +1,66 @@
+[
+  {
+    "_comment": "A river-valley people of about 2000 BC. They build in sun-dried brick and reed because the floodplain gives them clay and marsh but almost no timber and no stone; copper comes in by trade, not out of the ground, so smelting is rare knowledge held by one family.",
+    "name": "sumerian",
+    "label": "Sumerian",
+    "language": "emegir",
+    "architecture": "mesopotamian",
+    "biome": "river_valley",
+    "common_knowledge": [
+      "foraging",
+      "firemaking",
+      "hafting",
+      "hunting",
+      "threshing",
+      "tillage",
+      "herding",
+      "weaving",
+      "sewing",
+      "baking",
+      "grinding",
+      "pottery",
+      "dairying",
+      "reedwork",
+      "brickmaking",
+      "flintknapping",
+      "fishing",
+      "herbcraft",
+      "burial"
+    ],
+    "family_knowledge_pool": [
+      "coppersmithing",
+      "masonry"
+    ],
+    "family_knowledge_draws": 1,
+    "base_skill": 3,
+    "specialist_skill": 7,
+    "trades": [
+      "farming",
+      "herding",
+      "crafting",
+      "fishing",
+      "cooking",
+      "construction",
+      "hauling",
+      "foraging",
+      "mining",
+      "hunting",
+      "scouting"
+    ],
+    "crops": [
+      "emmer",
+      "flax"
+    ],
+    "starting_livestock": {
+      "sheep": 8,
+      "cattle": 2,
+      "chicken": 4
+    },
+    "preferred_foods": [
+      "bread",
+      "dates",
+      "cheese",
+      "mutton_cooked"
+    ]
+  }
+]

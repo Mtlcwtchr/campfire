@@ -1,0 +1,28 @@
+{
+  "_comment": [
+    "Настройки активного GPU-рельефа. Перечитываются каждые 0.5 с; ошибки выводятся в stderr без сброса рабочих значений.",
+    "detail_distance_scale: больше = подробный LOD дальше; 1.0 — прежнее поведение, 2.0 — примерно вдвое дальше при том же FOV/разрешении.",
+    "Пороги в пикселях: меньше = подробнее. Нужны 2*coarsen < refine и coarsen <= target <= refine.",
+    "chunk_cells и h8_atlas_side применяются после перезапуска мира/клиента. Остальные параметры — на лету.",
+    "chunk_cells: 16/32/64. Сторона чанка = chunk_cells * шаг геометрии. При 32 ячейках: 512 м для шага 16 м, 256 м для 8 м.",
+    "h8_atlas_side: сторона массива слотов; 16 = 256 страниц, 24 = 576. Если capacity limited, дальность упирается в этот бюджет.",
+    "meshes_per_plan: 1..64, на один проход планировщика, не на кадр. 4 — исходное значение, 8/16 — более крупные порции.",
+    "preload_pages: 0 отключает спекулятивную предзагрузку. look_ahead_seconds не зависит от FPS; max_look_ahead_metres ограничивает прогноз по каждой оси.",
+    "local_detail_height_metres: высота над H16 для локального окна H4; само окно остаётся 200x200 м. upload_mib_per_frame — бюджет страниц, не мешей.",
+    "Подробнее: doc/terrain_lod_config.md"
+  ],
+  "detail_distance_scale": 4.0,
+  "target_triangle_pixels": 96.0,
+  "refine_triangle_pixels": 128.0,
+  "coarsen_triangle_pixels": 48.0,
+  "chunk_cells": 32,
+  "h8_atlas_side": 16,
+  "meshes_per_plan": 4,
+  "preload_pages": 16,
+  "preload_margin_pixels": 32.0,
+  "look_ahead_seconds": 0.2,
+  "max_look_ahead_metres": 512.0,
+  "local_detail_height_metres": 32.0,
+  "upload_mib_per_frame": 8.0
+}
+

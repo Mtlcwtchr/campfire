@@ -1,0 +1,55 @@
+{
+  "id": "snow_dirty",
+  "runtime_size": 2048,
+  "runtime_files": {
+    "albedo": "snow_dirty_albedo.png",
+    "normal": "snow_dirty_normal.png",
+    "properties": "snow_dirty_properties.png"
+  },
+  "properties_channels": {
+    "r": "ao",
+    "g": "roughness",
+    "b": "height",
+    "a": "mask"
+  },
+  "mip_steps": [
+    2,
+    4,
+    8,
+    16
+  ],
+  "height_range_before_stretch": [
+    64.5,
+    255.0
+  ],
+  "had": {
+    "ao": true,
+    "rough": true,
+    "displacement": true,
+    "mask": false
+  },
+  "source": {
+    "site": "polyhaven",
+    "asset_id": "snow_03",
+    "asset_url": "https://polyhaven.com/a/snow_03",
+    "license": "CC0",
+    "authors": [
+      "Rob Tuytel"
+    ],
+    "attribution_required": false,
+    "original_physical_metres": [
+      2.0,
+      2.0
+    ],
+    "runtime_world_scale": 3.0,
+    "resolution": "2k",
+    "files": {
+      "diffuse": "snow_dirty_diffuse.png",
+      "normal": "snow_dirty_normal.png",
+      "displacement": "snow_dirty_displacement.png",
+      "rough": "snow_dirty_rough.png",
+      "ao": "snow_dirty_ao.png"
+    }
+  },
+  "world_scale": 3.0
+}

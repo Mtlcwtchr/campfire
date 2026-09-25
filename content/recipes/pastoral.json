@@ -1,0 +1,101 @@
+[
+  {
+    "name": "make_cheese",
+    "label": "Make cheese",
+    "category": "cooking",
+    "inputs": [
+      {
+        "item": "sheep_milk",
+        "count": 20
+      }
+    ],
+    "outputs": [
+      {
+        "item": "cheese",
+        "count": 10
+      }
+    ],
+    "work": 95,
+    "knowledge": "dairying",
+    "workplace": "dairy"
+  },
+  {
+    "name": "roast_mutton",
+    "label": "Roast mutton",
+    "category": "cooking",
+    "inputs": [
+      {
+        "item": "mutton_raw",
+        "count": 10
+      }
+    ],
+    "outputs": [
+      {
+        "item": "mutton_cooked",
+        "count": 10
+      }
+    ],
+    "work": 90,
+    "workplace": "oven",
+    "knowledge": "firemaking"
+  },
+  {
+    "name": "spin_wool",
+    "label": "Spin and weave wool",
+    "category": "crafting",
+    "inputs": [
+      {
+        "item": "wool",
+        "count": 5
+      }
+    ],
+    "outputs": [
+      {
+        "item": "wool_cloth",
+        "count": 2
+      }
+    ],
+    "work": 140,
+    "knowledge": "weaving"
+  },
+  {
+    "name": "sew_wool_tunic",
+    "label": "Sew a woollen tunic",
+    "category": "crafting",
+    "inputs": [
+      {
+        "item": "wool_cloth",
+        "count": 2
+      }
+    ],
+    "outputs": [
+      {
+        "item": "linen_tunic",
+        "count": 1
+      }
+    ],
+    "work": 110,
+    "tool": "needle",
+    "knowledge": "sewing"
+  },
+  {
+    "name": "roast_beef",
+    "label": "Roast beef",
+    "category": "cooking",
+    "inputs": [
+      {
+        "item": "beef_raw",
+        "count": 10
+      }
+    ],
+    "outputs": [
+      {
+        "item": "beef_cooked",
+        "count": 10
+      }
+    ],
+    "work": 95,
+    "workplace": "oven",
+    "knowledge": "firemaking"
+  }
+]

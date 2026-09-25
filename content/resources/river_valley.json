@@ -1,0 +1,147 @@
+[
+  {
+    "_comment": "The marsh is the Mesopotamian forest: reed for roofs, walls, baskets and boats, cut with a blade and growing back every season.",
+    "name": "reed_bed",
+    "label": "Reed bed",
+    "kind": "wild_plant",
+    "consumed_on_harvest": true,
+    "regrow_days": 0,
+    "blocks_movement": false,
+    "harvest": {
+      "yields": [
+        {
+          "item": "reed",
+          "count": 10
+        }
+      ],
+      "work": 45,
+      "preferred_tool": "knife",
+      "bare_hand_penalty": 0.55,
+      "category": "foraging",
+      "knowledge": "reedwork"
+    },
+    "spread_one_in": 50,
+    "keep_standing_percent": 25
+  },
+  {
+    "name": "date_palm",
+    "label": "Date palm",
+    "kind": "tree",
+    "consumed_on_harvest": false,
+    "regrow_days": 30,
+    "blocks_movement": false,
+    "seasons": [
+      "summer",
+      "autumn"
+    ],
+    "harvest": {
+      "yields": [
+        {
+          "item": "dates",
+          "count": 14
+        }
+      ],
+      "work": 60,
+      "category": "foraging",
+      "knowledge": "foraging"
+    },
+    "spread_one_in": 60,
+    "_comment": "Dates are picked; the palm goes on standing and bears again next season. Felling it is a different job with a different tool, and a felled palm is gone for good - no tree grows back out of its own stump, and what replaces it is seed falling near the ones still standing.",
+    "fell": {
+      "yields": [
+        {
+          "item": "palm_log",
+          "count": 3
+        },
+        {
+          "item": "branch",
+          "count": 2
+        }
+      ],
+      "work": 130,
+      "tool": "axe",
+      "preferred_tool": "axe",
+      "category": "woodcutting",
+      "knowledge": "woodcutting"
+    },
+    "keep_standing_percent": 30
+  },
+  {
+    "_comment": "Timber is scarce here, which is exactly why they built in brick and reed.",
+    "name": "tamarisk",
+    "label": "Tamarisk",
+    "kind": "tree",
+    "consumed_on_harvest": true,
+    "regrow_days": 0,
+    "blocks_movement": true,
+    "harvest": {
+      "yields": [
+        {
+          "item": "palm_log",
+          "count": 2
+        },
+        {
+          "item": "branch",
+          "count": 4
+        }
+      ],
+      "work": 170,
+      "tool": "axe",
+      "preferred_tool": "axe",
+      "category": "woodcutting",
+      "knowledge": "foraging"
+    },
+    "spread_one_in": 200,
+    "keep_standing_percent": 20
+  },
+  {
+    "name": "wild_emmer",
+    "label": "Wild emmer",
+    "kind": "wild_plant",
+    "consumed_on_harvest": true,
+    "regrow_days": 0,
+    "blocks_movement": false,
+    "seasons": [
+      "spring",
+      "summer",
+      "autumn"
+    ],
+    "harvest": {
+      "yields": [
+        {
+          "item": "emmer_ears",
+          "count": 26
+        }
+      ],
+      "work": 55,
+      "preferred_tool": "knife",
+      "bare_hand_penalty": 0.6,
+      "category": "farming",
+      "knowledge": "foraging"
+    },
+    "spread_one_in": 60,
+    "keep_standing_percent": 25
+  },
+  {
+    "_comment": "A stretch of bank where the fish run. Worked from the shore with a rod; the shoal moves on and comes back, which is why this one regrows.",
+    "name": "fishing_shallows",
+    "label": "Fishing shallows",
+    "kind": "water_source",
+    "consumed_on_harvest": true,
+    "regrow_days": 4,
+    "blocks_movement": false,
+    "harvest": {
+      "yields": [
+        {
+          "item": "fish_raw",
+          "count": 8
+        }
+      ],
+      "work": 80,
+      "required_tool": "spear",
+      "preferred_tool": "spear",
+      "category": "fishing",
+      "knowledge": "fishing"
+    }
+  }
+]

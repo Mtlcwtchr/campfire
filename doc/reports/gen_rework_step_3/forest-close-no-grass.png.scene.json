@@ -1,0 +1,118 @@
+{
+  "camera": [
+    5203.02978515625,
+    7903.02978515625,
+    112.26390075683594,
+    12.0
+  ],
+  "candidate_spacing_m": 8,
+  "culled": 12103,
+  "draws": 4,
+  "enabled": true,
+  "failed": false,
+  "focus_m": [
+    5130.0,
+    7830.0
+  ],
+  "frame": 720,
+  "grass": {
+    "adaptive": true,
+    "cached_roots": 0,
+    "candidate_budget": 65536,
+    "candidate_spacing_m": 2,
+    "draws": 0,
+    "enabled": false,
+    "focus_m": [
+      5130.0,
+      7830.0
+    ],
+    "instance_stride_bytes": 28,
+    "instance_upload_bytes": 0,
+    "root_bytes": 0,
+    "submitted_candidates": 0,
+    "submitted_triangles": 0,
+    "visible_radius_m": 192
+  },
+  "impostor_instances": 2845,
+  "impostor_views": 8,
+  "instance_upload_bytes": 173712,
+  "lod_mesh_pixels": [
+    63.06726373411859,
+    108.93436463165938
+  ],
+  "mesh_instances": 257,
+  "mesh_triangle_budget": 1500000,
+  "mesh_triangles": 1498585,
+  "objects": 15000,
+  "populations": [
+    11010,
+    2419,
+    873,
+    503,
+    195
+  ],
+  "radius_m": 768,
+  "ready": true,
+  "sampled_sites": 36864,
+  "seed": 42,
+  "shader_time": 2.0,
+  "shared_geometry_bytes": 983688,
+  "terrain": {
+    "cache_bytes": 23515040,
+    "capacity_limited": false,
+    "coarse": 0,
+    "data_step_m": [
+      8,
+      8
+    ],
+    "final_stage": true,
+    "gpu_bytes": 99695076,
+    "mesh_percent": 100,
+    "mesh_step_m": [
+      8,
+      8
+    ],
+    "missing": 0,
+    "pages_percent": 100,
+    "ram_bytes": 12410684,
+    "upload_failed": false
+  },
+  "triangles": 1504275,
+  "view_projection": [
+    0.7654655575752258,
+    -0.7654655575752258,
+    0.0,
+    2066.757080078125,
+    -0.547722578048706,
+    -0.547722578048706,
+    1.5491933822631836,
+    7004.56591796875,
+    -0.6324571371078491,
+    -0.6324571371078491,
+    -0.4472147226333618,
+    8338.7265625,
+    -0.6324555277824402,
+    -0.6324555277824402,
+    -0.4472135901451111,
+    8339.2060546875
+  ],
+  "viewport": [
+    1280,
+    800
+  ],
+  "water_tiles_skipped": 0,
+  "wind": [
+    0.9941021800041199,
+    -0.10844750702381134,
+    1.4288679361343384,
+    1.0
+  ],
+  "world_cells": [
+    64,
+    64
+  ],
+  "world_metres": [
+    34560,
+    34560
+  ]
+}

@@ -1,0 +1,190 @@
+[
+  {
+    "name": "flint_knife",
+    "label": "Flint knife",
+    "category": "tool",
+    "mass_kg": 0.4,
+    "stack_limit": 1,
+    "tool_class": "knife",
+    "tool_efficiency": 1.4,
+    "durability": 600
+  },
+  {
+    "name": "stone_axe",
+    "label": "Stone axe",
+    "category": "tool",
+    "mass_kg": 1.8,
+    "stack_limit": 1,
+    "tool_class": "axe",
+    "tool_efficiency": 1.8,
+    "durability": 500
+  },
+  {
+    "name": "stone_pick",
+    "label": "Stone pick",
+    "category": "tool",
+    "mass_kg": 2.2,
+    "stack_limit": 1,
+    "tool_class": "pick",
+    "tool_efficiency": 1.7,
+    "durability": 450
+  },
+  {
+    "name": "digging_stick",
+    "label": "Digging stick",
+    "category": "tool",
+    "mass_kg": 1.0,
+    "stack_limit": 1,
+    "tool_class": "hoe",
+    "tool_efficiency": 1.4,
+    "durability": 350
+  },
+  {
+    "name": "flint_needle",
+    "label": "Flint needle",
+    "category": "tool",
+    "mass_kg": 0.05,
+    "stack_limit": 1,
+    "tool_class": "needle",
+    "tool_efficiency": 1.5,
+    "durability": 400
+  },
+  {
+    "name": "wooden_spear",
+    "label": "Wooden spear",
+    "category": "weapon",
+    "mass_kg": 1.6,
+    "stack_limit": 1,
+    "tool_class": "spear",
+    "tool_efficiency": 1.6,
+    "durability": 400
+  },
+  {
+    "name": "quern_stone",
+    "label": "Quern stone",
+    "category": "component",
+    "mass_kg": 18,
+    "stack_limit": 2,
+    "tool_class": "quern",
+    "tool_efficiency": 1.5,
+    "durability": 3000
+  },
+  {
+    "name": "water_skin",
+    "label": "Water skin",
+    "category": "tool",
+    "mass_kg": 0.5,
+    "stack_limit": 1,
+    "tool_class": "vessel",
+    "tool_efficiency": 1.0,
+    "durability": 800,
+    "container_litres": 4
+  },
+  {
+    "_comment": "Bronze is the age's defining edge: it holds far longer than flint and cuts faster, and it costs a chain nobody can shortcut.",
+    "name": "bronze_axe",
+    "label": "Bronze axe",
+    "category": "tool",
+    "mass_kg": 1.6,
+    "stack_limit": 1,
+    "tool_class": "axe",
+    "tool_efficiency": 2.8,
+    "durability": 2200
+  },
+  {
+    "name": "bronze_pick",
+    "label": "Bronze pick",
+    "category": "tool",
+    "mass_kg": 2.0,
+    "stack_limit": 1,
+    "tool_class": "pick",
+    "tool_efficiency": 2.6,
+    "durability": 2000
+  },
+  {
+    "name": "bronze_sickle",
+    "label": "Bronze sickle",
+    "category": "tool",
+    "mass_kg": 0.7,
+    "stack_limit": 1,
+    "tool_class": "knife",
+    "tool_efficiency": 2.4,
+    "durability": 1800
+  },
+  {
+    "name": "bronze_hoe",
+    "label": "Bronze hoe",
+    "category": "tool",
+    "mass_kg": 1.4,
+    "stack_limit": 1,
+    "tool_class": "hoe",
+    "tool_efficiency": 2.4,
+    "durability": 1800
+  },
+  {
+    "name": "clay_pot",
+    "label": "Clay pot",
+    "category": "tool",
+    "mass_kg": 1.5,
+    "stack_limit": 1,
+    "tool_class": "vessel",
+    "tool_efficiency": 1.0,
+    "durability": 1200,
+    "container_litres": 8
+  },
+  {
+    "_comment": "Fired clay, notched and hard. Real Mesopotamian sickles were made of it, because the floodplain has no flint and the nearest good stone is a trade route away.",
+    "name": "clay_sickle",
+    "label": "Clay sickle",
+    "category": "tool",
+    "mass_kg": 0.6,
+    "stack_limit": 1,
+    "tool_class": "knife",
+    "tool_efficiency": 1.2,
+    "durability": 320
+  },
+  {
+    "_comment": "A reed pole, a line of twisted fibre and a bone hook.",
+    "name": "fishing_rod",
+    "label": "Fishing rod",
+    "category": "tool",
+    "tool_class": "spear",
+    "tool_power": 1.0,
+    "durability": 90,
+    "stack_limit": 1,
+    "weight": 0.8
+  },
+  {
+    "_comment": "A self bow of tamarisk and twisted sinew. Takes game at a distance, which is the difference between hunting and chasing.",
+    "name": "hunting_bow",
+    "label": "Hunting bow",
+    "category": "tool",
+    "tool_class": "bow",
+    "tool_power": 1.6,
+    "durability": 140,
+    "stack_limit": 1,
+    "weight": 1.0
+  },
+  {
+    "_comment": "A braided sling and a pouch of river stones. What a herdsboy carries.",
+    "name": "sling",
+    "label": "Sling",
+    "category": "tool",
+    "tool_class": "bow",
+    "tool_power": 1.1,
+    "durability": 70,
+    "stack_limit": 1,
+    "weight": 0.3
+  },
+  {
+    "_comment": "Cast, ground and hafted. Holds an edge where flint chips.",
+    "name": "bronze_dagger",
+    "label": "Bronze dagger",
+    "category": "tool",
+    "tool_class": "knife",
+    "tool_power": 1.7,
+    "durability": 220,
+    "stack_limit": 1,
+    "weight": 0.6
+  }
+]

@@ -1,0 +1,216 @@
+[
+  {
+    "_comment": "Bare hands must be enough to start (GDD 7). Everything here that a naked community needs on day one is takeable without a tool.",
+    "name": "fallen_branch",
+    "label": "Fallen branches",
+    "kind": "bush",
+    "consumed_on_harvest": true,
+    "regrow_days": 0,
+    "blocks_movement": false,
+    "harvest": {
+      "yields": [
+        {
+          "item": "branch",
+          "count": 3
+        }
+      ],
+      "work": 30,
+      "category": "foraging",
+      "knowledge": "foraging"
+    }
+  },
+  {
+    "name": "oak_tree",
+    "label": "Oak",
+    "kind": "tree",
+    "consumed_on_harvest": true,
+    "regrow_days": 0,
+    "blocks_movement": true,
+    "harvest": {
+      "yields": [
+        {
+          "item": "wood_log",
+          "count": 4
+        },
+        {
+          "item": "branch",
+          "count": 3
+        }
+      ],
+      "work": 220,
+      "tool": "axe",
+      "preferred_tool": "axe",
+      "category": "woodcutting",
+      "knowledge": "foraging"
+    },
+    "spread_one_in": 200,
+    "keep_standing_percent": 20
+  },
+  {
+    "_comment": "Loose stone can be picked up by hand; a pick makes it far faster.",
+    "name": "stone_outcrop",
+    "label": "Stone outcrop",
+    "kind": "rock",
+    "consumed_on_harvest": true,
+    "regrow_days": 0,
+    "blocks_movement": true,
+    "harvest": {
+      "yields": [
+        {
+          "item": "flint_stone",
+          "count": 12
+        },
+        {
+          "item": "stone_block",
+          "count": 5
+        }
+      ],
+      "work": 160,
+      "preferred_tool": "pick",
+      "bare_hand_penalty": 0.6,
+      "category": "mining",
+      "knowledge": "foraging"
+    }
+  },
+  {
+    "name": "berry_bush",
+    "label": "Berry bush",
+    "kind": "bush",
+    "consumed_on_harvest": false,
+    "regrow_days": 9,
+    "blocks_movement": false,
+    "seasons": [
+      "spring",
+      "summer",
+      "autumn"
+    ],
+    "harvest": {
+      "yields": [
+        {
+          "item": "berries",
+          "count": 16
+        }
+      ],
+      "work": 50,
+      "category": "foraging",
+      "knowledge": "foraging"
+    },
+    "spread_one_in": 120,
+    "_comment": "Picked over, not grubbed out: the bush bears again in a few days."
+  },
+  {
+    "name": "wild_einkorn",
+    "label": "Wild einkorn",
+    "kind": "wild_plant",
+    "consumed_on_harvest": true,
+    "regrow_days": 0,
+    "blocks_movement": false,
+    "seasons": [
+      "summer",
+      "autumn"
+    ],
+    "harvest": {
+      "yields": [
+        {
+          "item": "einkorn_ears",
+          "count": 30
+        }
+      ],
+      "work": 55,
+      "preferred_tool": "knife",
+      "bare_hand_penalty": 0.6,
+      "category": "farming",
+      "knowledge": "foraging"
+    },
+    "spread_one_in": 60,
+    "keep_standing_percent": 25
+  },
+  {
+    "name": "wild_flax",
+    "label": "Wild flax",
+    "kind": "wild_plant",
+    "consumed_on_harvest": true,
+    "regrow_days": 0,
+    "blocks_movement": false,
+    "harvest": {
+      "yields": [
+        {
+          "item": "plant_fiber",
+          "count": 8
+        },
+        {
+          "item": "flax_seed",
+          "count": 3
+        }
+      ],
+      "work": 40,
+      "category": "foraging",
+      "knowledge": "foraging"
+    },
+    "spread_one_in": 70,
+    "keep_standing_percent": 20
+  },
+  {
+    "name": "clay_bank",
+    "label": "Clay bank",
+    "kind": "rock",
+    "consumed_on_harvest": true,
+    "regrow_days": 0,
+    "blocks_movement": false,
+    "harvest": {
+      "yields": [
+        {
+          "item": "clay",
+          "count": 20
+        }
+      ],
+      "work": 110,
+      "preferred_tool": "hoe",
+      "bare_hand_penalty": 0.7,
+      "category": "mining",
+      "knowledge": "pottery"
+    }
+  },
+  {
+    "name": "copper_vein",
+    "label": "Copper vein",
+    "kind": "rock",
+    "consumed_on_harvest": true,
+    "regrow_days": 0,
+    "blocks_movement": true,
+    "harvest": {
+      "yields": [
+        {
+          "item": "copper_ore",
+          "count": 16
+        }
+      ],
+      "work": 260,
+      "tool": "pick",
+      "preferred_tool": "pick",
+      "category": "mining",
+      "knowledge": "coppersmithing"
+    }
+  },
+  {
+    "name": "tin_vein",
+    "label": "Tin vein",
+    "kind": "rock",
+    "consumed_on_harvest": true,
+    "regrow_days": 0,
+    "blocks_movement": true,
+    "harvest": {
+      "yields": [
+        {
+          "item": "tin_ore",
+          "count": 12
+        }
+      ],
+      "work": 280,
+      "tool": "pick",
+      "preferred_tool": "pick",
+      "category": "mining",
+      "knowledge": "coppersmithing"
+    }
+  }
+]

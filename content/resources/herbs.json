@@ -1,0 +1,47 @@
+[
+  {
+    "_comment": "Herbs grow where the ground is damp and shaded rather than everywhere: a herbalist walks to gather, and that walk is part of the cost of medicine (D98).",
+    "name": "yarrow",
+    "label": "Yarrow",
+    "kind": "bush",
+    "consumed_on_harvest": false,
+    "regrow_days": 12,
+    "spread_one_in": 90,
+    "keep_standing_percent": 50,
+    "blocks_movement": false,
+    "harvest": {
+      "yields": [
+        {
+          "item": "herbs",
+          "count": 2
+        }
+      ],
+      "work": 34,
+      "category": "foraging",
+      "knowledge": "foraging"
+    }
+  },
+  {
+    "name": "willow_stand",
+    "label": "Willow",
+    "kind": "bush",
+    "consumed_on_harvest": false,
+    "regrow_days": 20,
+    "spread_one_in": 120,
+    "keep_standing_percent": 60,
+    "blocks_movement": false,
+    "harvest": {
+      "_comment": "Willow bark: the oldest painkiller there is, and the reason a fever can be brought down before it kills.",
+      "yields": [
+        {
+          "item": "willow_bark",
+          "count": 2
+        }
+      ],
+      "work": 40,
+      "category": "foraging",
+      "knowledge": "foraging"
+    }
+  }
+]
+

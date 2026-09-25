@@ -1,0 +1,13 @@
+{
+  "site": "opengameart",
+  "pack": "Water - Batch of 15 Seamless Textures with normalmaps",
+  "pack_url": "https://opengameart.org/content/water-batch-of-15-seamless-textures-with-normalmaps",
+  "author": "Keith333",
+  "license": "CC-BY 3.0",
+  "attribution_required": true,
+  "kind": "normal",
+  "used_for": "marshes, ponds, still lakes, slow rivers",
+  "files": {
+    "normal": "GreenCalm_N.jpg"
+  }
+}

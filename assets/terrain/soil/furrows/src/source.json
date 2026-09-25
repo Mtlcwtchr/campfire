@@ -1,0 +1,23 @@
+{
+  "site": "polyhaven",
+  "asset_id": "farm_furrows",
+  "asset_url": "https://polyhaven.com/a/farm_furrows",
+  "license": "CC0",
+  "authors": [
+    "Amal Kumar"
+  ],
+  "attribution_required": false,
+  "original_physical_metres": [
+    2.098,
+    2.098
+  ],
+  "runtime_world_scale": 3.0,
+  "resolution": "2k",
+  "files": {
+    "diffuse": "soil_furrows_diffuse.png",
+    "normal": "soil_furrows_normal.png",
+    "displacement": "soil_furrows_displacement.png",
+    "rough": "soil_furrows_rough.png",
+    "ao": "soil_furrows_ao.png"
+  }
+}

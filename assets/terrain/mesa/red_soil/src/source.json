@@ -1,0 +1,23 @@
+{
+  "site": "polyhaven",
+  "asset_id": "cracked_red_ground",
+  "asset_url": "https://polyhaven.com/a/cracked_red_ground",
+  "license": "CC0",
+  "authors": [
+    "Amal Kumar"
+  ],
+  "attribution_required": false,
+  "original_physical_metres": [
+    2.0,
+    2.0
+  ],
+  "runtime_world_scale": 2.4,
+  "resolution": "2k",
+  "files": {
+    "diffuse": "mesa_red_soil_diffuse.png",
+    "normal": "mesa_red_soil_normal.png",
+    "displacement": "mesa_red_soil_displacement.png",
+    "rough": "mesa_red_soil_rough.png",
+    "ao": "mesa_red_soil_ao.png"
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "id": "sand_coast",
+  "runtime_size": 2048,
+  "runtime_files": {
+    "albedo": "sand_coast_albedo.png",
+    "normal": "sand_coast_normal.png",
+    "properties": "sand_coast_properties.png"
+  },
+  "properties_channels": {
+    "r": "ao",
+    "g": "roughness",
+    "b": "height",
+    "a": "mask"
+  },
+  "mip_steps": [
+    2,
+    4,
+    8,
+    16
+  ],
+  "height_range_before_stretch": [
+    65.25,
+    251.25
+  ],
+  "had": {
+    "ao": true,
+    "rough": true,
+    "displacement": true,
+    "mask": false
+  },
+  "source": {
+    "site": "polyhaven",
+    "asset_id": "aerial_beach_02",
+    "asset_url": "https://polyhaven.com/a/aerial_beach_02",
+    "license": "CC0",
+    "authors": [
+      "Rob Tuytel"
+    ],
+    "attribution_required": false,
+    "original_physical_metres": [
+      20.0,
+      20.0
+    ],
+    "runtime_world_scale": 16.0,
+    "resolution": "2k",
+    "files": {
+      "diffuse": "sand_coast_diffuse.png",
+      "normal": "sand_coast_normal.png",
+      "displacement": "sand_coast_displacement.png",
+      "rough": "sand_coast_rough.png",
+      "ao": "sand_coast_ao.png"
+    }
+  },
+  "world_scale": 16.0
+}

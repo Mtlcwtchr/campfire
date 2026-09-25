@@ -1,0 +1,55 @@
+{
+  "id": "soil_base",
+  "runtime_size": 2048,
+  "runtime_files": {
+    "albedo": "soil_base_albedo.png",
+    "normal": "soil_base_normal.png",
+    "properties": "soil_base_properties.png"
+  },
+  "properties_channels": {
+    "r": "ao",
+    "g": "roughness",
+    "b": "height",
+    "a": "mask"
+  },
+  "mip_steps": [
+    2,
+    4,
+    8,
+    16
+  ],
+  "height_range_before_stretch": [
+    0.0299,
+    0.9903
+  ],
+  "had": {
+    "ao": true,
+    "rough": true,
+    "displacement": true,
+    "mask": false
+  },
+  "source": {
+    "site": "polyhaven",
+    "asset_id": "dirt",
+    "asset_url": "https://polyhaven.com/a/dirt",
+    "license": "CC0",
+    "authors": [
+      "Charlotte Baglioni"
+    ],
+    "attribution_required": false,
+    "original_physical_metres": [
+      2.0,
+      2.0
+    ],
+    "runtime_world_scale": 2.0,
+    "resolution": "2k",
+    "files": {
+      "diffuse": "soil_base_diffuse.png",
+      "normal": "soil_base_normal.png",
+      "displacement": "soil_base_displacement.png",
+      "rough": "soil_base_rough.png",
+      "ao": "soil_base_ao.png"
+    }
+  },
+  "world_scale": 2.0
+}

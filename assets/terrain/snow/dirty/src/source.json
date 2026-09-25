@@ -1,0 +1,23 @@
+{
+  "site": "polyhaven",
+  "asset_id": "snow_03",
+  "asset_url": "https://polyhaven.com/a/snow_03",
+  "license": "CC0",
+  "authors": [
+    "Rob Tuytel"
+  ],
+  "attribution_required": false,
+  "original_physical_metres": [
+    2.0,
+    2.0
+  ],
+  "runtime_world_scale": 3.0,
+  "resolution": "2k",
+  "files": {
+    "diffuse": "snow_dirty_diffuse.png",
+    "normal": "snow_dirty_normal.png",
+    "displacement": "snow_dirty_displacement.png",
+    "rough": "snow_dirty_rough.png",
+    "ao": "snow_dirty_ao.png"
+  }
+}

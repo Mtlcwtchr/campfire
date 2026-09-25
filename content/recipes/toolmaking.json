@@ -1,0 +1,251 @@
+[
+  {
+    "name": "knap_flint_knife",
+    "label": "Knap a flint knife",
+    "category": "crafting",
+    "inputs": [
+      {
+        "item": "flint_stone",
+        "count": 2
+      }
+    ],
+    "outputs": [
+      {
+        "item": "flint_knife",
+        "count": 1
+      }
+    ],
+    "work": 70,
+    "knowledge": "flintknapping"
+  },
+  {
+    "name": "make_stone_axe",
+    "label": "Haft a stone axe",
+    "category": "crafting",
+    "inputs": [
+      {
+        "item": "flint_stone",
+        "count": 2
+      },
+      {
+        "item": "branch",
+        "count": 1
+      },
+      {
+        "item": "plant_fiber",
+        "count": 2
+      }
+    ],
+    "outputs": [
+      {
+        "item": "stone_axe",
+        "count": 1
+      }
+    ],
+    "work": 120,
+    "knowledge": "hafting"
+  },
+  {
+    "name": "make_stone_pick",
+    "label": "Haft a stone pick",
+    "category": "crafting",
+    "inputs": [
+      {
+        "item": "flint_stone",
+        "count": 3
+      },
+      {
+        "item": "branch",
+        "count": 1
+      },
+      {
+        "item": "plant_fiber",
+        "count": 2
+      }
+    ],
+    "outputs": [
+      {
+        "item": "stone_pick",
+        "count": 1
+      }
+    ],
+    "work": 130,
+    "knowledge": "hafting"
+  },
+  {
+    "name": "make_spear",
+    "label": "Make a spear",
+    "category": "crafting",
+    "inputs": [
+      {
+        "item": "branch",
+        "count": 2
+      },
+      {
+        "item": "flint_stone",
+        "count": 1
+      },
+      {
+        "item": "plant_fiber",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "wooden_spear",
+        "count": 1
+      }
+    ],
+    "work": 110,
+    "knowledge": "hafting"
+  },
+  {
+    "name": "make_digging_stick",
+    "label": "Sharpen a digging stick",
+    "category": "crafting",
+    "inputs": [
+      {
+        "item": "branch",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "digging_stick",
+        "count": 1
+      }
+    ],
+    "work": 45,
+    "tool": "knife",
+    "knowledge": "flintknapping"
+  },
+  {
+    "name": "knap_needle",
+    "label": "Knap a needle",
+    "category": "crafting",
+    "inputs": [
+      {
+        "item": "flint_stone",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "flint_needle",
+        "count": 1
+      }
+    ],
+    "work": 60,
+    "tool": "knife",
+    "knowledge": "flintknapping"
+  },
+  {
+    "name": "cut_quern_stone",
+    "label": "Cut a quern stone",
+    "category": "crafting",
+    "inputs": [
+      {
+        "item": "stone_block",
+        "count": 2
+      }
+    ],
+    "outputs": [
+      {
+        "item": "quern_stone",
+        "count": 1
+      }
+    ],
+    "work": 260,
+    "tool": "pick",
+    "knowledge": "flintknapping"
+  },
+  {
+    "name": "sew_water_skin",
+    "label": "Sew a water skin",
+    "category": "crafting",
+    "inputs": [
+      {
+        "item": "hide",
+        "count": 1
+      },
+      {
+        "item": "plant_fiber",
+        "count": 2
+      }
+    ],
+    "outputs": [
+      {
+        "item": "water_skin",
+        "count": 1
+      }
+    ],
+    "work": 90,
+    "tool": "needle",
+    "knowledge": "sewing"
+  },
+  {
+    "name": "make_fishing_rod",
+    "label": "Make a fishing rod",
+    "category": "crafting",
+    "inputs": [
+      {
+        "item": "reed",
+        "count": 4
+      },
+      {
+        "item": "plant_fiber",
+        "count": 3
+      }
+    ],
+    "outputs": [
+      {
+        "item": "fishing_rod",
+        "count": 1
+      }
+    ],
+    "work": 90,
+    "knowledge": "reedwork"
+  },
+  {
+    "name": "make_bow",
+    "label": "Make a hunting bow",
+    "category": "crafting",
+    "inputs": [
+      {
+        "item": "branch",
+        "count": 5
+      },
+      {
+        "item": "plant_fiber",
+        "count": 6
+      }
+    ],
+    "outputs": [
+      {
+        "item": "hunting_bow",
+        "count": 1
+      }
+    ],
+    "work": 150,
+    "knowledge": "hafting"
+  },
+  {
+    "name": "braid_sling",
+    "label": "Braid a sling",
+    "category": "crafting",
+    "inputs": [
+      {
+        "item": "plant_fiber",
+        "count": 5
+      }
+    ],
+    "outputs": [
+      {
+        "item": "sling",
+        "count": 1
+      }
+    ],
+    "work": 70,
+    "knowledge": "weaving"
+  }
+]

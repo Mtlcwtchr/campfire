@@ -1,0 +1,15 @@
+{
+  "layer": "residue",
+  "channel": "alpha",
+  "size": [
+    512,
+    512
+  ],
+  "sources": [
+    "assets/PHX_Alphas_LITE/Details/QuantumFoam.png",
+    "assets/PHX_Alphas_LITE/Details/Bubbles.png"
+  ],
+  "processing": "70% stretched QuantumFoam + 30% inverted Bubbles; periodic borders; box mips",
+  "provenance": "User-supplied PHX_Alphas_LITE; no license file found in the supplied folder. Verify redistribution terms.",
+  "generator": "python3 tools/bake_foam_residue.py"
+}

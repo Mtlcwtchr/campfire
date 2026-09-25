@@ -1,0 +1,24 @@
+{
+  "site": "polyhaven",
+  "asset_id": "raked_dirt",
+  "asset_url": "https://polyhaven.com/a/raked_dirt",
+  "license": "CC0",
+  "authors": [
+    "Dario Barresi",
+    "Dimitrios Savva"
+  ],
+  "attribution_required": false,
+  "original_physical_metres": [
+    2.0,
+    2.0
+  ],
+  "runtime_world_scale": 1.8,
+  "resolution": "2k",
+  "files": {
+    "diffuse": "soil_tilled_diffuse.png",
+    "normal": "soil_tilled_normal.png",
+    "displacement": "soil_tilled_displacement.png",
+    "rough": "soil_tilled_rough.png",
+    "ao": "soil_tilled_ao.png"
+  }
+}

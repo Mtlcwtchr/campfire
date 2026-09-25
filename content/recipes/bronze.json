@@ -1,0 +1,183 @@
+[
+  {
+    "name": "shape_pot",
+    "label": "Throw and fire a pot",
+    "category": "crafting",
+    "inputs": [
+      {
+        "item": "clay",
+        "count": 4
+      }
+    ],
+    "outputs": [
+      {
+        "item": "clay_pot",
+        "count": 1
+      }
+    ],
+    "work": 140,
+    "workplace": "kiln",
+    "knowledge": "pottery"
+  },
+  {
+    "name": "smelt_copper",
+    "label": "Smelt copper",
+    "category": "crafting",
+    "inputs": [
+      {
+        "item": "copper_ore",
+        "count": 3
+      }
+    ],
+    "outputs": [
+      {
+        "item": "copper_ingot",
+        "count": 1
+      }
+    ],
+    "work": 220,
+    "workplace": "kiln",
+    "knowledge": "coppersmithing"
+  },
+  {
+    "_comment": "Tin is scarce, which is exactly why bronze is worth something.",
+    "name": "alloy_bronze",
+    "label": "Alloy bronze",
+    "category": "crafting",
+    "inputs": [
+      {
+        "item": "copper_ingot",
+        "count": 3
+      },
+      {
+        "item": "tin_ore",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "bronze_ingot",
+        "count": 3
+      }
+    ],
+    "work": 240,
+    "workplace": "kiln",
+    "knowledge": "bronzeworking"
+  },
+  {
+    "name": "cast_bronze_axe",
+    "label": "Cast a bronze axe",
+    "category": "crafting",
+    "inputs": [
+      {
+        "item": "bronze_ingot",
+        "count": 1
+      },
+      {
+        "item": "branch",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "bronze_axe",
+        "count": 1
+      }
+    ],
+    "work": 200,
+    "workplace": "kiln",
+    "knowledge": "bronzeworking"
+  },
+  {
+    "name": "cast_bronze_pick",
+    "label": "Cast a bronze pick",
+    "category": "crafting",
+    "inputs": [
+      {
+        "item": "bronze_ingot",
+        "count": 1
+      },
+      {
+        "item": "branch",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "bronze_pick",
+        "count": 1
+      }
+    ],
+    "work": 200,
+    "workplace": "kiln",
+    "knowledge": "bronzeworking"
+  },
+  {
+    "name": "cast_bronze_sickle",
+    "label": "Cast a bronze sickle",
+    "category": "crafting",
+    "inputs": [
+      {
+        "item": "bronze_ingot",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "bronze_sickle",
+        "count": 1
+      }
+    ],
+    "work": 170,
+    "workplace": "kiln",
+    "knowledge": "bronzeworking"
+  },
+  {
+    "name": "cast_bronze_hoe",
+    "label": "Cast a bronze hoe",
+    "category": "crafting",
+    "inputs": [
+      {
+        "item": "bronze_ingot",
+        "count": 1
+      },
+      {
+        "item": "branch",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "bronze_hoe",
+        "count": 1
+      }
+    ],
+    "work": 180,
+    "workplace": "kiln",
+    "knowledge": "bronzeworking"
+  },
+  {
+    "name": "cast_bronze_dagger",
+    "label": "Cast a bronze dagger",
+    "category": "crafting",
+    "inputs": [
+      {
+        "item": "bronze_ingot",
+        "count": 1
+      },
+      {
+        "item": "branch",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "bronze_dagger",
+        "count": 1
+      }
+    ],
+    "work": 200,
+    "workplace": "kiln",
+    "knowledge": "bronzeworking"
+  }
+]

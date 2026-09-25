@@ -1,0 +1,23 @@
+{
+  "site": "polyhaven",
+  "asset_id": "aerial_beach_02",
+  "asset_url": "https://polyhaven.com/a/aerial_beach_02",
+  "license": "CC0",
+  "authors": [
+    "Rob Tuytel"
+  ],
+  "attribution_required": false,
+  "original_physical_metres": [
+    20.0,
+    20.0
+  ],
+  "runtime_world_scale": 16.0,
+  "resolution": "2k",
+  "files": {
+    "diffuse": "sand_coast_diffuse.png",
+    "normal": "sand_coast_normal.png",
+    "displacement": "sand_coast_displacement.png",
+    "rough": "sand_coast_rough.png",
+    "ao": "sand_coast_ao.png"
+  }
+}

@@ -1,0 +1,126 @@
+[
+  {
+    "_comment": "A flock is capital before it is meat: wool every season, milk through spring and summer, and only slaughtered when there is a surplus or nothing else to eat.",
+    "name": "sheep",
+    "label": "Sheep",
+    "knowledge": "herding",
+    "adult_age_days": 180,
+    "max_age_days": 3600,
+    "shear_interval_days": 45,
+    "milk_interval_days": 4,
+    "breed_interval_days": 190,
+    "breeding_stock": 10,
+    "twin_one_in": 3,
+    "shear": [
+      {
+        "item": "wool",
+        "count": 4
+      }
+    ],
+    "milk": [
+      {
+        "item": "sheep_milk",
+        "count": 2
+      }
+    ],
+    "slaughter": [
+      {
+        "item": "mutton_raw",
+        "count": 8
+      },
+      {
+        "item": "hide",
+        "count": 2
+      }
+    ],
+    "shear_work": 45,
+    "milk_work": 18,
+    "slaughter_work": 70,
+    "size_metres": 0.95
+  },
+  {
+    "_comment": "Red deer. They belong to nobody, they move where the grazing is, and a hunted one is gone - so a country carries only so many, and hunters who take them all have taken them all.",
+    "name": "deer",
+    "label": "Deer",
+    "wild": true,
+    "wild_capacity": 40,
+    "adult_age_days": 480,
+    "max_age_days": 4000,
+    "breed_interval_days": 300,
+    "breeding_stock": 8,
+    "twin_one_in": 4,
+    "hunt": [
+      {
+        "item": "venison_raw",
+        "count": 22
+      },
+      {
+        "item": "hide",
+        "count": 3
+      }
+    ],
+    "hunt_work": 120,
+    "hunt_tool": "bow",
+    "size_metres": 1.2
+  },
+  {
+    "_comment": "Wild pig. Bad-tempered, quick to breed, and worth the risk: more meat off one than off a deer.",
+    "name": "boar",
+    "label": "Wild boar",
+    "wild": true,
+    "wild_capacity": 30,
+    "adult_age_days": 300,
+    "max_age_days": 2500,
+    "breed_interval_days": 200,
+    "breeding_stock": 6,
+    "twin_one_in": 2,
+    "hunt": [
+      {
+        "item": "mutton_raw",
+        "count": 26
+      },
+      {
+        "item": "hide",
+        "count": 2
+      }
+    ],
+    "hunt_work": 150,
+    "hunt_tool": "spear",
+    "size_metres": 1.05,
+    "tames_into": "pig"
+  },
+  {
+    "_comment": "Wolves have to eat too. They take what they can catch - deer, boar, and a sheep nobody is watching - and a pup taken young becomes the dog that keeps them off.",
+    "name": "wolf",
+    "label": "Wolf",
+    "wild": true,
+    "predator": true,
+    "wild_capacity": 12,
+    "adult_age_days": 400,
+    "max_age_days": 3000,
+    "breed_interval_days": 300,
+    "breeding_stock": 4,
+    "tames_into": "shepherd_dog",
+    "hunt": [
+      {
+        "item": "hide",
+        "count": 3
+      }
+    ],
+    "hunt_work": 170,
+    "hunt_tool": "spear",
+    "size_metres": 1.0
+  },
+  {
+    "_comment": "A tamed wolf, raised to the flock. It keeps the sheep together and the wolves off them, which is the difference between a shepherd watching a flock and a shepherd chasing one.",
+    "name": "shepherd_dog",
+    "label": "Shepherd dog",
+    "knowledge": "herding",
+    "adult_age_days": 300,
+    "max_age_days": 3000,
+    "breed_interval_days": 400,
+    "breeding_stock": 2,
+    "guards_flock": true,
+    "size_metres": 0.85
+  }
+]

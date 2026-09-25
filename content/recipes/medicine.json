@@ -1,0 +1,46 @@
+[
+  {
+    "_comment": "Herbcraft. Neither of these needs a workshop - a bowl and a fire will do - which is why medicine is the one craft a community has from the day it arrives (D98).",
+    "name": "make_poultice",
+    "label": "Make a poultice",
+    "category": "medical",
+    "inputs": [
+      {
+        "item": "herbs",
+        "count": 3
+      }
+    ],
+    "outputs": [
+      {
+        "item": "poultice",
+        "count": 1
+      }
+    ],
+    "work": 45,
+    "knowledge": "herbcraft"
+  },
+  {
+    "name": "brew_fever_draught",
+    "label": "Brew a fever draught",
+    "category": "medical",
+    "inputs": [
+      {
+        "item": "willow_bark",
+        "count": 3
+      },
+      {
+        "item": "herbs",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "fever_draught",
+        "count": 1
+      }
+    ],
+    "work": 55,
+    "knowledge": "herbcraft"
+  }
+]
+

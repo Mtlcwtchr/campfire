@@ -1,0 +1,730 @@
+{
+  "cases": [
+    {
+      "absolute_8m_rule": [
+        8.0,
+        8.0
+      ],
+      "coarse_int32_height_bytes_estimate": 614656,
+      "coarse_sample_count_estimate": 153664,
+      "coarse_step_m": 256,
+      "fingerprint": 1453605696946100643,
+      "format_version": 1,
+      "generator": "scale-aware",
+      "generator_version": 1,
+      "height_m": 100000,
+      "name": "scale matrix",
+      "overview_columns": 392,
+      "overview_rows": 392,
+      "overview_sample_capacity": 153664,
+      "requires_paged_coarse": false,
+      "scale_policy_version": 1,
+      "seed": 1,
+      "semi_relative_30km_rule": [
+        30000.0,
+        30000.0
+      ],
+      "width_m": 100000,
+      "world_relative_quarter": [
+        25000.0,
+        25000.0
+      ]
+    },
+    {
+      "absolute_8m_rule": [
+        8.0,
+        8.0
+      ],
+      "coarse_int32_height_bytes_estimate": 3825936,
+      "coarse_sample_count_estimate": 956484,
+      "coarse_step_m": 256,
+      "fingerprint": 7777681592397972019,
+      "format_version": 1,
+      "generator": "scale-aware",
+      "generator_version": 1,
+      "height_m": 250000,
+      "name": "scale matrix",
+      "overview_columns": 978,
+      "overview_rows": 978,
+      "overview_sample_capacity": 956484,
+      "requires_paged_coarse": false,
+      "scale_policy_version": 1,
+      "seed": 1,
+      "semi_relative_30km_rule": [
+        41342.83534178372,
+        41342.83534178372
+      ],
+      "width_m": 250000,
+      "world_relative_quarter": [
+        62500.0,
+        62500.0
+      ]
+    },
+    {
+      "absolute_8m_rule": [
+        8.0,
+        8.0
+      ],
+      "coarse_int32_height_bytes_estimate": 3825936,
+      "coarse_sample_count_estimate": 956484,
+      "coarse_step_m": 1024,
+      "fingerprint": 7429097569591657394,
+      "format_version": 1,
+      "generator": "scale-aware",
+      "generator_version": 1,
+      "height_m": 1000000,
+      "name": "scale matrix",
+      "overview_columns": 978,
+      "overview_rows": 978,
+      "overview_sample_capacity": 956484,
+      "requires_paged_coarse": false,
+      "scale_policy_version": 1,
+      "seed": 1,
+      "semi_relative_30km_rule": [
+        67161.63415705018,
+        67161.63415705018
+      ],
+      "width_m": 1000000,
+      "world_relative_quarter": [
+        250000.0,
+        250000.0
+      ]
+    },
+    {
+      "absolute_8m_rule": [
+        8.0,
+        8.0
+      ],
+      "coarse_int32_height_bytes_estimate": 95413824,
+      "coarse_sample_count_estimate": 23853456,
+      "coarse_step_m": 2048,
+      "fingerprint": 820564702986588642,
+      "format_version": 1,
+      "generator": "scale-aware",
+      "generator_version": 1,
+      "height_m": 10000000,
+      "name": "scale matrix",
+      "overview_columns": 1024,
+      "overview_rows": 1024,
+      "overview_sample_capacity": 1048576,
+      "requires_paged_coarse": true,
+      "scale_policy_version": 1,
+      "seed": 1,
+      "semi_relative_30km_rule": [
+        150356.17008818165,
+        150356.17008818165
+      ],
+      "width_m": 10000000,
+      "world_relative_quarter": [
+        2500000.0,
+        2500000.0
+      ]
+    },
+    {
+      "absolute_8m_rule": [
+        8.0,
+        8.0
+      ],
+      "coarse_int32_height_bytes_estimate": 2422464,
+      "coarse_sample_count_estimate": 605616,
+      "coarse_step_m": 2048,
+      "fingerprint": 15794583804101998265,
+      "format_version": 1,
+      "generator": "scale-aware",
+      "generator_version": 1,
+      "height_m": 250000,
+      "name": "rectangular",
+      "overview_columns": 1024,
+      "overview_rows": 27,
+      "overview_sample_capacity": 27648,
+      "requires_paged_coarse": false,
+      "scale_policy_version": 1,
+      "seed": 1,
+      "semi_relative_30km_rule": [
+        78842.56707246994,
+        78842.56707246994
+      ],
+      "width_m": 10000000,
+      "world_relative_quarter": [
+        2500000.0,
+        62500.0
+      ]
+    },
+    {
+      "absolute_8m_rule": [
+        8.0,
+        8.0
+      ],
+      "coarse_int32_height_bytes_estimate": 614656,
+      "coarse_sample_count_estimate": 153664,
+      "coarse_step_m": 256,
+      "fingerprint": 14324581316780183628,
+      "format_version": 1,
+      "generator": "scale-aware",
+      "generator_version": 1,
+      "height_m": 100000,
+      "name": "scale matrix",
+      "overview_columns": 392,
+      "overview_rows": 392,
+      "overview_sample_capacity": 153664,
+      "requires_paged_coarse": false,
+      "scale_policy_version": 1,
+      "seed": 7,
+      "semi_relative_30km_rule": [
+        30000.0,
+        30000.0
+      ],
+      "width_m": 100000,
+      "world_relative_quarter": [
+        25000.0,
+        25000.0
+      ]
+    },
+    {
+      "absolute_8m_rule": [
+        8.0,
+        8.0
+      ],
+      "coarse_int32_height_bytes_estimate": 3825936,
+      "coarse_sample_count_estimate": 956484,
+      "coarse_step_m": 256,
+      "fingerprint": 17631026606303989440,
+      "format_version": 1,
+      "generator": "scale-aware",
+      "generator_version": 1,
+      "height_m": 250000,
+      "name": "scale matrix",
+      "overview_columns": 978,
+      "overview_rows": 978,
+      "overview_sample_capacity": 956484,
+      "requires_paged_coarse": false,
+      "scale_policy_version": 1,
+      "seed": 7,
+      "semi_relative_30km_rule": [
+        41342.83534178372,
+        41342.83534178372
+      ],
+      "width_m": 250000,
+      "world_relative_quarter": [
+        62500.0,
+        62500.0
+      ]
+    },
+    {
+      "absolute_8m_rule": [
+        8.0,
+        8.0
+      ],
+      "coarse_int32_height_bytes_estimate": 3825936,
+      "coarse_sample_count_estimate": 956484,
+      "coarse_step_m": 1024,
+      "fingerprint": 404635907014569781,
+      "format_version": 1,
+      "generator": "scale-aware",
+      "generator_version": 1,
+      "height_m": 1000000,
+      "name": "scale matrix",
+      "overview_columns": 978,
+      "overview_rows": 978,
+      "overview_sample_capacity": 956484,
+      "requires_paged_coarse": false,
+      "scale_policy_version": 1,
+      "seed": 7,
+      "semi_relative_30km_rule": [
+        67161.63415705018,
+        67161.63415705018
+      ],
+      "width_m": 1000000,
+      "world_relative_quarter": [
+        250000.0,
+        250000.0
+      ]
+    },
+    {
+      "absolute_8m_rule": [
+        8.0,
+        8.0
+      ],
+      "coarse_int32_height_bytes_estimate": 95413824,
+      "coarse_sample_count_estimate": 23853456,
+      "coarse_step_m": 2048,
+      "fingerprint": 16866037065205500954,
+      "format_version": 1,
+      "generator": "scale-aware",
+      "generator_version": 1,
+      "height_m": 10000000,
+      "name": "scale matrix",
+      "overview_columns": 1024,
+      "overview_rows": 1024,
+      "overview_sample_capacity": 1048576,
+      "requires_paged_coarse": true,
+      "scale_policy_version": 1,
+      "seed": 7,
+      "semi_relative_30km_rule": [
+        150356.17008818165,
+        150356.17008818165
+      ],
+      "width_m": 10000000,
+      "world_relative_quarter": [
+        2500000.0,
+        2500000.0
+      ]
+    },
+    {
+      "absolute_8m_rule": [
+        8.0,
+        8.0
+      ],
+      "coarse_int32_height_bytes_estimate": 2422464,
+      "coarse_sample_count_estimate": 605616,
+      "coarse_step_m": 2048,
+      "fingerprint": 5439917224757797838,
+      "format_version": 1,
+      "generator": "scale-aware",
+      "generator_version": 1,
+      "height_m": 250000,
+      "name": "rectangular",
+      "overview_columns": 1024,
+      "overview_rows": 27,
+      "overview_sample_capacity": 27648,
+      "requires_paged_coarse": false,
+      "scale_policy_version": 1,
+      "seed": 7,
+      "semi_relative_30km_rule": [
+        78842.56707246994,
+        78842.56707246994
+      ],
+      "width_m": 10000000,
+      "world_relative_quarter": [
+        2500000.0,
+        62500.0
+      ]
+    },
+    {
+      "absolute_8m_rule": [
+        8.0,
+        8.0
+      ],
+      "coarse_int32_height_bytes_estimate": 614656,
+      "coarse_sample_count_estimate": 153664,
+      "coarse_step_m": 256,
+      "fingerprint": 12440560313263738146,
+      "format_version": 1,
+      "generator": "scale-aware",
+      "generator_version": 1,
+      "height_m": 100000,
+      "name": "scale matrix",
+      "overview_columns": 392,
+      "overview_rows": 392,
+      "overview_sample_capacity": 153664,
+      "requires_paged_coarse": false,
+      "scale_policy_version": 1,
+      "seed": 11,
+      "semi_relative_30km_rule": [
+        30000.0,
+        30000.0
+      ],
+      "width_m": 100000,
+      "world_relative_quarter": [
+        25000.0,
+        25000.0
+      ]
+    },
+    {
+      "absolute_8m_rule": [
+        8.0,
+        8.0
+      ],
+      "coarse_int32_height_bytes_estimate": 3825936,
+      "coarse_sample_count_estimate": 956484,
+      "coarse_step_m": 256,
+      "fingerprint": 7691624609672190627,
+      "format_version": 1,
+      "generator": "scale-aware",
+      "generator_version": 1,
+      "height_m": 250000,
+      "name": "scale matrix",
+      "overview_columns": 978,
+      "overview_rows": 978,
+      "overview_sample_capacity": 956484,
+      "requires_paged_coarse": false,
+      "scale_policy_version": 1,
+      "seed": 11,
+      "semi_relative_30km_rule": [
+        41342.83534178372,
+        41342.83534178372
+      ],
+      "width_m": 250000,
+      "world_relative_quarter": [
+        62500.0,
+        62500.0
+      ]
+    },
+    {
+      "absolute_8m_rule": [
+        8.0,
+        8.0
+      ],
+      "coarse_int32_height_bytes_estimate": 3825936,
+      "coarse_sample_count_estimate": 956484,
+      "coarse_step_m": 1024,
+      "fingerprint": 16441929902403998030,
+      "format_version": 1,
+      "generator": "scale-aware",
+      "generator_version": 1,
+      "height_m": 1000000,
+      "name": "scale matrix",
+      "overview_columns": 978,
+      "overview_rows": 978,
+      "overview_sample_capacity": 956484,
+      "requires_paged_coarse": false,
+      "scale_policy_version": 1,
+      "seed": 11,
+      "semi_relative_30km_rule": [
+        67161.63415705018,
+        67161.63415705018
+      ],
+      "width_m": 1000000,
+      "world_relative_quarter": [
+        250000.0,
+        250000.0
+      ]
+    },
+    {
+      "absolute_8m_rule": [
+        8.0,
+        8.0
+      ],
+      "coarse_int32_height_bytes_estimate": 95413824,
+      "coarse_sample_count_estimate": 23853456,
+      "coarse_step_m": 2048,
+      "fingerprint": 12968957813961936492,
+      "format_version": 1,
+      "generator": "scale-aware",
+      "generator_version": 1,
+      "height_m": 10000000,
+      "name": "scale matrix",
+      "overview_columns": 1024,
+      "overview_rows": 1024,
+      "overview_sample_capacity": 1048576,
+      "requires_paged_coarse": true,
+      "scale_policy_version": 1,
+      "seed": 11,
+      "semi_relative_30km_rule": [
+        150356.17008818165,
+        150356.17008818165
+      ],
+      "width_m": 10000000,
+      "world_relative_quarter": [
+        2500000.0,
+        2500000.0
+      ]
+    },
+    {
+      "absolute_8m_rule": [
+        8.0,
+        8.0
+      ],
+      "coarse_int32_height_bytes_estimate": 2422464,
+      "coarse_sample_count_estimate": 605616,
+      "coarse_step_m": 2048,
+      "fingerprint": 8911150810707276325,
+      "format_version": 1,
+      "generator": "scale-aware",
+      "generator_version": 1,
+      "height_m": 250000,
+      "name": "rectangular",
+      "overview_columns": 1024,
+      "overview_rows": 27,
+      "overview_sample_capacity": 27648,
+      "requires_paged_coarse": false,
+      "scale_policy_version": 1,
+      "seed": 11,
+      "semi_relative_30km_rule": [
+        78842.56707246994,
+        78842.56707246994
+      ],
+      "width_m": 10000000,
+      "world_relative_quarter": [
+        2500000.0,
+        62500.0
+      ]
+    },
+    {
+      "absolute_8m_rule": [
+        8.0,
+        8.0
+      ],
+      "coarse_int32_height_bytes_estimate": 614656,
+      "coarse_sample_count_estimate": 153664,
+      "coarse_step_m": 256,
+      "fingerprint": 2065194378269783844,
+      "format_version": 1,
+      "generator": "scale-aware",
+      "generator_version": 1,
+      "height_m": 100000,
+      "name": "scale matrix",
+      "overview_columns": 392,
+      "overview_rows": 392,
+      "overview_sample_capacity": 153664,
+      "requires_paged_coarse": false,
+      "scale_policy_version": 1,
+      "seed": 42,
+      "semi_relative_30km_rule": [
+        30000.0,
+        30000.0
+      ],
+      "width_m": 100000,
+      "world_relative_quarter": [
+        25000.0,
+        25000.0
+      ]
+    },
+    {
+      "absolute_8m_rule": [
+        8.0,
+        8.0
+      ],
+      "coarse_int32_height_bytes_estimate": 3825936,
+      "coarse_sample_count_estimate": 956484,
+      "coarse_step_m": 256,
+      "fingerprint": 4891138397772246282,
+      "format_version": 1,
+      "generator": "scale-aware",
+      "generator_version": 1,
+      "height_m": 250000,
+      "name": "scale matrix",
+      "overview_columns": 978,
+      "overview_rows": 978,
+      "overview_sample_capacity": 956484,
+      "requires_paged_coarse": false,
+      "scale_policy_version": 1,
+      "seed": 42,
+      "semi_relative_30km_rule": [
+        41342.83534178372,
+        41342.83534178372
+      ],
+      "width_m": 250000,
+      "world_relative_quarter": [
+        62500.0,
+        62500.0
+      ]
+    },
+    {
+      "absolute_8m_rule": [
+        8.0,
+        8.0
+      ],
+      "coarse_int32_height_bytes_estimate": 3825936,
+      "coarse_sample_count_estimate": 956484,
+      "coarse_step_m": 1024,
+      "fingerprint": 18017039818044403936,
+      "format_version": 1,
+      "generator": "scale-aware",
+      "generator_version": 1,
+      "height_m": 1000000,
+      "name": "scale matrix",
+      "overview_columns": 978,
+      "overview_rows": 978,
+      "overview_sample_capacity": 956484,
+      "requires_paged_coarse": false,
+      "scale_policy_version": 1,
+      "seed": 42,
+      "semi_relative_30km_rule": [
+        67161.63415705018,
+        67161.63415705018
+      ],
+      "width_m": 1000000,
+      "world_relative_quarter": [
+        250000.0,
+        250000.0
+      ]
+    },
+    {
+      "absolute_8m_rule": [
+        8.0,
+        8.0
+      ],
+      "coarse_int32_height_bytes_estimate": 95413824,
+      "coarse_sample_count_estimate": 23853456,
+      "coarse_step_m": 2048,
+      "fingerprint": 12894610832480924431,
+      "format_version": 1,
+      "generator": "scale-aware",
+      "generator_version": 1,
+      "height_m": 10000000,
+      "name": "scale matrix",
+      "overview_columns": 1024,
+      "overview_rows": 1024,
+      "overview_sample_capacity": 1048576,
+      "requires_paged_coarse": true,
+      "scale_policy_version": 1,
+      "seed": 42,
+      "semi_relative_30km_rule": [
+        150356.17008818165,
+        150356.17008818165
+      ],
+      "width_m": 10000000,
+      "world_relative_quarter": [
+        2500000.0,
+        2500000.0
+      ]
+    },
+    {
+      "absolute_8m_rule": [
+        8.0,
+        8.0
+      ],
+      "coarse_int32_height_bytes_estimate": 2422464,
+      "coarse_sample_count_estimate": 605616,
+      "coarse_step_m": 2048,
+      "fingerprint": 17776413507536366049,
+      "format_version": 1,
+      "generator": "scale-aware",
+      "generator_version": 1,
+      "height_m": 250000,
+      "name": "rectangular",
+      "overview_columns": 1024,
+      "overview_rows": 27,
+      "overview_sample_capacity": 27648,
+      "requires_paged_coarse": false,
+      "scale_policy_version": 1,
+      "seed": 42,
+      "semi_relative_30km_rule": [
+        78842.56707246994,
+        78842.56707246994
+      ],
+      "width_m": 10000000,
+      "world_relative_quarter": [
+        2500000.0,
+        62500.0
+      ]
+    },
+    {
+      "absolute_8m_rule": [
+        8.0,
+        8.0
+      ],
+      "coarse_int32_height_bytes_estimate": 1170724,
+      "coarse_sample_count_estimate": 292681,
+      "coarse_step_m": 256,
+      "fingerprint": 11724502269689503169,
+      "format_version": 1,
+      "generator": "scale-aware",
+      "generator_version": 1,
+      "height_m": 138240,
+      "name": "small",
+      "overview_columns": 541,
+      "overview_rows": 541,
+      "overview_sample_capacity": 292681,
+      "requires_paged_coarse": false,
+      "scale_policy_version": 1,
+      "seed": 42,
+      "semi_relative_30km_rule": [
+        33600.29253519377,
+        33600.29253519377
+      ],
+      "width_m": 138240,
+      "world_relative_quarter": [
+        34560.0,
+        34560.0
+      ]
+    },
+    {
+      "absolute_8m_rule": [
+        8.0,
+        8.0
+      ],
+      "coarse_int32_height_bytes_estimate": 2630884,
+      "coarse_sample_count_estimate": 657721,
+      "coarse_step_m": 256,
+      "fingerprint": 11914281929676615137,
+      "format_version": 1,
+      "generator": "scale-aware",
+      "generator_version": 1,
+      "height_m": 207360,
+      "name": "medium",
+      "overview_columns": 811,
+      "overview_rows": 811,
+      "overview_sample_capacity": 657721,
+      "requires_paged_coarse": false,
+      "scale_policy_version": 1,
+      "seed": 42,
+      "semi_relative_30km_rule": [
+        38723.535249572524,
+        38723.535249572524
+      ],
+      "width_m": 207360,
+      "world_relative_quarter": [
+        51840.0,
+        51840.0
+      ]
+    },
+    {
+      "absolute_8m_rule": [
+        8.0,
+        8.0
+      ],
+      "coarse_int32_height_bytes_estimate": 1170724,
+      "coarse_sample_count_estimate": 292681,
+      "coarse_step_m": 512,
+      "fingerprint": 1209559977645651701,
+      "format_version": 1,
+      "generator": "scale-aware",
+      "generator_version": 1,
+      "height_m": 276480,
+      "name": "large",
+      "overview_columns": 541,
+      "overview_rows": 541,
+      "overview_sample_capacity": 292681,
+      "requires_paged_coarse": false,
+      "scale_policy_version": 1,
+      "seed": 42,
+      "semi_relative_30km_rule": [
+        42825.609931767285,
+        42825.609931767285
+      ],
+      "width_m": 276480,
+      "world_relative_quarter": [
+        69120.0,
+        69120.0
+      ]
+    },
+    {
+      "absolute_8m_rule": [
+        8.0,
+        8.0
+      ],
+      "coarse_int32_height_bytes_estimate": 2630884,
+      "coarse_sample_count_estimate": 657721,
+      "coarse_step_m": 512,
+      "fingerprint": 4678674083472570112,
+      "format_version": 1,
+      "generator": "scale-aware",
+      "generator_version": 1,
+      "height_m": 414720,
+      "name": "huge",
+      "overview_columns": 811,
+      "overview_rows": 811,
+      "overview_sample_capacity": 657721,
+      "requires_paged_coarse": false,
+      "scale_policy_version": 1,
+      "seed": 42,
+      "semi_relative_30km_rule": [
+        49355.49337971472,
+        49355.49337971472
+      ],
+      "width_m": 414720,
+      "world_relative_quarter": [
+        103680.0,
+        103680.0
+      ]
+    }
+  ],
+  "coarse_sample_budget": 1048576,
+  "height_samples_allocated": 0,
+  "overview_side_limit": 1024,
+  "runtime_presets_changed": false,
+  "scope": "P1a descriptor/policy only; terrain generation and runtime integration pending",
+  "terrain_generated": false
+}

@@ -1,0 +1,50 @@
+{
+  "_comment": "Provisional tuning. GDD 12 leaves the tick-to-year mapping open; see doc/DECISIONS.md D5.",
+  "time": {
+    "ticks_per_hour": 10,
+    "hours_per_day": 24,
+    "days_per_season": 15,
+    "seasons_per_year": 4
+  },
+  "needs": {
+    "hunger_per_hour": 0.0625,
+    "thirst_per_hour": 0.04,
+    "fatigue_per_hour": 0.055,
+    "sleep_recovery_per_hour": 0.17,
+    "eat_threshold": 0.65,
+    "drink_threshold": 0.65,
+    "sleep_threshold": 0.25
+  },
+  "work": {
+    "base_work_per_hour": 110,
+    "skill_bonus_per_level": 0.1,
+    "max_skill_level": 20,
+    "skill_gain_per_work_unit": 0.0025
+  },
+  "_body_comment": "The game hour is compressed (DECISIONS.md D5), so walk_tiles_per_hour is tuned against work and needs rather than real-world walking: 55 metres/hour keeps distance costly without letting travel consume the whole day.",
+  "body": {
+    "walk_tiles_per_hour": 55,
+    "carry_capacity_kg": 25,
+    "carry_penalty_per_kg": 0.005,
+    "adult_age": 16,
+    "elder_age": 50,
+    "max_age": 80,
+    "comfortable_temp_c": 20,
+    "hypothermia_temp_c": 5
+  },
+  "_climate_comment": "A river valley in the Fertile Crescent. Winter used to average one degree against a hypothermia line of five, so the cold ran the whole season with no let-up and health could never recover: see DECISIONS.md D82.",
+  "climate": {
+    "season_mid_c": [
+      18,
+      32,
+      21,
+      9
+    ],
+    "day_warmth_c": 4,
+    "night_chill_c": 5
+  },
+  "_farming_comment": "Water led onto poor soil improves the ground itself, and the improvement stays: half a point of fertility a day, so a season of watering turns desert into something worth sowing. See DECISIONS.md D90.",
+  "farming": {
+    "irrigated_soil_gain_per_day": 0.005
+  }
+}

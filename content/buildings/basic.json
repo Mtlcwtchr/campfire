@@ -1,0 +1,304 @@
+[
+  {
+    "_comment": "Slice buildings do not block movement: people work inside them. A palisade does.",
+    "name": "campfire",
+    "label": "Campfire",
+    "kind": "hearth",
+    "blocks_movement": false,
+    "materials": [
+      {
+        "item": "branch",
+        "count": 11
+      }
+    ],
+    "work": 78,
+    "knowledge": "firemaking",
+    "provides_heat": true,
+    "provides_fire": true,
+    "footprint": [
+      1,
+      1
+    ]
+  },
+  {
+    "name": "lean_to",
+    "label": "Lean-to shelter",
+    "kind": "housing",
+    "blocks_movement": false,
+    "sheltered": true,
+    "materials": [
+      {
+        "item": "branch",
+        "count": 18
+      },
+      {
+        "item": "thatch",
+        "count": 6
+      }
+    ],
+    "work": 182,
+    "knowledge": "thatching",
+    "sleeping_slots": 2,
+    "warmth_bonus": 2,
+    "comfort_bonus": 0.05,
+    "storage_slots": 4,
+    "footprint": [
+      2,
+      2
+    ],
+    "accepts": [
+      "food"
+    ]
+  },
+  {
+    "name": "store_pit",
+    "label": "Storage pit",
+    "kind": "storage",
+    "blocks_movement": false,
+    "sheltered": true,
+    "materials": [
+      {
+        "item": "branch",
+        "count": 22
+      },
+      {
+        "item": "thatch",
+        "count": 8
+      }
+    ],
+    "work": 234,
+    "knowledge": "thatching",
+    "storage_slots": 144,
+    "spoil_multiplier": 0.5,
+    "firm_ground": true,
+    "footprint": [
+      2,
+      2
+    ],
+    "accepts": [
+      "raw",
+      "building_material",
+      "component",
+      "tool",
+      "clothing",
+      "weapon"
+    ],
+    "_comment": "A pit dug and lined against the damp. Reed, clay, brick, flint, fibre, tools - everything that is not food. The grain goes in the granary."
+  },
+  {
+    "name": "wattle_hut",
+    "label": "Wattle hut",
+    "kind": "housing",
+    "blocks_movement": false,
+    "sheltered": true,
+    "materials": [
+      {
+        "item": "branch",
+        "count": 10
+      },
+      {
+        "item": "thatch",
+        "count": 3
+      }
+    ],
+    "work": 100,
+    "knowledge": "carpentry",
+    "sleeping_slots": 2,
+    "warmth_bonus": 6,
+    "comfort_bonus": 0.2,
+    "storage_slots": 6,
+    "firm_ground": true,
+    "footprint": [
+      2,
+      2
+    ],
+    "accepts": [
+      "food"
+    ],
+    "salvage": 0.7
+  },
+  {
+    "name": "timber_house",
+    "label": "Timber house",
+    "kind": "housing",
+    "blocks_movement": false,
+    "sheltered": true,
+    "materials": [
+      {
+        "item": "wood_log",
+        "count": 35
+      },
+      {
+        "item": "thatch",
+        "count": 22
+      },
+      {
+        "item": "clay",
+        "count": 11
+      }
+    ],
+    "work": 1274,
+    "knowledge": "carpentry",
+    "sleeping_slots": 4,
+    "warmth_bonus": 9,
+    "comfort_bonus": 0.4,
+    "storage_slots": 12,
+    "firm_ground": true,
+    "footprint": [
+      3,
+      2
+    ],
+    "accepts": [
+      "food"
+    ],
+    "replaces": "wattle_hut"
+  },
+  {
+    "name": "quern_stand",
+    "label": "Quern stand",
+    "kind": "workshop",
+    "blocks_movement": false,
+    "materials": [
+      {
+        "item": "quern_stone",
+        "count": 3
+      },
+      {
+        "item": "branch",
+        "count": 6
+      }
+    ],
+    "work": 156,
+    "knowledge": "grinding",
+    "function": "quern",
+    "firm_ground": true,
+    "footprint": [
+      3,
+      2
+    ],
+    "max_per_settlement": 1,
+    "worker_slots": 3,
+    "storage_slots": 24
+  },
+  {
+    "name": "palisade",
+    "label": "Palisade",
+    "kind": "fortification",
+    "blocks_movement": true,
+    "materials": [
+      {
+        "item": "wood_log",
+        "count": 4
+      }
+    ],
+    "work": 195,
+    "knowledge": "carpentry",
+    "firm_ground": true,
+    "footprint": [
+      1,
+      1
+    ]
+  },
+  {
+    "name": "kiln",
+    "label": "Kiln",
+    "kind": "workshop",
+    "blocks_movement": false,
+    "materials": [
+      {
+        "item": "stone_block",
+        "count": 8
+      },
+      {
+        "item": "clay",
+        "count": 18
+      }
+    ],
+    "work": 338,
+    "knowledge": "pottery",
+    "function": "kiln",
+    "provides_heat": true,
+    "firm_ground": true,
+    "footprint": [
+      3,
+      2
+    ],
+    "max_per_settlement": 1,
+    "worker_slots": 1,
+    "near": "extraction",
+    "storage_slots": 20
+  },
+  {
+    "_comment": "The store the harvest goes into: raised off the ground, sealed, with a filling hole in the top. Food and nothing else.",
+    "name": "granary",
+    "label": "Granary",
+    "kind": "storage",
+    "blocks_movement": false,
+    "sheltered": true,
+    "materials": [
+      {
+        "item": "wood_log",
+        "count": 14
+      },
+      {
+        "item": "clay",
+        "count": 18
+      },
+      {
+        "item": "thatch",
+        "count": 11
+      }
+    ],
+    "work": 546,
+    "knowledge": "carpentry",
+    "storage_slots": 360,
+    "spoil_multiplier": 0.25,
+    "firm_ground": true,
+    "footprint": [
+      3,
+      2
+    ],
+    "accepts": [
+      "food"
+    ]
+  },
+  {
+    "_comment": "A production building, not a freestanding furniture oven: flour and fuel come in, bread comes out.",
+    "name": "bakery",
+    "label": "Bakery",
+    "kind": "workshop",
+    "blocks_movement": false,
+    "sheltered": true,
+    "materials": [
+      {
+        "item": "stone_block",
+        "count": 14
+      },
+      {
+        "item": "clay",
+        "count": 22
+      },
+      {
+        "item": "wood_log",
+        "count": 11
+      },
+      {
+        "item": "thatch",
+        "count": 11
+      }
+    ],
+    "work": 676,
+    "knowledge": "baking",
+    "function": "oven",
+    "provides_heat": true,
+    "provides_fire": true,
+    "firm_ground": true,
+    "footprint": [
+      3,
+      2
+    ],
+    "max_per_settlement": 1,
+    "worker_slots": 2,
+    "storage_slots": 24
+  }
+]

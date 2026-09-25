@@ -1,0 +1,131 @@
+[
+  {
+    "name": "foraging",
+    "label": "Gathering by hand"
+  },
+  {
+    "name": "flintknapping",
+    "label": "Working stone into edges"
+  },
+  {
+    "name": "firemaking",
+    "label": "Making and keeping fire"
+  },
+  {
+    "name": "hafting",
+    "label": "Binding a head to a haft"
+  },
+  {
+    "name": "thatching",
+    "label": "Bundling reed and straw"
+  },
+  {
+    "name": "hunting",
+    "label": "Taking game with a spear"
+  },
+  {
+    "name": "carpentry",
+    "label": "Timber joining"
+  },
+  {
+    "name": "weaving",
+    "label": "Spinning and weaving fibre"
+  },
+  {
+    "name": "sewing",
+    "label": "Cutting and stitching cloth"
+  },
+  {
+    "name": "threshing",
+    "label": "Separating grain from ear"
+  },
+  {
+    "name": "grinding",
+    "label": "Milling grain to flour"
+  },
+  {
+    "name": "baking",
+    "label": "Baking dough into bread"
+  },
+  {
+    "_comment": "Discoveries surface out of the related work, not from a research job (GDD 6).",
+    "name": "irrigation",
+    "label": "Leading water to a field",
+    "discovered_from": "farming",
+    "discovery_one_in": 900,
+    "requires": [
+      "foraging"
+    ]
+  },
+  {
+    "name": "food_pit",
+    "label": "Storing food in a cold pit",
+    "discovered_from": "cooking",
+    "discovery_one_in": 3000,
+    "requires": [
+      "firemaking"
+    ]
+  },
+  {
+    "name": "tillage",
+    "label": "Breaking and sowing ground"
+  },
+  {
+    "name": "herding",
+    "label": "Keeping a flock"
+  },
+  {
+    "name": "dairying",
+    "label": "Making cheese from milk"
+  },
+  {
+    "name": "pottery",
+    "label": "Shaping and firing clay"
+  },
+  {
+    "name": "masonry",
+    "label": "Dressing and laying stone"
+  },
+  {
+    "name": "coppersmithing",
+    "label": "Smelting and working copper"
+  },
+  {
+    "_comment": "Alloying is the age's own discovery: a smith who works copper long enough finds what tin does to it.",
+    "name": "bronzeworking",
+    "label": "Alloying bronze",
+    "discovered_from": "crafting",
+    "discovery_one_in": 2500,
+    "requires": [
+      "coppersmithing"
+    ]
+  },
+  {
+    "name": "reedwork",
+    "label": "Cutting and binding reed"
+  },
+  {
+    "name": "brickmaking",
+    "label": "Moulding and drying mud brick"
+  },
+  {
+    "name": "fishing",
+    "label": "Taking fish from the river"
+  },
+  {
+    "name": "herbcraft",
+    "label": "Which plant answers which hurt"
+  },
+  {
+    "name": "burial",
+    "label": "Laying the dead to rest"
+  },
+  {
+    "name": "feltmaking",
+    "label": "Beating wool into felt"
+  },
+  {
+    "name": "smoking",
+    "label": "Keeping meat over a slow fire"
+  }
+]

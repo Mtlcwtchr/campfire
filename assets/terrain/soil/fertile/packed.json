@@ -1,0 +1,55 @@
+{
+  "id": "soil_fertile",
+  "runtime_size": 2048,
+  "runtime_files": {
+    "albedo": "soil_fertile_albedo.png",
+    "normal": "soil_fertile_normal.png",
+    "properties": "soil_fertile_properties.png"
+  },
+  "properties_channels": {
+    "r": "ao",
+    "g": "roughness",
+    "b": "height",
+    "a": "mask"
+  },
+  "mip_steps": [
+    2,
+    4,
+    8,
+    16
+  ],
+  "height_range_before_stretch": [
+    0.0074,
+    0.9954
+  ],
+  "had": {
+    "ao": true,
+    "rough": true,
+    "displacement": true,
+    "mask": false
+  },
+  "source": {
+    "site": "polyhaven",
+    "asset_id": "forest_ground_06",
+    "asset_url": "https://polyhaven.com/a/forest_ground_06",
+    "license": "CC0",
+    "authors": [
+      "Charlotte Baglioni"
+    ],
+    "attribution_required": false,
+    "original_physical_metres": [
+      2.11,
+      2.11
+    ],
+    "runtime_world_scale": 2.2,
+    "resolution": "2k",
+    "files": {
+      "diffuse": "soil_fertile_diffuse.png",
+      "normal": "soil_fertile_normal.png",
+      "displacement": "soil_fertile_displacement.png",
+      "rough": "soil_fertile_rough.png",
+      "ao": "soil_fertile_ao.png"
+    }
+  },
+  "world_scale": 2.2
+}

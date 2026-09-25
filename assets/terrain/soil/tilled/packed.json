@@ -1,0 +1,56 @@
+{
+  "id": "soil_tilled",
+  "runtime_size": 2048,
+  "runtime_files": {
+    "albedo": "soil_tilled_albedo.png",
+    "normal": "soil_tilled_normal.png",
+    "properties": "soil_tilled_properties.png"
+  },
+  "properties_channels": {
+    "r": "ao",
+    "g": "roughness",
+    "b": "height",
+    "a": "mask"
+  },
+  "mip_steps": [
+    2,
+    4,
+    8,
+    16
+  ],
+  "height_range_before_stretch": [
+    0.0092,
+    0.9828
+  ],
+  "had": {
+    "ao": true,
+    "rough": true,
+    "displacement": true,
+    "mask": false
+  },
+  "source": {
+    "site": "polyhaven",
+    "asset_id": "raked_dirt",
+    "asset_url": "https://polyhaven.com/a/raked_dirt",
+    "license": "CC0",
+    "authors": [
+      "Dario Barresi",
+      "Dimitrios Savva"
+    ],
+    "attribution_required": false,
+    "original_physical_metres": [
+      2.0,
+      2.0
+    ],
+    "runtime_world_scale": 1.8,
+    "resolution": "2k",
+    "files": {
+      "diffuse": "soil_tilled_diffuse.png",
+      "normal": "soil_tilled_normal.png",
+      "displacement": "soil_tilled_displacement.png",
+      "rough": "soil_tilled_rough.png",
+      "ao": "soil_tilled_ao.png"
+    }
+  },
+  "world_scale": 1.8
+}

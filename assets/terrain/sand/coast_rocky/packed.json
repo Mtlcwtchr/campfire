@@ -1,0 +1,55 @@
+{
+  "id": "sand_coast_rocky",
+  "runtime_size": 2048,
+  "runtime_files": {
+    "albedo": "sand_coast_rocky_albedo.png",
+    "normal": "sand_coast_rocky_normal.png",
+    "properties": "sand_coast_rocky_properties.png"
+  },
+  "properties_channels": {
+    "r": "ao",
+    "g": "roughness",
+    "b": "height",
+    "a": "mask"
+  },
+  "mip_steps": [
+    2,
+    4,
+    8,
+    16
+  ],
+  "height_range_before_stretch": [
+    2.0,
+    228.0
+  ],
+  "had": {
+    "ao": true,
+    "rough": true,
+    "displacement": true,
+    "mask": false
+  },
+  "source": {
+    "site": "polyhaven",
+    "asset_id": "coast_sand_01",
+    "asset_url": "https://polyhaven.com/a/coast_sand_01",
+    "license": "CC0",
+    "authors": [
+      "Rob Tuytel"
+    ],
+    "attribution_required": false,
+    "original_physical_metres": [
+      15.0,
+      15.0
+    ],
+    "runtime_world_scale": 12.0,
+    "resolution": "2k",
+    "files": {
+      "diffuse": "sand_coast_rocky_diffuse.png",
+      "normal": "sand_coast_rocky_normal.png",
+      "displacement": "sand_coast_rocky_displacement.png",
+      "rough": "sand_coast_rocky_rough.png",
+      "ao": "sand_coast_rocky_ao.png"
+    }
+  },
+  "world_scale": 12.0
+}

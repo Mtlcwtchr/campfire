@@ -1,0 +1,28 @@
+[
+  {
+    "_comment": "Sown grain, not gathered. Costs seed the community could have eaten and pays back a season later - the trade a farming culture already knows how to make.",
+    "name": "einkorn", "label": "Einkorn", "knowledge": "tillage",
+    "seed": "grain", "seed_count": 2,
+    "harvest": "einkorn_ears", "harvest_count": 16,
+    "grow_days": 22, "sow_seasons": ["spring", "autumn"],
+    "till_work": 60, "sow_work": 25, "harvest_work": 40,
+    "till_tool": "hoe", "bare_hand_penalty": 0.5
+  },
+  {
+    "name": "flax", "label": "Flax", "knowledge": "tillage",
+    "seed": "flax_seed", "seed_count": 2,
+    "harvest": "plant_fiber", "harvest_count": 12,
+    "grow_days": 18, "sow_seasons": ["spring"],
+    "till_work": 55, "sow_work": 25, "harvest_work": 35,
+    "till_tool": "hoe", "bare_hand_penalty": 0.5
+  },
+  {
+    "_comment": "The floodplain cereal. Sown on the silt after the flood and reaped in early summer.",
+    "name": "emmer", "label": "Emmer", "knowledge": "tillage",
+    "seed": "grain", "seed_count": 2,
+    "harvest": "emmer_ears", "harvest_count": 22,
+    "grow_days": 20, "sow_seasons": ["autumn", "spring"],
+    "till_work": 55, "sow_work": 22, "harvest_work": 38,
+    "till_tool": "hoe", "bare_hand_penalty": 0.5
+  }
+]

@@ -1,0 +1,55 @@
+{
+  "id": "cliff_mossy",
+  "runtime_size": 2048,
+  "runtime_files": {
+    "albedo": "cliff_mossy_albedo.png",
+    "normal": "cliff_mossy_normal.png",
+    "properties": "cliff_mossy_properties.png"
+  },
+  "properties_channels": {
+    "r": "ao",
+    "g": "roughness",
+    "b": "height",
+    "a": "mask"
+  },
+  "mip_steps": [
+    2,
+    4,
+    8,
+    16
+  ],
+  "height_range_before_stretch": [
+    64.5,
+    255.0
+  ],
+  "had": {
+    "ao": true,
+    "rough": true,
+    "displacement": true,
+    "mask": false
+  },
+  "source": {
+    "site": "polyhaven",
+    "asset_id": "mossy_rock",
+    "asset_url": "https://polyhaven.com/a/mossy_rock",
+    "license": "CC0",
+    "authors": [
+      "Rob Tuytel"
+    ],
+    "attribution_required": false,
+    "original_physical_metres": [
+      3.0,
+      3.0
+    ],
+    "runtime_world_scale": 4.0,
+    "resolution": "2k",
+    "files": {
+      "diffuse": "cliff_mossy_diffuse.png",
+      "normal": "cliff_mossy_normal.png",
+      "displacement": "cliff_mossy_displacement.png",
+      "rough": "cliff_mossy_rough.png",
+      "ao": "cliff_mossy_ao.png"
+    }
+  },
+  "world_scale": 4.0
+}

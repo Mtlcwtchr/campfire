@@ -1,0 +1,407 @@
+[
+  {
+    "_comment": "A dug channel that leads river water onto the silt. It has to start at the water or continue a channel that already does, so a community digs one canal out from the bank and branches it where the water is wanted. Water in the furrow helps this year's crop a little; what it really does is improve the ground itself, season after season (D90). No materials: a canal is labour.",
+    "name": "irrigation_canal",
+    "label": "Irrigation canal",
+    "kind": "other",
+    "blocks_movement": false,
+    "materials": [],
+    "work": 78,
+    "knowledge": "irrigation",
+    "irrigates": 3,
+    "irrigation_bonus": 0.15,
+    "footprint": [
+      1,
+      1
+    ]
+  },
+  {
+    "_comment": "A pit dug and lined against the damp. Reed, clay, brick, flint, fibre, tools - everything that is not food. The grain goes in the granary.",
+    "name": "reed_pit",
+    "label": "Lined store pit",
+    "kind": "storage",
+    "footprint": [
+      2,
+      2
+    ],
+    "blocks_movement": false,
+    "firm_ground": true,
+    "materials": [
+      {
+        "item": "reed",
+        "count": 10
+      },
+      {
+        "item": "thatch",
+        "count": 4
+      }
+    ],
+    "work": 190,
+    "knowledge": "reedwork",
+    "storage_slots": 108,
+    "spoil_rate": 0.8,
+    "accepts": [
+      "raw",
+      "building_material",
+      "component",
+      "tool",
+      "clothing",
+      "weapon"
+    ]
+  },
+  {
+    "_comment": "A granary of reed mats on posts: raised off the damp, sealed, filled through the top. What holds the harvest before there is brick to build with.",
+    "name": "reed_granary",
+    "label": "Reed granary",
+    "kind": "storage",
+    "footprint": [
+      3,
+      2
+    ],
+    "blocks_movement": false,
+    "firm_ground": true,
+    "materials": [
+      {
+        "item": "reed",
+        "count": 22
+      },
+      {
+        "item": "thatch",
+        "count": 8
+      }
+    ],
+    "work": 300,
+    "knowledge": "reedwork",
+    "storage_slots": 180,
+    "spoil_rate": 0.75,
+    "accepts": [
+      "food"
+    ]
+  },
+  {
+    "_comment": "The roof a family throws up in a week: a reed frame, mats and thatch. Room for a family of three, and what everybody lives in until there is a kiln to fire brick with.",
+    "name": "hut",
+    "label": "Reed hut",
+    "kind": "housing",
+    "blocks_movement": false,
+    "sheltered": true,
+    "materials": [
+      {
+        "item": "reed",
+        "count": 8
+      },
+      {
+        "item": "thatch",
+        "count": 3
+      }
+    ],
+    "work": 90,
+    "knowledge": "reedwork",
+    "sleeping_slots": 2,
+    "warmth_bonus": 2,
+    "comfort_bonus": 0.05,
+    "storage_slots": 6,
+    "footprint": [
+      2,
+      2
+    ],
+    "accepts": [
+      "food"
+    ],
+    "salvage": 0.7
+  },
+  {
+    "_comment": "The real thing: mud-brick walls on a reed-mat course, thick enough to hold the night's cold out and the day's heat off. This is the house a settled Mesopotamian family lives in.",
+    "name": "mudbrick_house",
+    "label": "Mud-brick house",
+    "kind": "housing",
+    "blocks_movement": false,
+    "sheltered": true,
+    "materials": [
+      {
+        "item": "mudbrick",
+        "count": 69
+      },
+      {
+        "item": "reed",
+        "count": 29
+      },
+      {
+        "item": "thatch",
+        "count": 18
+      }
+    ],
+    "work": 806,
+    "knowledge": "brickmaking",
+    "sleeping_slots": 4,
+    "warmth_bonus": 10,
+    "comfort_bonus": 0.45,
+    "storage_slots": 12,
+    "firm_ground": true,
+    "footprint": [
+      3,
+      2
+    ],
+    "accepts": [
+      "food"
+    ],
+    "replaces": "hut"
+  },
+  {
+    "_comment": "The house a big family lives in: two storeys around a court, room for five or six. What a household builds when it has the hands and the brick for it, instead of putting up a second small house next door.",
+    "name": "mudbrick_manor",
+    "label": "Mud-brick house, large",
+    "kind": "housing",
+    "blocks_movement": false,
+    "sheltered": true,
+    "materials": [
+      {
+        "item": "mudbrick",
+        "count": 98
+      },
+      {
+        "item": "reed",
+        "count": 29
+      },
+      {
+        "item": "thatch",
+        "count": 18
+      }
+    ],
+    "work": 1404,
+    "knowledge": "brickmaking",
+    "sleeping_slots": 6,
+    "warmth_bonus": 10,
+    "comfort_bonus": 0.45,
+    "storage_slots": 18,
+    "firm_ground": true,
+    "footprint": [
+      4,
+      3
+    ],
+    "accepts": [
+      "food"
+    ],
+    "replaces": "mudbrick_house"
+  },
+  {
+    "name": "mudbrick_granary",
+    "label": "Granary",
+    "kind": "storage",
+    "blocks_movement": false,
+    "sheltered": true,
+    "materials": [
+      {
+        "item": "mudbrick",
+        "count": 46
+      },
+      {
+        "item": "reed",
+        "count": 22
+      }
+    ],
+    "work": 442,
+    "knowledge": "brickmaking",
+    "storage_slots": 420,
+    "spoil_multiplier": 0.22,
+    "firm_ground": true,
+    "footprint": [
+      3,
+      2
+    ],
+    "accepts": [
+      "food"
+    ],
+    "_comment": "The store the harvest goes into: raised off the ground, sealed, with a filling hole in the top. Food and nothing else.",
+    "replaces": "reed_granary"
+  },
+  {
+    "_comment": "A roofed production building around a brick oven, with room for flour, fuel and bakers.",
+    "name": "mudbrick_bakery",
+    "label": "Mud-brick bakery",
+    "kind": "workshop",
+    "blocks_movement": false,
+    "sheltered": true,
+    "materials": [
+      {
+        "item": "mudbrick",
+        "count": 51
+      },
+      {
+        "item": "reed",
+        "count": 22
+      },
+      {
+        "item": "thatch",
+        "count": 11
+      }
+    ],
+    "work": 494,
+    "knowledge": "baking",
+    "function": "oven",
+    "provides_heat": true,
+    "provides_fire": true,
+    "firm_ground": true,
+    "footprint": [
+      3,
+      2
+    ],
+    "max_per_settlement": 1,
+    "worker_slots": 2,
+    "storage_slots": 24
+  },
+  {
+    "name": "courtyard_wall",
+    "label": "Courtyard wall",
+    "kind": "fortification",
+    "blocks_movement": true,
+    "materials": [
+      {
+        "item": "mudbrick",
+        "count": 11
+      }
+    ],
+    "work": 143,
+    "knowledge": "brickmaking",
+    "firm_ground": true,
+    "footprint": [
+      1,
+      1
+    ]
+  },
+  {
+    "_comment": "The one part of the wall people walk through. A community that walls itself in and leaves its fields outside starves behind its own fortification, so the line is laid out closed and this stands in the one tile set aside for it. Brick and nothing else: the valley fells no timber, and a gate that wanted logs was a gate the community could never begin.",
+    "name": "city_gate",
+    "label": "Gate",
+    "kind": "fortification",
+    "blocks_movement": false,
+    "materials": [
+      {
+        "item": "mudbrick",
+        "count": 20
+      }
+    ],
+    "work": 160,
+    "knowledge": "brickmaking",
+    "firm_ground": true,
+    "max_per_settlement": 1,
+    "footprint": [
+      1,
+      1
+    ]
+  },
+  {
+    "_comment": "A pit kiln of raw clay and reed - no stone, because a river valley has none to spare. It is the one brick building not built of brick, because it is what fires the brick: until it stands, every roof is reed.",
+    "name": "brick_kiln",
+    "label": "Brick kiln",
+    "kind": "workshop",
+    "blocks_movement": false,
+    "function": "kiln",
+    "materials": [
+      {
+        "item": "clay",
+        "count": 30
+      },
+      {
+        "item": "reed",
+        "count": 16
+      }
+    ],
+    "work": 273,
+    "knowledge": "pottery",
+    "provides_heat": true,
+    "firm_ground": true,
+    "footprint": [
+      3,
+      2
+    ],
+    "max_per_settlement": 1,
+    "worker_slots": 1,
+    "near": "extraction",
+    "storage_slots": 20
+  },
+  {
+    "name": "brick_quern",
+    "label": "Grinding stand",
+    "kind": "workshop",
+    "blocks_movement": false,
+    "function": "quern",
+    "materials": [
+      {
+        "item": "quern_stone",
+        "count": 3
+      },
+      {
+        "item": "mudbrick",
+        "count": 11
+      }
+    ],
+    "work": 156,
+    "knowledge": "grinding",
+    "firm_ground": true,
+    "footprint": [
+      3,
+      2
+    ],
+    "max_per_settlement": 1,
+    "worker_slots": 3,
+    "storage_slots": 24
+  },
+  {
+    "_comment": "A low open shed by the pasture: shade, a bench and pots. Milk keeps a day and cheese keeps a season, so this is what makes a flock worth milking.",
+    "name": "reed_dairy",
+    "label": "Dairy shed",
+    "kind": "workshop",
+    "footprint": [
+      3,
+      2
+    ],
+    "blocks_movement": false,
+    "firm_ground": true,
+    "materials": [
+      {
+        "item": "reed",
+        "count": 26
+      },
+      {
+        "item": "clay_pot",
+        "count": 3
+      }
+    ],
+    "work": 260,
+    "knowledge": "dairying",
+    "function": "dairy",
+    "max_per_settlement": 1,
+    "worker_slots": 2,
+    "near": "pasture",
+    "storage_slots": 18
+  },
+  {
+    "_comment": "A reed byre: posts, mats and a thatched roof, with room for a flock. Penned at night the sheep are together in the morning and the wolves have had nothing.",
+    "name": "reed_byre",
+    "label": "Byre",
+    "kind": "other",
+    "footprint": [
+      4,
+      3
+    ],
+    "blocks_movement": false,
+    "firm_ground": true,
+    "near": "pasture",
+    "materials": [
+      {
+        "item": "reed",
+        "count": 30
+      },
+      {
+        "item": "thatch",
+        "count": 12
+      }
+    ],
+    "work": 420,
+    "knowledge": "herding",
+    "animal_slots": 25,
+    "max_per_settlement": 1,
+    "sheltered": true
+  }
+]

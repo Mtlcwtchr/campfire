@@ -1,0 +1,38 @@
+[
+  {
+    "_comment": "Medicine, as an early bronze age community actually had it: gathered plants, a poultice for wounds, a bitter tea for fever, and the knowledge of which is which (D98).",
+    "name": "herbs",
+    "label": "Herbs",
+    "category": "raw",
+    "mass_per_unit": 0.05,
+    "stack_limit": 40,
+    "spoil_days": 30
+  },
+  {
+    "name": "willow_bark",
+    "label": "Willow bark",
+    "category": "raw",
+    "mass_per_unit": 0.08,
+    "stack_limit": 40,
+    "spoil_days": 90
+  },
+  {
+    "name": "poultice",
+    "label": "Poultice",
+    "category": "component",
+    "mass_per_unit": 0.2,
+    "stack_limit": 12,
+    "spoil_days": 20,
+    "heals_wound": 0.7
+  },
+  {
+    "name": "fever_draught",
+    "label": "Fever draught",
+    "category": "component",
+    "mass_per_unit": 0.3,
+    "stack_limit": 12,
+    "spoil_days": 14,
+    "heals_sickness": 0.6
+  }
+]
+

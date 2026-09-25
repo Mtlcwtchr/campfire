@@ -1,0 +1,26 @@
+{
+  "id": "water_foam",
+  "runtime_size": 2048,
+  "runtime_files": {
+    "mask": "water_foam_mask.png"
+  },
+  "mip_steps": [
+    2,
+    4,
+    8,
+    16
+  ],
+  "source": {
+    "site": "opengameart",
+    "pack": "Water - Batch of 15 Seamless Textures with normalmaps",
+    "pack_url": "https://opengameart.org/content/water-batch-of-15-seamless-textures-with-normalmaps",
+    "author": "Keith333",
+    "license": "CC-BY 3.0",
+    "attribution_required": true,
+    "kind": "mask",
+    "used_for": "the shoreline net and whitecaps",
+    "files": {
+      "mask": "FoamB_S.jpg"
+    }
+  }
+}

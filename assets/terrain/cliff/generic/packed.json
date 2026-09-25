@@ -1,0 +1,56 @@
+{
+  "id": "cliff_generic",
+  "runtime_size": 2048,
+  "runtime_files": {
+    "albedo": "cliff_generic_albedo.png",
+    "normal": "cliff_generic_normal.png",
+    "properties": "cliff_generic_properties.png"
+  },
+  "properties_channels": {
+    "r": "ao",
+    "g": "roughness",
+    "b": "height",
+    "a": "mask"
+  },
+  "mip_steps": [
+    2,
+    4,
+    8,
+    16
+  ],
+  "height_range_before_stretch": [
+    0.0005,
+    0.9993
+  ],
+  "had": {
+    "ao": true,
+    "rough": true,
+    "displacement": true,
+    "mask": false
+  },
+  "source": {
+    "site": "polyhaven",
+    "asset_id": "rock_face_03",
+    "asset_url": "https://polyhaven.com/a/rock_face_03",
+    "license": "CC0",
+    "authors": [
+      "Dario Barresi",
+      "Rico Cilliers"
+    ],
+    "attribution_required": false,
+    "original_physical_metres": [
+      2.7,
+      2.7
+    ],
+    "runtime_world_scale": 4.0,
+    "resolution": "2k",
+    "files": {
+      "diffuse": "cliff_generic_diffuse.png",
+      "normal": "cliff_generic_normal.png",
+      "displacement": "cliff_generic_displacement.png",
+      "rough": "cliff_generic_rough.png",
+      "ao": "cliff_generic_ao.png"
+    }
+  },
+  "world_scale": 4.0
+}

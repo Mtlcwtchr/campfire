@@ -1,0 +1,17 @@
+[
+  { "name": "strong",    "label": "Strong",    "heritable": true, "innate_one_in": 8,  "strength": 0.35,
+    "work_affinity": { "woodcutting": 0.4, "mining": 0.4, "construction": 0.3 }, "excludes": ["frail"] },
+  { "name": "frail",     "label": "Frail",     "heritable": true, "innate_one_in": 14, "strength": -0.3, "endurance": -0.2,
+    "work_affinity": { "crafting": 0.2 }, "excludes": ["strong"] },
+  { "name": "enduring",  "label": "Enduring",  "heritable": true, "innate_one_in": 9,  "endurance": 0.35,
+    "work_affinity": { "hauling": 0.3, "construction": 0.3, "farming": 0.2 } },
+  { "name": "deft",      "label": "Deft",      "heritable": true, "innate_one_in": 10, "dexterity": 0.35,
+    "work_affinity": { "crafting": 0.5, "cooking": 0.3, "medical": 0.3 } },
+  { "name": "great_mind","label": "Great mind","heritable": true, "innate_one_in": 40,
+    "learn_rate": 0.4, "discovery": 1.5,
+    "_comment": "GDD 6 names this trait explicitly: it raises the chance of a discovery during suitable work." },
+  { "name": "restless",  "label": "Restless",  "heritable": false, "innate_one_in": 12,
+    "work_affinity": { "hunting": 0.4, "foraging": 0.3 } },
+  { "name": "homebound", "label": "Homebound", "heritable": false, "innate_one_in": 12,
+    "work_affinity": { "cooking": 0.4, "childcare": 0.4, "crafting": 0.2 }, "excludes": ["restless"] }
+]

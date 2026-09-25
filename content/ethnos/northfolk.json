@@ -1,0 +1,62 @@
+[
+  {
+    "_comment": "A forest people of the northern woods. Timber is the one thing they have in abundance and grain is the one thing they cannot count on, so they build in logs and keep their winter in a smokehouse rather than a granary. They hunt more than they sow, they keep a few sheep for wool rather than for meat, and their year is organised around not starving in February (D100).",
+    "name": "northfolk",
+    "label": "Northfolk",
+    "language": "northfolk",
+    "architecture": "timber",
+    "biome": "temperate",
+    "common_knowledge": [
+      "foraging",
+      "flintknapping",
+      "firemaking",
+      "hafting",
+      "thatching",
+      "hunting",
+      "smoking",
+      "carpentry",
+      "herding",
+      "weaving",
+      "sewing",
+      "grinding",
+      "threshing",
+      "tillage",
+      "herbcraft",
+      "burial"
+    ],
+    "family_knowledge_pool": [
+      "pottery",
+      "masonry",
+      "coppersmithing"
+    ],
+    "family_knowledge_draws": 1,
+    "base_skill": 3,
+    "specialist_skill": 7,
+    "trades": [
+      "hunting",
+      "woodcutting",
+      "foraging",
+      "crafting",
+      "construction",
+      "cooking",
+      "hauling",
+      "farming",
+      "herding",
+      "fishing"
+    ],
+    "crops": [
+      "einkorn",
+      "flax"
+    ],
+    "starting_livestock": {
+      "sheep": 4,
+      "pig": 3
+    },
+    "preferred_foods": [
+      "smoked_meat",
+      "venison_cooked",
+      "berries",
+      "bread"
+    ]
+  }
+]

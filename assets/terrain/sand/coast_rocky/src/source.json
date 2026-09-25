@@ -1,0 +1,23 @@
+{
+  "site": "polyhaven",
+  "asset_id": "coast_sand_01",
+  "asset_url": "https://polyhaven.com/a/coast_sand_01",
+  "license": "CC0",
+  "authors": [
+    "Rob Tuytel"
+  ],
+  "attribution_required": false,
+  "original_physical_metres": [
+    15.0,
+    15.0
+  ],
+  "runtime_world_scale": 12.0,
+  "resolution": "2k",
+  "files": {
+    "diffuse": "sand_coast_rocky_diffuse.png",
+    "normal": "sand_coast_rocky_normal.png",
+    "displacement": "sand_coast_rocky_displacement.png",
+    "rough": "sand_coast_rocky_rough.png",
+    "ao": "sand_coast_rocky_ao.png"
+  }
+}

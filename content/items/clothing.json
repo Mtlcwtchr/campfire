@@ -1,0 +1,14 @@
+[
+  {
+    "name": "loincloth", "label": "Loincloth", "category": "clothing",
+    "mass_kg": 0.2, "stack_limit": 1, "insulation": 1
+  },
+  {
+    "name": "linen_tunic", "label": "Linen tunic", "category": "clothing",
+    "mass_kg": 0.6, "stack_limit": 1, "insulation": 4
+  },
+  {
+    "name": "hide_cloak", "label": "Hide cloak", "category": "clothing",
+    "mass_kg": 2.5, "stack_limit": 1, "insulation": 9
+  }
+]

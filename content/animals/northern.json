@@ -1,0 +1,39 @@
+[
+  {
+    "_comment": "Elk. The largest thing in a northern wood and the difference between a hunting people eating through February and not: one of them is a month of meat. There are never many.",
+    "name": "moose",
+    "label": "Elk",
+    "wild": true,
+    "wild_capacity": 16,
+    "size_metres": 1.5,
+    "adult_age_days": 540,
+    "max_age_days": 4500,
+    "breed_interval_days": 330,
+    "breeding_stock": 6,
+    "hunt": [
+      { "item": "venison_raw", "count": 34 },
+      { "item": "hide", "count": 4 }
+    ],
+    "hunt_work": 190,
+    "hunt_tool": "bow"
+  },
+  {
+    "_comment": "Bear. It takes what it finds, which in a bad autumn is somebody's flock. Killing one is dangerous work that the community does because of what it costs to leave it alive - and the hide is the warmest thing anybody owns.",
+    "name": "bear",
+    "label": "Bear",
+    "wild": true,
+    "predator": true,
+    "wild_capacity": 8,
+    "size_metres": 1.4,
+    "adult_age_days": 700,
+    "max_age_days": 4000,
+    "breed_interval_days": 400,
+    "breeding_stock": 3,
+    "hunt": [
+      { "item": "venison_raw", "count": 18 },
+      { "item": "hide", "count": 5 }
+    ],
+    "hunt_work": 240,
+    "hunt_tool": "spear"
+  }
+]

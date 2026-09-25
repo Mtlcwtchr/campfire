@@ -1,0 +1,68 @@
+{
+  "format_version": 2,
+  "_comment": "One rig for every person, built by tools/build_pawn_rig.py from source/pawn_layers.png. Each atlas is a 3x3 grid of 512px cells sharing one pivot, so all layers are drawn into the same rectangle and the composition is correct by construction.",
+  "cell": 512,
+  "pivot": [
+    256,
+    456
+  ],
+  "columns": [
+    "south",
+    "east",
+    "north"
+  ],
+  "rows": [
+    "child",
+    "adult",
+    "elder"
+  ],
+  "west": {
+    "source": "east",
+    "mirror_x": true
+  },
+  "layers": {
+    "body": "body.png",
+    "head": "head.png",
+    "arms": "arms.png",
+    "garment_kilt": "garment_kilt.png",
+    "garment_robe": "garment_robe.png",
+    "garment_tunic": "garment_tunic.png",
+    "garment_wool": "garment_wool.png",
+    "garment_fine": "garment_fine.png",
+    "garment_hide": "garment_hide.png"
+  },
+  "content_mapping": {
+    "loincloth": "garment_kilt",
+    "linen_tunic": "garment_tunic",
+    "wool_cloth": "garment_wool",
+    "felt_cloak": "garment_wool",
+    "hide_cloak": "garment_hide"
+  },
+  "draw_order": {
+    "south": [
+      "body",
+      "garment",
+      "arms",
+      "head"
+    ],
+    "east": [
+      "body",
+      "garment",
+      "arms",
+      "head"
+    ],
+    "west": [
+      "body",
+      "garment",
+      "arms",
+      "head"
+    ],
+    "north": [
+      "head",
+      "body",
+      "garment",
+      "arms"
+    ]
+  },
+  "figure_height_in_cell": 0.85
+}

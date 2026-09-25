@@ -1,0 +1,41 @@
+[
+  {
+    "_comment": "Goats. What a dry-country people herds where a flock of sheep would starve: they browse scrub and thorn rather than grass, give less wool and more milk, and breed faster. A steppe community lives off the milk and keeps the flock (D100).",
+    "name": "goat",
+    "label": "Goat",
+    "knowledge": "herding",
+    "adult_age_days": 150,
+    "max_age_days": 3200,
+    "shear_interval_days": 70,
+    "milk_interval_days": 3,
+    "breed_interval_days": 160,
+    "breeding_stock": 8,
+    "twin_one_in": 2,
+    "shear": [
+      {
+        "item": "wool",
+        "count": 2
+      }
+    ],
+    "milk": [
+      {
+        "item": "sheep_milk",
+        "count": 3
+      }
+    ],
+    "slaughter": [
+      {
+        "item": "mutton_raw",
+        "count": 6
+      },
+      {
+        "item": "hide",
+        "count": 2
+      }
+    ],
+    "shear_work": 35,
+    "milk_work": 16,
+    "slaughter_work": 60,
+    "size_metres": 0.85
+  }
+]

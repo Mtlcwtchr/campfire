@@ -1,0 +1,26 @@
+[
+  { "name": "branch",       "label": "Branch",        "category": "building_material", "mass_kg": 2,   "stack_limit": 25 },
+  { "name": "wood_log",     "label": "Log",           "category": "building_material", "mass_kg": 12,  "stack_limit": 8 },
+  { "name": "flint_stone",  "label": "Flint",         "category": "raw",               "mass_kg": 1,   "stack_limit": 30 },
+  { "name": "stone_block",  "label": "Stone block",   "category": "building_material", "mass_kg": 20,  "stack_limit": 6 },
+  { "name": "plant_fiber",  "label": "Plant fibre",   "category": "raw",               "mass_kg": 0.3, "stack_limit": 40 },
+  { "name": "thatch",       "label": "Thatch bundle", "category": "building_material", "mass_kg": 3,   "stack_limit": 15 },
+  { "name": "linen_cloth",  "label": "Linen cloth",   "category": "component",         "mass_kg": 0.5, "stack_limit": 20 },
+  { "name": "hide",         "label": "Raw hide",      "category": "raw",               "mass_kg": 4,   "stack_limit": 10 },
+  { "name": "einkorn_ears", "label": "Einkorn ears",  "category": "raw",               "mass_kg": 0.4, "stack_limit": 60 },
+  { "name": "clay",          "label": "Clay",           "category": "raw",               "mass_kg": 2,   "stack_limit": 25 },
+  { "name": "wool",          "label": "Fleece",         "category": "raw",               "mass_kg": 0.5, "stack_limit": 30 },
+  { "name": "wool_cloth",    "label": "Woollen cloth",  "category": "component",         "mass_kg": 0.6, "stack_limit": 20 },
+  { "name": "flax_seed",     "label": "Linseed",        "category": "raw",               "mass_kg": 0.2, "stack_limit": 40 },
+  { "name": "copper_ore",    "label": "Copper ore",     "category": "raw",               "mass_kg": 3,   "stack_limit": 20 },
+  { "name": "tin_ore",       "label": "Tin ore",        "category": "raw",               "mass_kg": 3,   "stack_limit": 20 },
+  { "name": "copper_ingot",  "label": "Copper ingot",   "category": "component",         "mass_kg": 4,   "stack_limit": 12 },
+  { "name": "bronze_ingot",  "label": "Bronze ingot",   "category": "component",         "mass_kg": 4,   "stack_limit": 12 },
+  {
+    "_comment": "Reed is the Mesopotamian timber: it roofs, it walls, it binds, and the marsh grows more of it every year.",
+    "name": "reed", "label": "Reed bundle", "category": "building_material", "mass_kg": 1.5, "stack_limit": 30
+  },
+  { "name": "mudbrick",    "label": "Mud brick",    "category": "building_material", "mass_kg": 5,   "stack_limit": 20 },
+  { "name": "emmer_ears",  "label": "Emmer ears",   "category": "raw",               "mass_kg": 0.4, "stack_limit": 60 },
+  { "name": "palm_log",    "label": "Palm trunk",   "category": "building_material", "mass_kg": 14,  "stack_limit": 6 }
+]

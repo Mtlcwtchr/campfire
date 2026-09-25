@@ -1,0 +1,59 @@
+[
+  {
+    "_comment": "A steppe herding people of the dry grass and thorn country. They live off the flock rather than off a field: milk and curd through the year, meat when there is a surplus, felt instead of woven cloth, and a tent instead of a house. They sow a little emmer where they can and think nothing of leaving it. Stone they know how to work, timber they mostly do not have, and their wealth walks about on four legs (D100).",
+    "name": "yamna",
+    "label": "Steppe folk",
+    "language": "yamna",
+    "architecture": "steppe",
+    "biome": "river_valley",
+    "common_knowledge": [
+      "foraging",
+      "flintknapping",
+      "firemaking",
+      "hafting",
+      "hunting",
+      "herding",
+      "dairying",
+      "feltmaking",
+      "sewing",
+      "thatching",
+      "grinding",
+      "threshing",
+      "tillage",
+      "herbcraft",
+      "burial"
+    ],
+    "family_knowledge_pool": [
+      "coppersmithing",
+      "carpentry",
+      "weaving"
+    ],
+    "family_knowledge_draws": 1,
+    "base_skill": 3,
+    "specialist_skill": 7,
+    "trades": [
+      "herding",
+      "hunting",
+      "foraging",
+      "crafting",
+      "cooking",
+      "hauling",
+      "construction",
+      "farming"
+    ],
+    "crops": [
+      "emmer"
+    ],
+    "starting_livestock": {
+      "sheep": 6,
+      "goat": 8,
+      "horse": 4
+    },
+    "preferred_foods": [
+      "cheese",
+      "mutton_cooked",
+      "smoked_meat",
+      "berries"
+    ]
+  }
+]

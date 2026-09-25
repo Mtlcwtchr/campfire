@@ -1,0 +1,183 @@
+{
+  "camera": [
+    6590.59326171875,
+    9290.59375,
+    1093.419677734375,
+    0.6000000238418579
+  ],
+  "candidate_spacing_m": 8,
+  "culled": 0,
+  "detail_blend": 0.0,
+  "detail_requested": false,
+  "draws": 1,
+  "enabled": true,
+  "failed": false,
+  "focus_m": [
+    5130.0,
+    7830.0
+  ],
+  "frame": 720,
+  "grass": {
+    "adaptive": true,
+    "cached_roots": 32217,
+    "candidate_budget": 131072,
+    "candidate_spacing_m": 2,
+    "drawn_candidates": 28502,
+    "drawn_triangles": 57004,
+    "draws": 1,
+    "enabled": true,
+    "far_blocks": 120,
+    "far_candidate_step_m": 16,
+    "far_candidates": 32217,
+    "focus_m": [
+      5130.0,
+      7830.0
+    ],
+    "gpu_cull_working_bytes": 9439252,
+    "gpu_frustum_culling": true,
+    "gpu_indirect_draw": true,
+    "instance_stride_bytes": 32,
+    "instance_upload_bytes": 1030944,
+    "near_candidates": 0,
+    "root_bytes": 1030944,
+    "submitted_candidates": 32217,
+    "submitted_counts_are_pre_cull": true,
+    "submitted_triangles": 64434,
+    "view_wide_ground_cover": true,
+    "visible_radius_m": 192
+  },
+  "grove_blocks": 82,
+  "grove_budget": 32768,
+  "grove_candidate_step_m": 32,
+  "grove_impostors": 3049,
+  "grove_max_focus_distance_m": 1877.1153744142582,
+  "grove_root_bytes": 257920,
+  "impostor_instances": 3049,
+  "impostor_views": 8,
+  "instance_upload_bytes": 170744,
+  "lod_mesh_pixels": [
+    22.0,
+    38.0
+  ],
+  "mesh_instances": 0,
+  "mesh_level_instances": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "mesh_level_pixel_error": 3.0,
+  "mesh_level_triangle_counts": [
+    [
+      6265,
+      1544,
+      609,
+      234
+    ],
+    [
+      3947,
+      987,
+      422,
+      256
+    ],
+    [
+      900,
+      224,
+      90,
+      36
+    ],
+    [
+      342,
+      86,
+      34,
+      14
+    ],
+    [
+      880,
+      220,
+      80,
+      40
+    ]
+  ],
+  "mesh_level_triangles": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "mesh_triangle_budget": 1500000,
+  "mesh_triangles": 0,
+  "objects": 0,
+  "populations": [
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "radius_m": 768,
+  "ready": true,
+  "sampled_sites": 0,
+  "seed": 42,
+  "shader_time": 2.0,
+  "shared_geometry_bytes": 1147608,
+  "terrain": {
+    "cache_bytes": 26238332,
+    "capacity_limited": false,
+    "coarse": 0,
+    "data_step_m": [
+      8,
+      8
+    ],
+    "final_stage": true,
+    "gpu_bytes": 99695076,
+    "mesh_percent": 100,
+    "mesh_step_m": [
+      8,
+      32
+    ],
+    "missing": 0,
+    "pages_percent": 100,
+    "ram_bytes": 12410684,
+    "upload_failed": false
+  },
+  "triangles": 6098,
+  "view_projection": [
+    0.7654655575752258,
+    -0.7654655575752258,
+    0.0,
+    2066.757080078125,
+    -0.547722578048706,
+    -0.547722578048706,
+    1.5491933822631836,
+    7004.56591796875,
+    -0.6324571371078491,
+    -0.6324571371078491,
+    -0.4472147226333618,
+    10532.6630859375,
+    -0.6324555277824402,
+    -0.6324555277824402,
+    -0.4472135901451111,
+    10533.13671875
+  ],
+  "view_wide_vegetation": true,
+  "viewport": [
+    1280,
+    800
+  ],
+  "water_tiles_skipped": 0,
+  "wind": [
+    0.9941021800041199,
+    -0.10844750702381134,
+    1.4288679361343384,
+    1.0
+  ],
+  "world_cells": [
+    64,
+    64
+  ],
+  "world_metres": [
+    34560,
+    34560
+  ]
+}

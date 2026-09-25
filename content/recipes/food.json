@@ -1,0 +1,102 @@
+[
+  {
+    "name": "thresh_einkorn",
+    "label": "Thresh einkorn",
+    "category": "farming",
+    "inputs": [
+      {
+        "item": "einkorn_ears",
+        "count": 20
+      }
+    ],
+    "outputs": [
+      {
+        "item": "grain",
+        "count": 15
+      }
+    ],
+    "work": 55,
+    "knowledge": "threshing"
+  },
+  {
+    "name": "grind_flour",
+    "label": "Grind flour",
+    "category": "cooking",
+    "inputs": [
+      {
+        "item": "grain",
+        "count": 15
+      }
+    ],
+    "outputs": [
+      {
+        "item": "flour",
+        "count": 10
+      }
+    ],
+    "work": 70,
+    "workplace": "quern",
+    "knowledge": "grinding",
+    "water_litres": 0
+  },
+  {
+    "name": "bake_bread",
+    "label": "Bake bread",
+    "category": "cooking",
+    "inputs": [
+      {
+        "item": "flour",
+        "count": 10
+      }
+    ],
+    "outputs": [
+      {
+        "item": "bread",
+        "count": 10
+      }
+    ],
+    "work": 80,
+    "workplace": "oven",
+    "knowledge": "baking",
+    "water_litres": 2
+  },
+  {
+    "name": "roast_venison",
+    "label": "Roast venison",
+    "category": "cooking",
+    "inputs": [
+      {
+        "item": "venison_raw",
+        "count": 10
+      }
+    ],
+    "outputs": [
+      {
+        "item": "venison_cooked",
+        "count": 10
+      }
+    ],
+    "work": 90,
+    "workplace": "oven",
+    "knowledge": "firemaking"
+  },
+  {
+    "name": "roast_fish",
+    "label": "Roast fish",
+    "category": "cooking",
+    "inputs": [
+      {
+        "item": "fish_raw",
+        "count": 10
+      }
+    ],
+    "outputs": [
+      {
+        "item": "fish_cooked",
+        "count": 10
+      }
+    ],
+    "work": 85,
+    "knowledge": "firemaking"
+  }
+]

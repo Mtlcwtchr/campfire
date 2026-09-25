@@ -1,0 +1,23 @@
+{
+  "site": "polyhaven",
+  "asset_id": "sand_02",
+  "asset_url": "https://polyhaven.com/a/sand_02",
+  "license": "CC0",
+  "authors": [
+    "Charlotte Baglioni"
+  ],
+  "attribution_required": false,
+  "original_physical_metres": [
+    2.14,
+    2.14
+  ],
+  "runtime_world_scale": 1.8,
+  "resolution": "2k",
+  "files": {
+    "diffuse": "sand_wet_diffuse.png",
+    "normal": "sand_wet_normal.png",
+    "displacement": "sand_wet_displacement.png",
+    "rough": "sand_wet_rough.png",
+    "ao": "sand_wet_ao.png"
+  }
+}

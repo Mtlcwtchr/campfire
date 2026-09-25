@@ -1,0 +1,55 @@
+{
+  "id": "mesa_red_soil",
+  "runtime_size": 2048,
+  "runtime_files": {
+    "albedo": "mesa_red_soil_albedo.png",
+    "normal": "mesa_red_soil_normal.png",
+    "properties": "mesa_red_soil_properties.png"
+  },
+  "properties_channels": {
+    "r": "ao",
+    "g": "roughness",
+    "b": "height",
+    "a": "mask"
+  },
+  "mip_steps": [
+    2,
+    4,
+    8,
+    16
+  ],
+  "height_range_before_stretch": [
+    0.0071,
+    0.9191
+  ],
+  "had": {
+    "ao": true,
+    "rough": true,
+    "displacement": true,
+    "mask": false
+  },
+  "source": {
+    "site": "polyhaven",
+    "asset_id": "cracked_red_ground",
+    "asset_url": "https://polyhaven.com/a/cracked_red_ground",
+    "license": "CC0",
+    "authors": [
+      "Amal Kumar"
+    ],
+    "attribution_required": false,
+    "original_physical_metres": [
+      2.0,
+      2.0
+    ],
+    "runtime_world_scale": 2.4,
+    "resolution": "2k",
+    "files": {
+      "diffuse": "mesa_red_soil_diffuse.png",
+      "normal": "mesa_red_soil_normal.png",
+      "displacement": "mesa_red_soil_displacement.png",
+      "rough": "mesa_red_soil_rough.png",
+      "ao": "mesa_red_soil_ao.png"
+    }
+  },
+  "world_scale": 2.4
+}

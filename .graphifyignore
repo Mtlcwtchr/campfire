@@ -1,0 +1,20 @@
+# First-party source, tests, tools, configuration and text documentation.
+# Build/output/cache directories are already excluded by .gitignore.
+/third_party/
+/assets/*
+!/assets/shaders/
+
+# Reference media and captured diagnostics are not implementation sources.
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.svg
+*.mov
+*.mp4
+*.webm
+*.mkv
+*.avi
+*.pdf
+

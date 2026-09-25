@@ -1,0 +1,24 @@
+{
+  "site": "polyhaven",
+  "asset_id": "sparse_grass",
+  "asset_url": "https://polyhaven.com/a/sparse_grass",
+  "license": "CC0",
+  "authors": [
+    "Amal Kumar"
+  ],
+  "attribution_required": false,
+  "original_physical_metres": [
+    2.0,
+    2.0
+  ],
+  "runtime_world_scale": 2.6,
+  "resolution": "2k",
+  "files": {
+    "diffuse": "grass_sparse_diffuse.png",
+    "normal": "grass_sparse_normal.png",
+    "displacement": "grass_sparse_displacement.png",
+    "rough": "grass_sparse_rough.png",
+    "ao": "grass_sparse_ao.png",
+    "mask": "grass_sparse_mask.png"
+  }
+}

@@ -1,0 +1,83 @@
+[
+  {
+    "_comment": "Felting: wool, water and work, no loom. A herding people has fleece and no time to sit at a loom, and this is what it does with it (D100).",
+    "name": "make_felt",
+    "label": "Beat felt",
+    "category": "crafting",
+    "inputs": [
+      {
+        "item": "wool",
+        "count": 4
+      }
+    ],
+    "outputs": [
+      {
+        "item": "felt",
+        "count": 1
+      }
+    ],
+    "work": 60,
+    "knowledge": "feltmaking"
+  },
+  {
+    "name": "sew_felt_cloak",
+    "label": "Sew a felt cloak",
+    "category": "crafting",
+    "inputs": [
+      {
+        "item": "felt",
+        "count": 2
+      }
+    ],
+    "outputs": [
+      {
+        "item": "felt_cloak",
+        "count": 1
+      }
+    ],
+    "work": 70,
+    "knowledge": "sewing"
+  },
+  {
+    "_comment": "Smoking. Slow fire, hung meat, and a winter that can be got through without a granary.",
+    "name": "smoke_meat",
+    "label": "Smoke meat",
+    "category": "cooking",
+    "inputs": [
+      {
+        "item": "venison_raw",
+        "count": 4
+      }
+    ],
+    "outputs": [
+      {
+        "item": "smoked_meat",
+        "count": 4
+      }
+    ],
+    "work": 65,
+    "knowledge": "smoking",
+    "building": "smokehouse"
+  },
+  {
+    "name": "smoke_mutton",
+    "label": "Smoke mutton",
+    "category": "cooking",
+    "inputs": [
+      {
+        "item": "mutton_raw",
+        "count": 4
+      }
+    ],
+    "outputs": [
+      {
+        "item": "smoked_meat",
+        "count": 4
+      }
+    ],
+    "work": 65,
+    "knowledge": "smoking",
+    "building": "smokehouse"
+  }
+]
+

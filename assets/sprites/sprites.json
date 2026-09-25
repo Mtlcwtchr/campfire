@@ -1,0 +1,1979 @@
+{
+  "format_version": 3,
+  "_comment": "Written by tools/extract_sprites.py. Keys are content definition names; the renderer falls back to the category when a definition has no sprite of its own.",
+  "sprites": {
+    "foliage/grass_0": {
+      "file": "kenney_foliageSprites/PNG/Shaded/sprite_0052.png",
+      "size": [
+        1024,
+        1024
+      ]
+    },
+    "foliage/grass_1": {
+      "file": "kenney_foliageSprites/PNG/Shaded/sprite_0053.png",
+      "size": [
+        1024,
+        1024
+      ]
+    },
+    "foliage/grass_2": {
+      "file": "kenney_foliageSprites/PNG/Shaded/sprite_0054.png",
+      "size": [
+        1024,
+        1024
+      ]
+    },
+    "foliage/grass_3": {
+      "file": "kenney_foliageSprites/PNG/Shaded/sprite_0055.png",
+      "size": [
+        1024,
+        1024
+      ]
+    },
+    "foliage/grass_4": {
+      "file": "kenney_foliageSprites/PNG/Shaded/sprite_0056.png",
+      "size": [
+        1024,
+        1024
+      ]
+    },
+    "foliage/grass_5": {
+      "file": "kenney_foliageSprites/PNG/Shaded/sprite_0057.png",
+      "size": [
+        1024,
+        1024
+      ]
+    },
+    "terrain/grass": {
+      "file": "terrain/grass.png",
+      "size": [
+        96,
+        102
+      ]
+    },
+    "terrain/forest": {
+      "file": "terrain/forest.png",
+      "size": [
+        98,
+        104
+      ]
+    },
+    "terrain/dirt": {
+      "file": "terrain/dirt.png",
+      "size": [
+        98,
+        104
+      ]
+    },
+    "terrain/rock": {
+      "file": "terrain/rock.png",
+      "size": [
+        98,
+        104
+      ]
+    },
+    "terrain/water": {
+      "file": "terrain/water.png",
+      "size": [
+        97,
+        106
+      ]
+    },
+    "terrain/sand": {
+      "file": "terrain/sand.png",
+      "size": [
+        96,
+        106
+      ],
+      "directional": true
+    },
+    "terrain/marsh": {
+      "file": "terrain/marsh.png",
+      "size": [
+        98,
+        108
+      ]
+    },
+    "terrain/tilled": {
+      "file": "terrain/tilled.png",
+      "size": [
+        98,
+        108
+      ],
+      "directional": true
+    },
+    "terrain/shore_sand_edge": {
+      "file": "terrain/shore_sand_edge.png",
+      "size": [
+        91,
+        106
+      ]
+    },
+    "terrain/shore_dirt_edge": {
+      "file": "terrain/shore_dirt_edge.png",
+      "size": [
+        92,
+        107
+      ]
+    },
+    "terrain/shore_marsh_edge": {
+      "file": "terrain/shore_marsh_edge.png",
+      "size": [
+        91,
+        108
+      ]
+    },
+    "terrain/shore_rock_edge": {
+      "file": "terrain/shore_rock_edge.png",
+      "size": [
+        88,
+        106
+      ]
+    },
+    "terrain/shore_sand_outer": {
+      "file": "terrain/shore_sand_outer.png",
+      "size": [
+        88,
+        106
+      ]
+    },
+    "terrain/shore_dirt_outer": {
+      "file": "terrain/shore_dirt_outer.png",
+      "size": [
+        87,
+        106
+      ]
+    },
+    "terrain/shore_marsh_outer": {
+      "file": "terrain/shore_marsh_outer.png",
+      "size": [
+        89,
+        108
+      ]
+    },
+    "terrain/shore_rock_outer": {
+      "file": "terrain/shore_rock_outer.png",
+      "size": [
+        85,
+        106
+      ]
+    },
+    "nodes/fallen_branch": {
+      "file": "nodes/fallen_branch.png",
+      "size": [
+        195,
+        147
+      ]
+    },
+    "nodes/oak_tree": {
+      "file": "nodes/oak_tree.png",
+      "size": [
+        211,
+        206
+      ]
+    },
+    "nodes/berry_bush": {
+      "file": "nodes/berry_bush.png",
+      "size": [
+        202,
+        167
+      ]
+    },
+    "nodes/reed_bed": {
+      "file": "nodes/reed_bed.png",
+      "size": [
+        176,
+        162
+      ]
+    },
+    "nodes/fishing_shallows": {
+      "file": "nodes/fishing_shallows.png",
+      "size": [
+        118,
+        156
+      ]
+    },
+    "nodes/wild_flax": {
+      "file": "nodes/wild_flax.png",
+      "size": [
+        179,
+        159
+      ]
+    },
+    "nodes/date_palm": {
+      "file": "nodes/date_palm.png",
+      "size": [
+        212,
+        209
+      ]
+    },
+    "nodes/tamarisk": {
+      "file": "nodes/tamarisk.png",
+      "size": [
+        204,
+        190
+      ]
+    },
+    "nodes/willow_stand": {
+      "file": "nodes/willow_stand.png",
+      "size": [
+        193,
+        187
+      ]
+    },
+    "nodes/yarrow": {
+      "file": "nodes/yarrow.png",
+      "size": [
+        204,
+        162
+      ]
+    },
+    "nodes/wild_emmer": {
+      "file": "nodes/wild_emmer.png",
+      "size": [
+        171,
+        168
+      ]
+    },
+    "nodes/wild_einkorn": {
+      "file": "nodes/wild_einkorn.png",
+      "size": [
+        171,
+        168
+      ]
+    },
+    "items/wooden_club": {
+      "file": "items/wooden_club.png",
+      "size": [
+        69,
+        280
+      ]
+    },
+    "items/stone_mace": {
+      "file": "items/stone_mace.png",
+      "size": [
+        80,
+        278
+      ]
+    },
+    "items/bronze_mace": {
+      "file": "items/bronze_mace.png",
+      "size": [
+        97,
+        281
+      ]
+    },
+    "items/flint_knife": {
+      "file": "items/flint_knife.png",
+      "size": [
+        72,
+        276
+      ]
+    },
+    "items/bronze_dagger": {
+      "file": "items/bronze_dagger.png",
+      "size": [
+        76,
+        276
+      ]
+    },
+    "items/bronze_sickle": {
+      "file": "items/bronze_sickle.png",
+      "size": [
+        108,
+        276
+      ]
+    },
+    "items/wooden_spear": {
+      "file": "items/wooden_spear.png",
+      "size": [
+        39,
+        267
+      ]
+    },
+    "items/hunting_bow": {
+      "file": "items/hunting_bow.png",
+      "size": [
+        76,
+        268
+      ]
+    },
+    "items/sling": {
+      "file": "items/sling.png",
+      "size": [
+        99,
+        243
+      ]
+    },
+    "items/stone_axe": {
+      "file": "items/stone_axe.png",
+      "size": [
+        129,
+        167
+      ]
+    },
+    "items/bronze_axe": {
+      "file": "items/bronze_axe.png",
+      "size": [
+        171,
+        167
+      ]
+    },
+    "nodes/stone_outcrop": {
+      "file": "nodes/stone_outcrop.png",
+      "size": [
+        211,
+        166
+      ]
+    },
+    "nodes/clay_bank": {
+      "file": "nodes/clay_bank.png",
+      "size": [
+        218,
+        162
+      ]
+    },
+    "nodes/copper_vein": {
+      "file": "nodes/copper_vein.png",
+      "size": [
+        196,
+        138
+      ]
+    },
+    "nodes/tin_vein": {
+      "file": "nodes/tin_vein.png",
+      "size": [
+        193,
+        126
+      ]
+    },
+    "nodes/deer_herd": {
+      "file": "nodes/deer_herd.png",
+      "size": [
+        233,
+        167
+      ]
+    },
+    "nodes/copper_vein_spent": {
+      "file": "nodes/copper_vein_spent.png",
+      "size": [
+        196,
+        131
+      ]
+    },
+    "nodes/tin_vein_spent": {
+      "file": "nodes/tin_vein_spent.png",
+      "size": [
+        196,
+        127
+      ]
+    },
+    "buildings/campfire": {
+      "file": "buildings/campfire.png",
+      "size": [
+        159,
+        144
+      ]
+    },
+    "buildings/campfire_site": {
+      "file": "buildings/campfire_site.png",
+      "size": [
+        153,
+        129
+      ]
+    },
+    "buildings/store_pit": {
+      "file": "buildings/store_pit.png",
+      "size": [
+        158,
+        125
+      ]
+    },
+    "buildings/store_pit_site": {
+      "file": "buildings/store_pit_site.png",
+      "size": [
+        160,
+        100
+      ]
+    },
+    "buildings/reed_pit": {
+      "file": "buildings/reed_pit.png",
+      "size": [
+        158,
+        125
+      ]
+    },
+    "buildings/reed_pit_site": {
+      "file": "buildings/reed_pit_site.png",
+      "size": [
+        160,
+        100
+      ]
+    },
+    "buildings/wattle_hut": {
+      "file": "buildings/wattle_hut.png",
+      "size": [
+        160,
+        153
+      ]
+    },
+    "buildings/wattle_hut_site": {
+      "file": "buildings/wattle_hut_site.png",
+      "size": [
+        145,
+        131
+      ]
+    },
+    "buildings/quern_stand": {
+      "file": "buildings/quern_stand.png",
+      "size": [
+        197,
+        160
+      ]
+    },
+    "buildings/quern_stand_site": {
+      "file": "buildings/quern_stand_site.png",
+      "size": [
+        158,
+        143
+      ]
+    },
+    "buildings/kiln": {
+      "file": "buildings/kiln.png",
+      "size": [
+        168,
+        129
+      ]
+    },
+    "buildings/kiln_site": {
+      "file": "buildings/kiln_site.png",
+      "size": [
+        165,
+        131
+      ]
+    },
+    "buildings/granary": {
+      "file": "buildings/granary.png",
+      "size": [
+        164,
+        171
+      ]
+    },
+    "buildings/granary_site": {
+      "file": "buildings/granary_site.png",
+      "size": [
+        158,
+        150
+      ]
+    },
+    "buildings/reed_granary": {
+      "file": "buildings/reed_granary.png",
+      "size": [
+        164,
+        171
+      ]
+    },
+    "buildings/reed_granary_site": {
+      "file": "buildings/reed_granary_site.png",
+      "size": [
+        158,
+        150
+      ]
+    },
+    "buildings/hut": {
+      "file": "buildings/hut.png",
+      "size": [
+        165,
+        150
+      ]
+    },
+    "buildings/hut_site": {
+      "file": "buildings/hut_site.png",
+      "size": [
+        147,
+        131
+      ]
+    },
+    "buildings/mudbrick_house": {
+      "file": "buildings/mudbrick_house.png",
+      "size": [
+        181,
+        146
+      ]
+    },
+    "buildings/mudbrick_house_site": {
+      "file": "buildings/mudbrick_house_site.png",
+      "size": [
+        166,
+        130
+      ]
+    },
+    "buildings/timber_house": {
+      "file": "buildings/timber_house.png",
+      "size": [
+        222,
+        158
+      ]
+    },
+    "buildings/timber_house_site": {
+      "file": "buildings/timber_house_site.png",
+      "size": [
+        184,
+        132
+      ]
+    },
+    "buildings/mudbrick_manor": {
+      "file": "buildings/mudbrick_manor.png",
+      "size": [
+        293,
+        172
+      ]
+    },
+    "buildings/mudbrick_manor_site": {
+      "file": "buildings/mudbrick_manor_site.png",
+      "size": [
+        250,
+        164
+      ]
+    },
+    "buildings/mudbrick_granary": {
+      "file": "buildings/mudbrick_granary.png",
+      "size": [
+        165,
+        159
+      ]
+    },
+    "buildings/mudbrick_granary_site": {
+      "file": "buildings/mudbrick_granary_site.png",
+      "size": [
+        156,
+        158
+      ]
+    },
+    "buildings/bakery": {
+      "file": "buildings/bakery.png",
+      "size": [
+        189,
+        141
+      ]
+    },
+    "buildings/bakery_site": {
+      "file": "buildings/bakery_site.png",
+      "size": [
+        149,
+        122
+      ]
+    },
+    "buildings/mudbrick_bakery": {
+      "file": "buildings/mudbrick_bakery.png",
+      "size": [
+        189,
+        141
+      ]
+    },
+    "buildings/mudbrick_bakery_site": {
+      "file": "buildings/mudbrick_bakery_site.png",
+      "size": [
+        149,
+        122
+      ]
+    },
+    "buildings/brick_kiln": {
+      "file": "buildings/brick_kiln.png",
+      "size": [
+        172,
+        174
+      ]
+    },
+    "buildings/brick_kiln_site": {
+      "file": "buildings/brick_kiln_site.png",
+      "size": [
+        177,
+        124
+      ]
+    },
+    "buildings/brick_quern": {
+      "file": "buildings/brick_quern.png",
+      "size": [
+        178,
+        151
+      ]
+    },
+    "buildings/brick_quern_site": {
+      "file": "buildings/brick_quern_site.png",
+      "size": [
+        158,
+        140
+      ]
+    },
+    "buildings/smokehouse": {
+      "file": "buildings/smokehouse.png",
+      "size": [
+        189,
+        177
+      ]
+    },
+    "buildings/smokehouse_site": {
+      "file": "buildings/smokehouse_site.png",
+      "size": [
+        158,
+        163
+      ]
+    },
+    "buildings/reed_dairy": {
+      "file": "buildings/reed_dairy.png",
+      "size": [
+        170,
+        156
+      ]
+    },
+    "buildings/reed_dairy_site": {
+      "file": "buildings/reed_dairy_site.png",
+      "size": [
+        139,
+        148
+      ]
+    },
+    "buildings/lean_to": {
+      "file": "buildings/lean_to.png",
+      "size": [
+        202,
+        190
+      ]
+    },
+    "buildings/felt_tent": {
+      "file": "buildings/felt_tent.png",
+      "size": [
+        160,
+        153
+      ]
+    },
+    "buildings/felt_tent_site": {
+      "file": "buildings/felt_tent_site.png",
+      "size": [
+        145,
+        131
+      ]
+    },
+    "buildings/courtyard_wall": {
+      "file": "buildings/courtyard_wall.png",
+      "size": [
+        127,
+        127
+      ]
+    },
+    "buildings/courtyard_wall_side": {
+      "file": "buildings/courtyard_wall_side.png",
+      "size": [
+        100,
+        100
+      ]
+    },
+    "buildings/courtyard_wall_site": {
+      "file": "buildings/courtyard_wall_site.png",
+      "size": [
+        160,
+        160
+      ]
+    },
+    "buildings/city_gate": {
+      "file": "buildings/city_gate.png",
+      "size": [
+        178,
+        178
+      ]
+    },
+    "buildings/city_gate_site": {
+      "file": "buildings/city_gate_site.png",
+      "size": [
+        174,
+        174
+      ]
+    },
+    "buildings/palisade": {
+      "file": "buildings/palisade.png",
+      "size": [
+        111,
+        111
+      ]
+    },
+    "buildings/palisade_side": {
+      "file": "buildings/palisade_side.png",
+      "size": [
+        76,
+        76
+      ]
+    },
+    "buildings/palisade_site": {
+      "file": "buildings/palisade_site.png",
+      "size": [
+        65,
+        65
+      ]
+    },
+    "buildings/irrigation_canal": {
+      "file": "buildings/irrigation_canal.png",
+      "size": [
+        96,
+        106
+      ],
+      "ground": true
+    },
+    "buildings/reed_byre": {
+      "file": "buildings/reed_byre.png",
+      "size": [
+        295,
+        169
+      ]
+    },
+    "crops/emmer_0": {
+      "file": "crops/emmer_0.png",
+      "size": [
+        145,
+        167
+      ],
+      "directional": true,
+      "ground": true
+    },
+    "crops/emmer_1": {
+      "file": "crops/emmer_1.png",
+      "size": [
+        142,
+        167
+      ],
+      "directional": true,
+      "ground": true
+    },
+    "crops/emmer_2": {
+      "file": "crops/emmer_2.png",
+      "size": [
+        150,
+        184
+      ],
+      "directional": true,
+      "ground": true
+    },
+    "crops/emmer_3": {
+      "file": "crops/emmer_3.png",
+      "size": [
+        150,
+        182
+      ],
+      "directional": true,
+      "ground": true
+    },
+    "crops/flax_0": {
+      "file": "crops/flax_0.png",
+      "size": [
+        142,
+        168
+      ],
+      "directional": true,
+      "ground": true
+    },
+    "crops/flax_1": {
+      "file": "crops/flax_1.png",
+      "size": [
+        142,
+        168
+      ],
+      "directional": true,
+      "ground": true
+    },
+    "crops/flax_2": {
+      "file": "crops/flax_2.png",
+      "size": [
+        150,
+        178
+      ],
+      "directional": true,
+      "ground": true
+    },
+    "crops/flax_3": {
+      "file": "crops/flax_3.png",
+      "size": [
+        150,
+        170
+      ],
+      "directional": true,
+      "ground": true
+    },
+    "crops/einkorn_0": {
+      "file": "crops/einkorn_0.png",
+      "size": [
+        142,
+        170
+      ],
+      "directional": true,
+      "ground": true
+    },
+    "crops/einkorn_1": {
+      "file": "crops/einkorn_1.png",
+      "size": [
+        144,
+        170
+      ],
+      "directional": true,
+      "ground": true
+    },
+    "crops/einkorn_2": {
+      "file": "crops/einkorn_2.png",
+      "size": [
+        150,
+        192
+      ],
+      "directional": true,
+      "ground": true
+    },
+    "crops/einkorn_3": {
+      "file": "crops/einkorn_3.png",
+      "size": [
+        150,
+        178
+      ],
+      "directional": true,
+      "ground": true
+    },
+    "animals/sheep": {
+      "file": "animals/sheep.png",
+      "size": [
+        357,
+        289
+      ]
+    },
+    "animals/sheep_front": {
+      "file": "animals/sheep_front.png",
+      "size": [
+        224,
+        307
+      ]
+    },
+    "animals/sheep_back": {
+      "file": "animals/sheep_back.png",
+      "size": [
+        199,
+        303
+      ]
+    },
+    "animals/sheep_shorn": {
+      "file": "animals/sheep_shorn.png",
+      "size": [
+        357,
+        273
+      ]
+    },
+    "animals/sheep_shorn_front": {
+      "file": "animals/sheep_shorn_front.png",
+      "size": [
+        197,
+        286
+      ]
+    },
+    "animals/sheep_shorn_back": {
+      "file": "animals/sheep_shorn_back.png",
+      "size": [
+        188,
+        283
+      ]
+    },
+    "animals/sheep_young": {
+      "file": "animals/sheep_young.png",
+      "size": [
+        248,
+        189
+      ]
+    },
+    "animals/sheep_young_front": {
+      "file": "animals/sheep_young_front.png",
+      "size": [
+        166,
+        194
+      ]
+    },
+    "animals/sheep_young_back": {
+      "file": "animals/sheep_young_back.png",
+      "size": [
+        162,
+        188
+      ]
+    },
+    "animals/sheep_young_shorn": {
+      "file": "animals/sheep_young_shorn.png",
+      "size": [
+        243,
+        183
+      ]
+    },
+    "animals/sheep_young_shorn_front": {
+      "file": "animals/sheep_young_shorn_front.png",
+      "size": [
+        163,
+        189
+      ]
+    },
+    "animals/sheep_young_shorn_back": {
+      "file": "animals/sheep_young_shorn_back.png",
+      "size": [
+        161,
+        190
+      ]
+    },
+    "animals/goat": {
+      "file": "animals/goat.png",
+      "size": [
+        362,
+        325
+      ]
+    },
+    "animals/goat_front": {
+      "file": "animals/goat_front.png",
+      "size": [
+        208,
+        319
+      ]
+    },
+    "animals/goat_back": {
+      "file": "animals/goat_back.png",
+      "size": [
+        201,
+        317
+      ]
+    },
+    "animals/goat_shorn": {
+      "file": "animals/goat_shorn.png",
+      "size": [
+        362,
+        307
+      ]
+    },
+    "animals/goat_shorn_front": {
+      "file": "animals/goat_shorn_front.png",
+      "size": [
+        206,
+        309
+      ]
+    },
+    "animals/goat_shorn_back": {
+      "file": "animals/goat_shorn_back.png",
+      "size": [
+        192,
+        302
+      ]
+    },
+    "animals/goat_young": {
+      "file": "animals/goat_young.png",
+      "size": [
+        260,
+        207
+      ]
+    },
+    "animals/goat_young_front": {
+      "file": "animals/goat_young_front.png",
+      "size": [
+        182,
+        203
+      ]
+    },
+    "animals/goat_young_back": {
+      "file": "animals/goat_young_back.png",
+      "size": [
+        165,
+        202
+      ]
+    },
+    "animals/goat_young_shorn": {
+      "file": "animals/goat_young_shorn.png",
+      "size": [
+        235,
+        191
+      ]
+    },
+    "animals/goat_young_shorn_front": {
+      "file": "animals/goat_young_shorn_front.png",
+      "size": [
+        174,
+        189
+      ]
+    },
+    "animals/goat_young_shorn_back": {
+      "file": "animals/goat_young_shorn_back.png",
+      "size": [
+        162,
+        188
+      ]
+    },
+    "animals/yak": {
+      "file": "animals/yak.png",
+      "size": [
+        406,
+        302
+      ]
+    },
+    "animals/yak_front": {
+      "file": "animals/yak_front.png",
+      "size": [
+        248,
+        310
+      ]
+    },
+    "animals/yak_back": {
+      "file": "animals/yak_back.png",
+      "size": [
+        234,
+        302
+      ]
+    },
+    "animals/yak_shorn": {
+      "file": "animals/yak_shorn.png",
+      "size": [
+        406,
+        290
+      ]
+    },
+    "animals/yak_shorn_front": {
+      "file": "animals/yak_shorn_front.png",
+      "size": [
+        236,
+        297
+      ]
+    },
+    "animals/yak_shorn_back": {
+      "file": "animals/yak_shorn_back.png",
+      "size": [
+        222,
+        293
+      ]
+    },
+    "animals/yak_young": {
+      "file": "animals/yak_young.png",
+      "size": [
+        308,
+        219
+      ]
+    },
+    "animals/yak_young_front": {
+      "file": "animals/yak_young_front.png",
+      "size": [
+        205,
+        220
+      ]
+    },
+    "animals/yak_young_back": {
+      "file": "animals/yak_young_back.png",
+      "size": [
+        185,
+        218
+      ]
+    },
+    "animals/yak_young_shorn": {
+      "file": "animals/yak_young_shorn.png",
+      "size": [
+        281,
+        195
+      ]
+    },
+    "animals/yak_young_shorn_front": {
+      "file": "animals/yak_young_shorn_front.png",
+      "size": [
+        196,
+        201
+      ]
+    },
+    "animals/yak_young_shorn_back": {
+      "file": "animals/yak_young_shorn_back.png",
+      "size": [
+        189,
+        201
+      ]
+    },
+    "animals/wild_yak": {
+      "file": "animals/wild_yak.png",
+      "size": [
+        406,
+        302
+      ]
+    },
+    "animals/wild_yak_front": {
+      "file": "animals/wild_yak_front.png",
+      "size": [
+        248,
+        310
+      ]
+    },
+    "animals/wild_yak_back": {
+      "file": "animals/wild_yak_back.png",
+      "size": [
+        234,
+        302
+      ]
+    },
+    "animals/wild_yak_young": {
+      "file": "animals/wild_yak_young.png",
+      "size": [
+        308,
+        219
+      ]
+    },
+    "animals/wild_yak_young_front": {
+      "file": "animals/wild_yak_young_front.png",
+      "size": [
+        205,
+        220
+      ]
+    },
+    "animals/wild_yak_young_back": {
+      "file": "animals/wild_yak_young_back.png",
+      "size": [
+        185,
+        218
+      ]
+    },
+    "animals/deer": {
+      "file": "animals/deer.png",
+      "size": [
+        483,
+        581
+      ]
+    },
+    "animals/deer_front": {
+      "file": "animals/deer_front.png",
+      "size": [
+        224,
+        578
+      ]
+    },
+    "animals/deer_back": {
+      "file": "animals/deer_back.png",
+      "size": [
+        223,
+        578
+      ]
+    },
+    "animals/deer_young": {
+      "file": "animals/deer_young.png",
+      "size": [
+        351,
+        395
+      ]
+    },
+    "animals/deer_young_front": {
+      "file": "animals/deer_young_front.png",
+      "size": [
+        188,
+        395
+      ]
+    },
+    "animals/deer_young_back": {
+      "file": "animals/deer_young_back.png",
+      "size": [
+        184,
+        393
+      ]
+    },
+    "animals/moose": {
+      "file": "animals/moose.png",
+      "size": [
+        516,
+        592
+      ]
+    },
+    "animals/moose_front": {
+      "file": "animals/moose_front.png",
+      "size": [
+        361,
+        589
+      ]
+    },
+    "animals/moose_back": {
+      "file": "animals/moose_back.png",
+      "size": [
+        352,
+        589
+      ]
+    },
+    "animals/moose_young": {
+      "file": "animals/moose_young.png",
+      "size": [
+        346,
+        401
+      ]
+    },
+    "animals/moose_young_front": {
+      "file": "animals/moose_young_front.png",
+      "size": [
+        207,
+        400
+      ]
+    },
+    "animals/moose_young_back": {
+      "file": "animals/moose_young_back.png",
+      "size": [
+        193,
+        401
+      ]
+    },
+    "animals/wolf": {
+      "file": "animals/wolf.png",
+      "size": [
+        614,
+        506
+      ]
+    },
+    "animals/wolf_front": {
+      "file": "animals/wolf_front.png",
+      "size": [
+        234,
+        528
+      ]
+    },
+    "animals/wolf_back": {
+      "file": "animals/wolf_back.png",
+      "size": [
+        212,
+        519
+      ]
+    },
+    "animals/wolf_young": {
+      "file": "animals/wolf_young.png",
+      "size": [
+        456,
+        373
+      ]
+    },
+    "animals/wolf_young_front": {
+      "file": "animals/wolf_young_front.png",
+      "size": [
+        192,
+        392
+      ]
+    },
+    "animals/wolf_young_back": {
+      "file": "animals/wolf_young_back.png",
+      "size": [
+        158,
+        382
+      ]
+    },
+    "animals/bear": {
+      "file": "animals/bear.png",
+      "size": [
+        641,
+        488
+      ]
+    },
+    "animals/bear_front": {
+      "file": "animals/bear_front.png",
+      "size": [
+        380,
+        514
+      ]
+    },
+    "animals/bear_back": {
+      "file": "animals/bear_back.png",
+      "size": [
+        301,
+        500
+      ]
+    },
+    "animals/bear_young": {
+      "file": "animals/bear_young.png",
+      "size": [
+        459,
+        342
+      ]
+    },
+    "animals/bear_young_front": {
+      "file": "animals/bear_young_front.png",
+      "size": [
+        254,
+        364
+      ]
+    },
+    "animals/bear_young_back": {
+      "file": "animals/bear_young_back.png",
+      "size": [
+        224,
+        353
+      ]
+    },
+    "animals/boar": {
+      "file": "animals/boar.png",
+      "size": [
+        605,
+        499
+      ]
+    },
+    "animals/boar_front": {
+      "file": "animals/boar_front.png",
+      "size": [
+        289,
+        503
+      ]
+    },
+    "animals/boar_back": {
+      "file": "animals/boar_back.png",
+      "size": [
+        266,
+        501
+      ]
+    },
+    "animals/boar_young": {
+      "file": "animals/boar_young.png",
+      "size": [
+        396,
+        344
+      ]
+    },
+    "animals/boar_young_front": {
+      "file": "animals/boar_young_front.png",
+      "size": [
+        185,
+        342
+      ]
+    },
+    "animals/boar_young_back": {
+      "file": "animals/boar_young_back.png",
+      "size": [
+        197,
+        344
+      ]
+    },
+    "animals/pig": {
+      "file": "animals/pig.png",
+      "size": [
+        620,
+        402
+      ]
+    },
+    "animals/pig_front": {
+      "file": "animals/pig_front.png",
+      "size": [
+        358,
+        442
+      ]
+    },
+    "animals/pig_back": {
+      "file": "animals/pig_back.png",
+      "size": [
+        327,
+        434
+      ]
+    },
+    "animals/pig_young": {
+      "file": "animals/pig_young.png",
+      "size": [
+        413,
+        279
+      ]
+    },
+    "animals/pig_young_front": {
+      "file": "animals/pig_young_front.png",
+      "size": [
+        282,
+        293
+      ]
+    },
+    "animals/pig_young_back": {
+      "file": "animals/pig_young_back.png",
+      "size": [
+        263,
+        290
+      ]
+    },
+    "animals/shepherd_dog": {
+      "file": "animals/shepherd_dog.png",
+      "size": [
+        587,
+        514
+      ]
+    },
+    "animals/shepherd_dog_front": {
+      "file": "animals/shepherd_dog_front.png",
+      "size": [
+        266,
+        514
+      ]
+    },
+    "animals/shepherd_dog_back": {
+      "file": "animals/shepherd_dog_back.png",
+      "size": [
+        251,
+        514
+      ]
+    },
+    "animals/shepherd_dog_young": {
+      "file": "animals/shepherd_dog_young.png",
+      "size": [
+        429,
+        347
+      ]
+    },
+    "animals/shepherd_dog_young_front": {
+      "file": "animals/shepherd_dog_young_front.png",
+      "size": [
+        234,
+        349
+      ]
+    },
+    "animals/shepherd_dog_young_back": {
+      "file": "animals/shepherd_dog_young_back.png",
+      "size": [
+        226,
+        348
+      ]
+    },
+    "animals/aurochs": {
+      "file": "animals/aurochs.png",
+      "size": [
+        521,
+        417
+      ]
+    },
+    "animals/aurochs_front": {
+      "file": "animals/aurochs_front.png",
+      "size": [
+        286,
+        427
+      ]
+    },
+    "animals/aurochs_back": {
+      "file": "animals/aurochs_back.png",
+      "size": [
+        272,
+        419
+      ]
+    },
+    "animals/cattle": {
+      "file": "animals/cattle.png",
+      "size": [
+        568,
+        416
+      ]
+    },
+    "animals/cattle_front": {
+      "file": "animals/cattle_front.png",
+      "size": [
+        283,
+        429
+      ]
+    },
+    "animals/cattle_back": {
+      "file": "animals/cattle_back.png",
+      "size": [
+        261,
+        422
+      ]
+    },
+    "animals/horse": {
+      "file": "animals/horse.png",
+      "size": [
+        472,
+        504
+      ]
+    },
+    "animals/horse_front": {
+      "file": "animals/horse_front.png",
+      "size": [
+        191,
+        507
+      ]
+    },
+    "animals/horse_back": {
+      "file": "animals/horse_back.png",
+      "size": [
+        200,
+        504
+      ]
+    },
+    "animals/horse_young": {
+      "file": "animals/horse_young.png",
+      "size": [
+        360,
+        375
+      ]
+    },
+    "animals/horse_young_front": {
+      "file": "animals/horse_young_front.png",
+      "size": [
+        158,
+        384
+      ]
+    },
+    "animals/horse_young_back": {
+      "file": "animals/horse_young_back.png",
+      "size": [
+        159,
+        377
+      ]
+    },
+    "animals/wild_horse": {
+      "file": "animals/wild_horse.png",
+      "size": [
+        472,
+        504
+      ]
+    },
+    "animals/wild_horse_front": {
+      "file": "animals/wild_horse_front.png",
+      "size": [
+        191,
+        507
+      ]
+    },
+    "animals/wild_horse_back": {
+      "file": "animals/wild_horse_back.png",
+      "size": [
+        200,
+        504
+      ]
+    },
+    "animals/wild_horse_young": {
+      "file": "animals/wild_horse_young.png",
+      "size": [
+        360,
+        375
+      ]
+    },
+    "animals/wild_horse_young_front": {
+      "file": "animals/wild_horse_young_front.png",
+      "size": [
+        158,
+        384
+      ]
+    },
+    "animals/wild_horse_young_back": {
+      "file": "animals/wild_horse_young_back.png",
+      "size": [
+        159,
+        377
+      ]
+    },
+    "animals/donkey": {
+      "file": "animals/donkey.png",
+      "size": [
+        341,
+        310
+      ]
+    },
+    "animals/donkey_front": {
+      "file": "animals/donkey_front.png",
+      "size": [
+        142,
+        306
+      ]
+    },
+    "animals/donkey_back": {
+      "file": "animals/donkey_back.png",
+      "size": [
+        141,
+        304
+      ]
+    },
+    "animals/donkey_young": {
+      "file": "animals/donkey_young.png",
+      "size": [
+        256,
+        222
+      ]
+    },
+    "animals/donkey_young_front": {
+      "file": "animals/donkey_young_front.png",
+      "size": [
+        120,
+        224
+      ]
+    },
+    "animals/donkey_young_back": {
+      "file": "animals/donkey_young_back.png",
+      "size": [
+        112,
+        223
+      ]
+    },
+    "animals/chicken": {
+      "file": "animals/chicken.png",
+      "size": [
+        331,
+        302
+      ]
+    },
+    "animals/chicken_front": {
+      "file": "animals/chicken_front.png",
+      "size": [
+        193,
+        308
+      ]
+    },
+    "animals/chicken_back": {
+      "file": "animals/chicken_back.png",
+      "size": [
+        194,
+        304
+      ]
+    },
+    "animals/rooster": {
+      "file": "animals/rooster.png",
+      "size": [
+        377,
+        391
+      ]
+    },
+    "animals/rooster_front": {
+      "file": "animals/rooster_front.png",
+      "size": [
+        209,
+        392
+      ]
+    },
+    "animals/rooster_back": {
+      "file": "animals/rooster_back.png",
+      "size": [
+        206,
+        386
+      ]
+    },
+    "animals/chicken_young": {
+      "file": "animals/chicken_young.png",
+      "size": [
+        179,
+        199
+      ]
+    },
+    "animals/chicken_young_front": {
+      "file": "animals/chicken_young_front.png",
+      "size": [
+        151,
+        206
+      ]
+    },
+    "animals/chicken_young_back": {
+      "file": "animals/chicken_young_back.png",
+      "size": [
+        141,
+        201
+      ]
+    },
+    "terrain/shore_sand_inner": {
+      "file": "terrain/shore_sand_inner.png",
+      "size": [
+        106,
+        106
+      ],
+      "ground": true
+    },
+    "terrain/shore_dirt_inner": {
+      "file": "terrain/shore_dirt_inner.png",
+      "size": [
+        107,
+        107
+      ],
+      "ground": true
+    },
+    "terrain/shore_marsh_inner": {
+      "file": "terrain/shore_marsh_inner.png",
+      "size": [
+        108,
+        108
+      ],
+      "ground": true
+    },
+    "terrain/shore_rock_inner": {
+      "file": "terrain/shore_rock_inner.png",
+      "size": [
+        106,
+        106
+      ],
+      "ground": true
+    },
+    "ground/dirt": {
+      "file": "ground/dirt.png",
+      "size": [
+        512,
+        512
+      ],
+      "tiles": true
+    },
+    "ground/dirt@16": {
+      "file": "ground/dirt@16.png",
+      "size": [
+        32,
+        32
+      ],
+      "tiles": true
+    },
+    "ground/dirt@2": {
+      "file": "ground/dirt@2.png",
+      "size": [
+        256,
+        256
+      ],
+      "tiles": true
+    },
+    "ground/dirt@4": {
+      "file": "ground/dirt@4.png",
+      "size": [
+        128,
+        128
+      ],
+      "tiles": true
+    },
+    "ground/dirt@8": {
+      "file": "ground/dirt@8.png",
+      "size": [
+        64,
+        64
+      ],
+      "tiles": true
+    },
+    "ground/grass": {
+      "file": "ground/grass.png",
+      "size": [
+        512,
+        512
+      ],
+      "tiles": true
+    },
+    "ground/grass@16": {
+      "file": "ground/grass@16.png",
+      "size": [
+        32,
+        32
+      ],
+      "tiles": true
+    },
+    "ground/grass@2": {
+      "file": "ground/grass@2.png",
+      "size": [
+        256,
+        256
+      ],
+      "tiles": true
+    },
+    "ground/grass@4": {
+      "file": "ground/grass@4.png",
+      "size": [
+        128,
+        128
+      ],
+      "tiles": true
+    },
+    "ground/grass@8": {
+      "file": "ground/grass@8.png",
+      "size": [
+        64,
+        64
+      ],
+      "tiles": true
+    },
+    "ground/marsh": {
+      "file": "ground/marsh.png",
+      "size": [
+        512,
+        512
+      ],
+      "tiles": true
+    },
+    "ground/marsh@16": {
+      "file": "ground/marsh@16.png",
+      "size": [
+        32,
+        32
+      ],
+      "tiles": true
+    },
+    "ground/marsh@2": {
+      "file": "ground/marsh@2.png",
+      "size": [
+        256,
+        256
+      ],
+      "tiles": true
+    },
+    "ground/marsh@4": {
+      "file": "ground/marsh@4.png",
+      "size": [
+        128,
+        128
+      ],
+      "tiles": true
+    },
+    "ground/marsh@8": {
+      "file": "ground/marsh@8.png",
+      "size": [
+        64,
+        64
+      ],
+      "tiles": true
+    },
+    "ground/rock": {
+      "file": "ground/rock.png",
+      "size": [
+        512,
+        512
+      ],
+      "tiles": true
+    },
+    "ground/rock@16": {
+      "file": "ground/rock@16.png",
+      "size": [
+        32,
+        32
+      ],
+      "tiles": true
+    },
+    "ground/rock@2": {
+      "file": "ground/rock@2.png",
+      "size": [
+        256,
+        256
+      ],
+      "tiles": true
+    },
+    "ground/rock@4": {
+      "file": "ground/rock@4.png",
+      "size": [
+        128,
+        128
+      ],
+      "tiles": true
+    },
+    "ground/rock@8": {
+      "file": "ground/rock@8.png",
+      "size": [
+        64,
+        64
+      ],
+      "tiles": true
+    },
+    "ground/sand": {
+      "file": "ground/sand.png",
+      "size": [
+        512,
+        512
+      ],
+      "tiles": true
+    },
+    "ground/sand@16": {
+      "file": "ground/sand@16.png",
+      "size": [
+        32,
+        32
+      ],
+      "tiles": true
+    },
+    "ground/sand@2": {
+      "file": "ground/sand@2.png",
+      "size": [
+        256,
+        256
+      ],
+      "tiles": true
+    },
+    "ground/sand@4": {
+      "file": "ground/sand@4.png",
+      "size": [
+        128,
+        128
+      ],
+      "tiles": true
+    },
+    "ground/sand@8": {
+      "file": "ground/sand@8.png",
+      "size": [
+        64,
+        64
+      ],
+      "tiles": true
+    },
+    "ground/snow": {
+      "file": "ground/snow.png",
+      "size": [
+        512,
+        512
+      ],
+      "tiles": true
+    },
+    "ground/snow@16": {
+      "file": "ground/snow@16.png",
+      "size": [
+        32,
+        32
+      ],
+      "tiles": true
+    },
+    "ground/snow@2": {
+      "file": "ground/snow@2.png",
+      "size": [
+        256,
+        256
+      ],
+      "tiles": true
+    },
+    "ground/snow@4": {
+      "file": "ground/snow@4.png",
+      "size": [
+        128,
+        128
+      ],
+      "tiles": true
+    },
+    "ground/snow@8": {
+      "file": "ground/snow@8.png",
+      "size": [
+        64,
+        64
+      ],
+      "tiles": true
+    },
+    "ground/grass_wild": {
+      "file": "ground/grass_wild.png",
+      "size": [512, 512],
+      "tiles": true
+    },
+    "ground/grass_wild@2": {
+      "file": "ground/grass_wild@2.png",
+      "size": [256, 256],
+      "tiles": true
+    },
+    "ground/grass_wild@4": {
+      "file": "ground/grass_wild@4.png",
+      "size": [128, 128],
+      "tiles": true
+    },
+    "ground/grass_wild@8": {
+      "file": "ground/grass_wild@8.png",
+      "size": [64, 64],
+      "tiles": true
+    },
+    "ground/grass_wild@16": {
+      "file": "ground/grass_wild@16.png",
+      "size": [32, 32],
+      "tiles": true
+    },
+    "ground/rock_smooth": {
+      "file": "ground/rock_smooth.png",
+      "size": [512, 512],
+      "tiles": true
+    },
+    "ground/rock_smooth@2": {
+      "file": "ground/rock_smooth@2.png",
+      "size": [256, 256],
+      "tiles": true
+    },
+    "ground/rock_smooth@4": {
+      "file": "ground/rock_smooth@4.png",
+      "size": [128, 128],
+      "tiles": true
+    },
+    "ground/rock_smooth@8": {
+      "file": "ground/rock_smooth@8.png",
+      "size": [64, 64],
+      "tiles": true
+    },
+    "ground/rock_smooth@16": {
+      "file": "ground/rock_smooth@16.png",
+      "size": [32, 32],
+      "tiles": true
+    }
+  }
+}

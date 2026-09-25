@@ -1,0 +1,23 @@
+{
+  "site": "polyhaven",
+  "asset_id": "sand_01",
+  "asset_url": "https://polyhaven.com/a/sand_01",
+  "license": "CC0",
+  "authors": [
+    "Rob Tuytel"
+  ],
+  "attribution_required": false,
+  "original_physical_metres": [
+    1.5,
+    1.5
+  ],
+  "runtime_world_scale": 1.6,
+  "resolution": "2k",
+  "files": {
+    "diffuse": "sand_dry_diffuse.png",
+    "normal": "sand_dry_normal.png",
+    "displacement": "sand_dry_displacement.png",
+    "rough": "sand_dry_rough.png",
+    "ao": "sand_dry_ao.png"
+  }
+}

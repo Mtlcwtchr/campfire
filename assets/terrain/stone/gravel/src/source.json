@@ -1,0 +1,23 @@
+{
+  "site": "polyhaven",
+  "asset_id": "gravel_ground_01",
+  "asset_url": "https://polyhaven.com/a/gravel_ground_01",
+  "license": "CC0",
+  "authors": [
+    "Rob Tuytel"
+  ],
+  "attribution_required": false,
+  "original_physical_metres": [
+    3.0,
+    3.0
+  ],
+  "runtime_world_scale": 2.0,
+  "resolution": "2k",
+  "files": {
+    "diffuse": "gravel_diffuse.png",
+    "normal": "gravel_normal.png",
+    "displacement": "gravel_displacement.png",
+    "rough": "gravel_rough.png",
+    "ao": "gravel_ao.png"
+  }
+}

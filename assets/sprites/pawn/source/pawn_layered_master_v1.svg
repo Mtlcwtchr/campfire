@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="1536" height="1536" viewBox="0 0 1536 1536"
+     shape-rendering="geometricPrecision">
+  <title>Layered pawn atlas master v1</title>
+  <desc>Columns: south, east, north. Rows: child, adult, elder. Cell 512x512. Pivot local 256,456. West mirrors east.</desc>
+  <metadata>
+    cell-size: 512x512;
+    columns: south,east,north;
+    rows: child,adult,elder;
+    pivot-local: 256,456;
+    west: mirror(east);
+  </metadata>
+
+  <defs>
+    <radialGradient id="skin" cx="27%" cy="20%" r="91%">
+      <stop offset="0" stop-color="#fffaf3"/>
+      <stop offset="0.58" stop-color="#eee3d7"/>
+      <stop offset="0.82" stop-color="#ded3c8"/>
+      <stop offset="1" stop-color="#b9ada2"/>
+    </radialGradient>
+    <radialGradient id="skinBack" cx="31%" cy="18%" r="94%">
+      <stop offset="0" stop-color="#fbf4ec"/>
+      <stop offset="0.61" stop-color="#eadfd3"/>
+      <stop offset="0.84" stop-color="#d6cabf"/>
+      <stop offset="1" stop-color="#b5a99e"/>
+    </radialGradient>
+    <linearGradient id="lowerShade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#77685b" stop-opacity="0"/>
+      <stop offset="0.68" stop-color="#77685b" stop-opacity="0"/>
+      <stop offset="1" stop-color="#77685b" stop-opacity="0.20"/>
+    </linearGradient>
+    <linearGradient id="loinFill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ead4aa"/>
+      <stop offset="0.62" stop-color="#d1b180"/>
+      <stop offset="1" stop-color="#aa8457"/>
+    </linearGradient>
+    <linearGradient id="tunicFill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ddbb83"/>
+      <stop offset="0.62" stop-color="#c3985e"/>
+      <stop offset="1" stop-color="#8e683e"/>
+    </linearGradient>
+
+    <!-- CHILD BASE -->
+    <g id="body-child-south">
+      <path d="M204 276 C190 286 187 310 187 333 C176 334 170 344 170 354 C170 365 178 372 189 371 C191 408 196 439 211 449 C236 456 278 456 302 449 C317 438 321 407 323 371 C334 372 342 364 342 354 C342 343 335 335 325 333 C325 309 321 286 307 277 C281 267 230 267 204 276 Z"/>
+      <path d="M189 383 C195 423 204 443 226 449 C252 456 282 454 302 446" fill="none" stroke="#857568" stroke-opacity="0.18" stroke-width="14"/>
+    </g>
+    <g id="body-child-east">
+      <path d="M226 276 C216 288 213 314 213 341 L213 421 C214 443 222 453 238 456 C255 459 283 458 296 451 C305 441 307 421 308 397 L308 315 C307 291 299 279 284 274 C267 269 240 269 226 276 Z"/>
+      <path d="M279 333 C286 350 286 369 277 378 C269 386 260 380 260 370 C260 364 262 359 264 355" fill="none"/>
+    </g>
+    <g id="body-child-north">
+      <path d="M203 278 C188 290 185 314 185 336 C174 338 168 348 169 358 C170 368 178 375 189 374 C191 410 196 439 211 449 C236 456 278 456 303 449 C318 437 322 407 324 374 C335 375 343 367 343 357 C343 346 336 338 326 336 C326 312 322 289 307 278 C280 265 230 265 203 278 Z" fill="url(#skinBack)"/>
+      <path d="M189 385 C196 425 205 443 227 449 C253 456 283 454 303 446" fill="none" stroke="#857568" stroke-opacity="0.18" stroke-width="14"/>
+    </g>
+    <g id="head-child-south">
+      <path d="M252 139 C303 138 339 174 341 222 C343 270 311 304 258 307 C206 309 171 279 169 230 C167 181 201 142 252 139 Z"/>
+      <path d="M181 253 C196 287 225 304 260 303 C299 302 324 281 336 250" fill="none" stroke="#7e6f62" stroke-opacity="0.19" stroke-width="13"/>
+    </g>
+    <g id="head-child-east">
+      <path d="M252 139 C303 138 339 174 341 222 C343 270 311 304 258 307 C206 309 171 279 169 230 C167 181 201 142 252 139 Z"/>
+      <path d="M181 253 C196 287 225 304 260 303 C299 302 324 281 336 250" fill="none" stroke="#7e6f62" stroke-opacity="0.19" stroke-width="13"/>
+    </g>
+    <g id="head-child-north">
+      <path d="M252 141 C302 140 337 175 339 222 C341 268 310 301 258 304 C207 306 173 277 171 230 C169 183 202 144 252 141 Z" fill="url(#skinBack)"/>
+    </g>
+
+    <!-- ADULT BASE -->
+    <g id="body-adult-south">
+      <path d="M187 216 C168 230 163 271 163 315 C151 316 144 327 144 339 C144 351 153 359 164 358 C166 397 170 432 190 446 C223 456 291 456 324 446 C343 430 348 397 349 358 C362 359 370 350 370 338 C370 326 363 317 351 315 C351 270 347 231 326 216 C291 202 223 202 187 216 Z"/>
+      <path d="M164 371 C172 417 184 439 211 446 C247 455 296 452 324 441" fill="none" stroke="#857568" stroke-opacity="0.18" stroke-width="18"/>
+    </g>
+    <g id="body-adult-east">
+      <path d="M212 218 C197 237 193 277 193 327 L193 413 C194 439 203 452 224 456 C247 460 285 459 304 450 C316 439 319 415 320 386 L320 268 C319 238 306 221 286 216 C264 211 231 210 212 218 Z"/>
+      <path d="M278 302 C285 325 286 349 274 362 C265 371 253 366 251 354 C250 348 251 342 253 337" fill="none"/>
+    </g>
+    <g id="body-adult-north">
+      <path d="M178 202 C157 219 152 265 152 315 C139 316 132 327 132 339 C132 351 141 359 153 358 C155 398 159 432 179 446 C213 456 280 456 313 446 C332 429 337 397 338 358 C350 359 359 350 359 338 C359 326 352 317 340 315 C340 267 335 221 314 203 C279 184 213 184 178 202 Z" fill="url(#skinBack)"/>
+      <path d="M153 371 C161 417 173 439 200 446 C236 455 285 452 313 441" fill="none" stroke="#857568" stroke-opacity="0.18" stroke-width="18"/>
+    </g>
+    <g id="head-adult-south">
+      <path d="M252 58 C307 57 346 96 349 149 C352 202 317 240 259 243 C202 245 164 212 162 158 C160 105 197 61 252 58 Z"/>
+      <path d="M175 184 C191 222 223 241 261 240 C304 239 331 216 344 181" fill="none" stroke="#7e6f62" stroke-opacity="0.20" stroke-width="16"/>
+    </g>
+    <g id="head-adult-east">
+      <path d="M252 58 C307 57 346 96 349 149 C352 202 317 240 259 243 C202 245 164 212 162 158 C160 105 197 61 252 58 Z"/>
+      <path d="M175 184 C191 222 223 241 261 240 C304 239 331 216 344 181" fill="none" stroke="#7e6f62" stroke-opacity="0.20" stroke-width="16"/>
+    </g>
+    <g id="head-adult-north">
+      <path d="M252 70 C305 69 342 105 344 155 C346 205 313 239 258 241 C204 243 168 212 166 162 C164 112 200 73 252 70 Z" fill="url(#skinBack)"/>
+    </g>
+
+    <!-- ELDER BASE -->
+    <g id="body-elder-south">
+      <path d="M181 230 C161 244 157 278 157 315 C144 316 136 327 136 340 C136 352 145 361 158 360 C160 398 166 431 187 445 C221 456 290 456 324 445 C344 429 350 397 351 360 C364 361 373 351 373 339 C373 326 365 317 353 315 C353 276 348 244 327 229 C291 214 218 214 181 230 Z"/>
+      <path d="M158 375 C166 420 181 439 210 446 C247 455 298 452 324 440" fill="none" stroke="#857568" stroke-opacity="0.18" stroke-width="18"/>
+    </g>
+    <g id="body-elder-east">
+      <path d="M198 244 C185 265 181 300 182 337 L184 410 C185 436 196 451 219 455 C244 460 286 459 307 448 C320 433 324 407 324 377 L322 285 C320 257 307 239 286 232 C261 224 218 226 198 244 Z"/>
+      <path d="M282 310 C291 331 292 353 280 365 C271 374 258 369 256 356 C255 349 257 343 260 337" fill="none"/>
+    </g>
+    <g id="body-elder-north">
+      <path d="M176 214 C154 232 149 273 149 315 C136 316 128 327 128 340 C128 352 137 361 150 360 C152 399 158 431 179 445 C214 456 284 456 318 445 C338 428 344 397 345 360 C358 361 367 351 367 339 C367 326 359 317 347 315 C347 273 342 232 320 214 C283 195 213 195 176 214 Z" fill="url(#skinBack)"/>
+      <path d="M150 375 C158 420 173 439 202 446 C239 455 290 452 318 440" fill="none" stroke="#857568" stroke-opacity="0.18" stroke-width="18"/>
+    </g>
+    <g id="head-elder-south">
+      <path d="M251 79 C303 77 341 113 344 163 C347 213 314 249 260 252 C206 254 170 223 167 173 C164 123 199 82 251 79 Z"/>
+      <path d="M180 198 C196 231 225 249 261 248 C301 247 328 225 340 195" fill="none" stroke="#7e6f62" stroke-opacity="0.20" stroke-width="15"/>
+    </g>
+    <g id="head-elder-east">
+      <path d="M273 86 C325 84 363 120 366 170 C369 220 336 256 282 259 C228 261 192 230 189 180 C186 130 221 89 273 86 Z"/>
+      <path d="M202 205 C218 238 247 256 283 255 C323 254 350 232 362 202" fill="none" stroke="#7e6f62" stroke-opacity="0.20" stroke-width="15"/>
+    </g>
+    <g id="head-elder-north">
+      <path d="M252 84 C304 82 341 118 344 168 C347 218 314 253 260 256 C206 258 170 227 167 177 C164 127 200 87 252 84 Z" fill="url(#skinBack)"/>
+    </g>
+
+    <!-- LOINCLOTHS -->
+    <g id="loin-child-south">
+      <path d="M191 343 C225 337 287 337 321 343 L319 365 C286 371 224 371 192 365 Z"/>
+      <path d="M218 359 C240 364 275 364 296 359 L287 426 C270 432 243 432 226 426 Z"/>
+    </g>
+    <g id="loin-child-east">
+      <path d="M215 343 C236 339 284 339 306 344 L304 365 C282 369 237 369 215 365 Z"/>
+      <path d="M252 360 C267 364 287 364 301 360 L298 425 C286 430 267 430 255 425 Z"/>
+    </g>
+    <g id="loin-child-north">
+      <path d="M189 345 C224 338 289 338 323 345 L321 367 C287 373 224 373 191 367 Z"/>
+      <path d="M214 361 C239 367 278 367 301 361 L293 425 C274 431 242 431 223 425 Z"/>
+    </g>
+    <g id="loin-adult-south">
+      <path d="M166 326 C209 319 307 319 348 326 L346 350 C304 357 209 357 168 350 Z"/>
+      <path d="M207 344 C236 352 279 352 307 344 L297 428 C275 435 239 435 218 428 Z"/>
+    </g>
+    <g id="loin-adult-east">
+      <path d="M194 326 C222 321 291 321 318 327 L316 350 C288 355 223 355 195 350 Z"/>
+      <path d="M248 344 C268 350 293 350 313 344 L309 427 C292 434 267 434 251 427 Z"/>
+    </g>
+    <g id="loin-adult-north">
+      <path d="M155 328 C198 320 297 320 338 328 L336 352 C294 359 199 359 157 352 Z"/>
+      <path d="M195 346 C225 354 270 354 299 346 L289 428 C266 435 229 435 207 428 Z"/>
+    </g>
+    <g id="loin-elder-south">
+      <path d="M160 329 C205 321 309 321 351 329 L349 353 C306 360 205 360 162 353 Z"/>
+      <path d="M202 347 C233 355 280 355 310 347 L300 429 C277 436 239 436 216 429 Z"/>
+    </g>
+    <g id="loin-elder-east">
+      <path d="M184 329 C214 323 294 323 322 329 L320 353 C290 358 215 358 185 353 Z"/>
+      <path d="M250 347 C270 353 298 353 318 347 L313 427 C296 434 270 434 253 427 Z"/>
+    </g>
+    <g id="loin-elder-north">
+      <path d="M152 331 C198 322 303 322 345 331 L343 355 C300 362 198 362 154 355 Z"/>
+      <path d="M193 349 C224 357 272 357 302 349 L292 429 C269 436 231 436 208 429 Z"/>
+    </g>
+
+    <!-- SIMPLE TUNICS -->
+    <g id="tunic-child-south">
+      <path d="M205 276 C191 290 189 316 189 346 L191 401 C193 421 202 432 217 437 C242 443 274 443 299 437 C314 428 320 408 321 381 L323 329 C322 305 318 287 306 277 C279 269 232 269 205 276 Z"/>
+      <path d="M219 281 C239 295 276 295 294 281" fill="none"/>
+      <path d="M207 410 C235 419 279 419 307 410" fill="none" stroke-opacity="0.55"/>
+    </g>
+    <g id="tunic-child-east">
+      <path d="M226 276 C216 291 214 317 214 347 L216 414 C218 435 226 444 241 447 C258 451 282 450 295 443 C304 431 306 408 306 383 L307 316 C306 293 299 280 284 275 C267 270 241 270 226 276 Z"/>
+      <path d="M278 332 C284 349 284 367 276 376 C268 384 260 379 259 369" fill="none"/>
+      <path d="M220 414 C240 421 280 421 302 414" fill="none" stroke-opacity="0.55"/>
+    </g>
+    <g id="tunic-child-north">
+      <path d="M203 278 C189 291 187 316 187 347 L190 402 C192 422 201 433 217 438 C242 444 276 444 301 438 C316 428 322 407 323 380 L324 330 C323 305 318 288 307 279 C280 269 230 269 203 278 Z"/>
+      <path d="M207 411 C235 420 280 420 309 411" fill="none" stroke-opacity="0.55"/>
+    </g>
+    <g id="tunic-adult-south">
+      <path d="M187 216 C170 234 166 276 166 321 L169 386 C171 414 181 432 199 441 C232 450 282 450 315 441 C334 426 343 394 345 352 L349 310 C348 267 344 232 326 216 C291 205 223 205 187 216 Z"/>
+      <path d="M205 220 C231 240 282 240 308 220" fill="none"/>
+      <path d="M186 409 C225 422 287 422 326 409" fill="none" stroke-opacity="0.55"/>
+    </g>
+    <g id="tunic-adult-east">
+      <path d="M212 218 C198 240 195 280 195 329 L197 402 C198 427 207 442 227 447 C249 452 283 451 301 442 C313 428 316 403 317 376 L318 269 C317 241 305 223 286 217 C264 212 232 211 212 218 Z"/>
+      <path d="M278 301 C284 323 285 347 274 359 C265 368 254 363 252 352" fill="none"/>
+      <path d="M202 410 C229 420 286 420 311 410" fill="none" stroke-opacity="0.55"/>
+    </g>
+    <g id="tunic-adult-north">
+      <path d="M178 202 C159 224 155 269 155 317 L158 385 C160 414 170 432 188 441 C222 450 272 450 305 441 C324 425 333 393 335 351 L338 310 C337 264 333 222 314 203 C279 188 213 188 178 202 Z"/>
+      <path d="M175 409 C214 422 278 422 317 409" fill="none" stroke-opacity="0.55"/>
+    </g>
+    <g id="tunic-elder-south">
+      <path d="M181 230 C163 249 160 282 160 322 L163 385 C165 413 176 432 195 441 C229 451 282 451 316 441 C336 425 345 393 347 352 L350 311 C349 275 345 246 327 230 C291 218 218 218 181 230 Z"/>
+      <path d="M199 234 C226 253 285 253 311 233" fill="none"/>
+      <path d="M180 410 C220 423 290 423 330 409" fill="none" stroke-opacity="0.55"/>
+    </g>
+    <g id="tunic-elder-east">
+      <path d="M198 244 C186 267 184 300 185 338 L188 402 C189 428 200 443 221 447 C246 452 284 451 304 441 C317 425 321 398 321 370 L320 286 C318 260 306 242 286 234 C261 228 218 229 198 244 Z"/>
+      <path d="M282 309 C289 329 291 351 280 362 C271 371 259 366 257 354" fill="none"/>
+      <path d="M193 411 C223 422 292 422 315 409" fill="none" stroke-opacity="0.55"/>
+    </g>
+    <g id="tunic-elder-north">
+      <path d="M176 214 C156 235 152 276 152 318 L155 385 C157 414 168 432 187 441 C221 451 276 451 310 441 C330 424 339 393 341 351 L344 311 C343 271 339 234 320 214 C283 199 213 199 176 214 Z"/>
+      <path d="M171 410 C211 423 285 423 326 409" fill="none" stroke-opacity="0.55"/>
+    </g>
+  </defs>
+
+  <!-- Each export layer keeps the full 1536x1536 page. -->
+  <g id="layer-bodies" fill="url(#skin)" stroke="#2d1a0c" stroke-width="7.5" stroke-linejoin="round" stroke-linecap="round">
+    <use xlink:href="#body-child-south" transform="translate(0 0)"/>
+    <use xlink:href="#body-child-east" transform="translate(512 0)"/>
+    <use xlink:href="#body-child-north" transform="translate(1024 0)"/>
+    <use xlink:href="#body-adult-south" transform="translate(0 512)"/>
+    <use xlink:href="#body-adult-east" transform="translate(512 512)"/>
+    <use xlink:href="#body-adult-north" transform="translate(1024 512)"/>
+    <use xlink:href="#body-elder-south" transform="translate(0 1024)"/>
+    <use xlink:href="#body-elder-east" transform="translate(512 1024)"/>
+    <use xlink:href="#body-elder-north" transform="translate(1024 1024)"/>
+  </g>
+
+  <g id="layer-heads" fill="url(#skin)" stroke="#2d1a0c" stroke-width="7.5" stroke-linejoin="round" stroke-linecap="round">
+    <use xlink:href="#head-child-south" transform="translate(0 0)"/>
+    <use xlink:href="#head-child-east" transform="translate(512 0)"/>
+    <use xlink:href="#head-child-north" transform="translate(1024 0)"/>
+    <use xlink:href="#head-adult-south" transform="translate(0 512)"/>
+    <use xlink:href="#head-adult-east" transform="translate(512 512)"/>
+    <use xlink:href="#head-adult-north" transform="translate(1024 512)"/>
+    <use xlink:href="#head-elder-south" transform="translate(0 1024)"/>
+    <use xlink:href="#head-elder-east" transform="translate(512 1024)"/>
+    <use xlink:href="#head-elder-north" transform="translate(1024 1024)"/>
+  </g>
+
+  <g id="layer-loincloth" fill="url(#loinFill)" stroke="#573416" stroke-width="5.5" stroke-linejoin="round" stroke-linecap="round">
+    <use xlink:href="#loin-child-south" transform="translate(0 0)"/>
+    <use xlink:href="#loin-child-east" transform="translate(512 0)"/>
+    <use xlink:href="#loin-child-north" transform="translate(1024 0)"/>
+    <use xlink:href="#loin-adult-south" transform="translate(0 512)"/>
+    <use xlink:href="#loin-adult-east" transform="translate(512 512)"/>
+    <use xlink:href="#loin-adult-north" transform="translate(1024 512)"/>
+    <use xlink:href="#loin-elder-south" transform="translate(0 1024)"/>
+    <use xlink:href="#loin-elder-east" transform="translate(512 1024)"/>
+    <use xlink:href="#loin-elder-north" transform="translate(1024 1024)"/>
+  </g>
+
+  <g id="layer-tunic" fill="url(#tunicFill)" stroke="#573416" stroke-width="6.5" stroke-linejoin="round" stroke-linecap="round">
+    <use xlink:href="#tunic-child-south" transform="translate(0 0)"/>
+    <use xlink:href="#tunic-child-east" transform="translate(512 0)"/>
+    <use xlink:href="#tunic-child-north" transform="translate(1024 0)"/>
+    <use xlink:href="#tunic-adult-south" transform="translate(0 512)"/>
+    <use xlink:href="#tunic-adult-east" transform="translate(512 512)"/>
+    <use xlink:href="#tunic-adult-north" transform="translate(1024 512)"/>
+    <use xlink:href="#tunic-elder-south" transform="translate(0 1024)"/>
+    <use xlink:href="#tunic-elder-east" transform="translate(512 1024)"/>
+    <use xlink:href="#tunic-elder-north" transform="translate(1024 1024)"/>
+  </g>
+</svg>

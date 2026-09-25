@@ -1,0 +1,132 @@
+{
+  "camera": [
+    7102.59326171875,
+    9290.59375,
+    1067.708984375,
+    0.6000000238418579
+  ],
+  "candidate_spacing_m": 8,
+  "culled": 0,
+  "detail_blend": 0.0,
+  "detail_requested": false,
+  "draws": 1,
+  "enabled": true,
+  "failed": false,
+  "focus_m": [
+    5642.0,
+    7830.0
+  ],
+  "frame": 720,
+  "grass": {
+    "adaptive": true,
+    "cached_roots": 32217,
+    "candidate_budget": 131072,
+    "candidate_spacing_m": 2,
+    "draws": 111,
+    "enabled": true,
+    "far_blocks": 111,
+    "far_candidate_step_m": 16,
+    "far_candidates": 32217,
+    "focus_m": [
+      5642.0,
+      7830.0
+    ],
+    "instance_stride_bytes": 28,
+    "instance_upload_bytes": 902076,
+    "near_candidates": 0,
+    "root_bytes": 902076,
+    "submitted_candidates": 32217,
+    "submitted_triangles": 64434,
+    "view_wide_ground_cover": true,
+    "visible_radius_m": 192
+  },
+  "grove_blocks": 76,
+  "grove_budget": 32768,
+  "grove_candidate_step_m": 32,
+  "grove_impostors": 3000,
+  "grove_max_focus_distance_m": 2141.051214619231,
+  "grove_root_bytes": 225680,
+  "impostor_instances": 3000,
+  "impostor_views": 8,
+  "instance_upload_bytes": 168000,
+  "lod_mesh_pixels": [
+    22.0,
+    38.0
+  ],
+  "mesh_instances": 0,
+  "mesh_triangle_budget": 1500000,
+  "mesh_triangles": 0,
+  "objects": 0,
+  "populations": [
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "radius_m": 768,
+  "ready": true,
+  "sampled_sites": 0,
+  "seed": 42,
+  "shader_time": 2.0,
+  "shared_geometry_bytes": 983688,
+  "terrain": {
+    "cache_bytes": 26238332,
+    "capacity_limited": false,
+    "coarse": 0,
+    "data_step_m": [
+      8,
+      8
+    ],
+    "final_stage": true,
+    "gpu_bytes": 99695076,
+    "mesh_percent": 100,
+    "mesh_step_m": [
+      8,
+      8
+    ],
+    "missing": 0,
+    "pages_percent": 100,
+    "ram_bytes": 12410684,
+    "upload_failed": false
+  },
+  "triangles": 6000,
+  "view_projection": [
+    0.7654655575752258,
+    -0.7654655575752258,
+    0.0,
+    1674.838623046875,
+    -0.547722578048706,
+    -0.547722578048706,
+    1.5491933822631836,
+    7324.83056640625,
+    -0.6324571371078491,
+    -0.6324571371078491,
+    -0.4472147226333618,
+    10844.982421875,
+    -0.6324555277824402,
+    -0.6324555277824402,
+    -0.4472135901451111,
+    10845.4560546875
+  ],
+  "view_wide_vegetation": true,
+  "viewport": [
+    1280,
+    800
+  ],
+  "water_tiles_skipped": 0,
+  "wind": [
+    0.9941021800041199,
+    -0.10844750702381134,
+    1.4125654697418213,
+    1.0
+  ],
+  "world_cells": [
+    64,
+    64
+  ],
+  "world_metres": [
+    34560,
+    34560
+  ]
+}

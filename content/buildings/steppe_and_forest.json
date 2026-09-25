@@ -1,0 +1,71 @@
+[
+  {
+    "_comment": "A felt tent. A herding people's house: no timber frame worth the name, no stone, no thatch - poles and beaten wool, warm out of all proportion to its weight, and it can be taken down. What makes it a different way of living from a hut is that its materials come off the flock rather than out of the country (D100).",
+    "name": "felt_tent",
+    "label": "Felt tent",
+    "kind": "housing",
+    "blocks_movement": false,
+    "sheltered": true,
+    "materials": [
+      {
+        "item": "felt",
+        "count": 6
+      },
+      {
+        "item": "branch",
+        "count": 8
+      }
+    ],
+    "work": 120,
+    "knowledge": "feltmaking",
+    "sleeping_slots": 3,
+    "warmth_bonus": 9,
+    "comfort_bonus": 0.25,
+    "storage_slots": 6,
+    "firm_ground": false,
+    "footprint": [
+      2,
+      2
+    ],
+    "accepts": [
+      "food"
+    ],
+    "salvage": 0.85
+  },
+  {
+    "_comment": "A smokehouse: a hut with a slow fire under hanging meat. A forest people has no grain worth storing and everything it eats walks away if it is not preserved, so this is its granary.",
+    "name": "smokehouse",
+    "label": "Smokehouse",
+    "kind": "workshop",
+    "blocks_movement": false,
+    "sheltered": true,
+    "materials": [
+      {
+        "item": "wood_log",
+        "count": 8
+      },
+      {
+        "item": "branch",
+        "count": 10
+      },
+      {
+        "item": "thatch",
+        "count": 6
+      }
+    ],
+    "work": 260,
+    "knowledge": "smoking",
+    "function": "smokehouse",
+    "provides_fire": true,
+    "provides_heat": true,
+    "firm_ground": true,
+    "footprint": [
+      2,
+      2
+    ],
+    "max_per_settlement": 2,
+    "worker_slots": 1,
+    "storage_slots": 16
+  }
+]
+

@@ -1,0 +1,31 @@
+[
+  {
+    "_comment": "Felt: wool beaten and rolled rather than spun and woven. It is the fabric of a people who follow their flock - it needs no loom, it is made in a day, and it is what a tent is (D100).",
+    "name": "felt",
+    "label": "Felt",
+    "category": "component",
+    "mass_per_unit": 0.6,
+    "stack_limit": 20
+  },
+  {
+    "name": "felt_cloak",
+    "label": "Felt cloak",
+    "category": "clothing",
+    "mass_per_unit": 1.8,
+    "stack_limit": 1,
+    "insulation": 4.5
+  },
+  {
+    "_comment": "Smoked over a slow fire, meat keeps a season instead of a week. It is the northern answer to a winter with no grain in it.",
+    "name": "smoked_meat",
+    "label": "Smoked meat",
+    "category": "food",
+    "mass_per_unit": 0.4,
+    "stack_limit": 30,
+    "nutrition": 0.34,
+    "food_groups": ["meat"],
+    "edible_raw": true,
+    "spoil_days": 120
+  }
+]
+

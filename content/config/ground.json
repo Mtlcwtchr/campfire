@@ -1,0 +1,92 @@
+[
+  {
+    "_comment": "What the ground is made of. One file for both ends of it: the bakery reads set, variant, tint and keep_colour to bake the texture, and the renderer reads the rest every frame to blend one material into the next. Kept together because they are one decision - how this stuff looks - and split across two files they drift apart. metres_per_turn is how much ground one turn of the texture covers: bigger is a larger pattern and fewer repeats. blend_width is how wide the border with a neighbour is, in weight; tear is how far noise tears that border about; tear_metres is how big the tears are. The border between two materials takes the average of their widths, the larger of their tears and the smaller of their sizes - what makes a border soft is a property of the stuff on either side of it.",
+    "name": "grass",
+    "set": "Grass",
+    "variant": "1",
+    "tint": [1.0, 1.0, 1.0],
+    "keep_colour": 1.0,
+    "metres_per_turn": 2.4,
+    "blend_width": 0.34,
+    "tear": 0.30,
+    "tear_metres": 3.4
+  },
+  {
+    "name": "dirt",
+    "set": "Mud",
+    "variant": "1",
+    "tint": [1.0, 1.0, 1.0],
+    "keep_colour": 1.0,
+    "metres_per_turn": 2.0,
+    "blend_width": 0.34,
+    "tear": 0.34,
+    "tear_metres": 3.0
+  },
+  {
+    "name": "sand",
+    "set": "Sand",
+    "variant": "1",
+    "tint": [1.0, 1.0, 1.0],
+    "keep_colour": 1.0,
+    "metres_per_turn": 1.6,
+    "blend_width": 0.11,
+    "tear": 0.16,
+    "tear_metres": 1.8
+  },
+  {
+    "name": "rock",
+    "set": "Ground",
+    "variant": "5",
+    "tint": [0.94, 0.95, 0.98],
+    "keep_colour": 0.90,
+    "metres_per_turn": 2.6,
+    "blend_width": 0.08,
+    "tear": 0.22,
+    "tear_metres": 1.4
+  },
+  {
+    "name": "marsh",
+    "set": "Swamp",
+    "variant": "1",
+    "tint": [1.0, 1.0, 1.0],
+    "keep_colour": 1.0,
+    "metres_per_turn": 2.0,
+    "blend_width": 0.44,
+    "tear": 0.55,
+    "tear_metres": 1.2
+  },
+  {
+    "name": "snow",
+    "set": "Snow",
+    "variant": "1",
+    "tint": [1.0, 1.0, 1.0],
+    "keep_colour": 1.0,
+    "metres_per_turn": 3.0,
+    "blend_width": 0.28,
+    "tear": 0.24,
+    "tear_metres": 2.6
+  },
+  {
+    "_comment": "Not in the six the ground blends between - these two are baked for the sprite and cliff work and for whoever wants a second grass - but they are materials all the same and belong in the same file.",
+    "name": "grass_wild",
+    "set": "Grass",
+    "variant": "5",
+    "tint": [1.0, 1.0, 1.0],
+    "keep_colour": 1.0,
+    "metres_per_turn": 24.0,
+    "blend_width": 0.34,
+    "tear": 0.30,
+    "tear_metres": 3.4
+  },
+  {
+    "name": "rock_smooth",
+    "set": "Ground",
+    "variant": "6",
+    "tint": [0.96, 0.97, 1.0],
+    "keep_colour": 0.92,
+    "metres_per_turn": 18.0,
+    "blend_width": 0.08,
+    "tear": 0.22,
+    "tear_metres": 1.4
+  }
+]

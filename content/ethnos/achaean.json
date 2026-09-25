@@ -1,0 +1,65 @@
+[
+  {
+    "_comment": "A settled bronze-age people, not a band that must invent flintknapping. They arrive knowing how to sow, herd, weave, bake, throw pots and dress stone; smelting is rarer, held by a family or two.",
+    "name": "achaean",
+    "label": "Achaean",
+    "language": "achaean",
+    "architecture": "aegean",
+    "common_knowledge": [
+      "foraging",
+      "flintknapping",
+      "firemaking",
+      "hafting",
+      "thatching",
+      "hunting",
+      "threshing",
+      "tillage",
+      "herding",
+      "weaving",
+      "sewing",
+      "baking",
+      "grinding",
+      "carpentry",
+      "pottery",
+      "dairying",
+      "herbcraft",
+      "burial"
+    ],
+    "family_knowledge_pool": [
+      "coppersmithing",
+      "masonry",
+      "bronzeworking"
+    ],
+    "family_knowledge_draws": 1,
+    "_skills_comment": "Everyone has a working grounding in every trade the culture practises; each adult is markedly better at one, dealt round so ten people cover ten trades.",
+    "base_skill": 3,
+    "specialist_skill": 7,
+    "trades": [
+      "farming",
+      "herding",
+      "woodcutting",
+      "mining",
+      "crafting",
+      "cooking",
+      "construction",
+      "hauling",
+      "foraging",
+      "hunting"
+    ],
+    "crops": [
+      "einkorn",
+      "flax"
+    ],
+    "starting_livestock": {
+      "sheep": 6,
+      "goat": 3,
+      "pig": 2
+    },
+    "preferred_foods": [
+      "bread",
+      "cheese",
+      "mutton_cooked",
+      "berries"
+    ]
+  }
+]

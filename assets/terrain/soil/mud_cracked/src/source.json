@@ -1,0 +1,24 @@
+{
+  "site": "polyhaven",
+  "asset_id": "mud_cracked_dry_riverbed_002",
+  "asset_url": "https://polyhaven.com/a/mud_cracked_dry_riverbed_002",
+  "license": "CC0",
+  "authors": [
+    "Dario Barresi",
+    "Dimitrios Savva"
+  ],
+  "attribution_required": false,
+  "original_physical_metres": [
+    2.0,
+    2.0
+  ],
+  "runtime_world_scale": 2.6,
+  "resolution": "2k",
+  "files": {
+    "diffuse": "mud_cracked_diffuse.png",
+    "normal": "mud_cracked_normal.png",
+    "displacement": "mud_cracked_displacement.png",
+    "rough": "mud_cracked_rough.png",
+    "ao": "mud_cracked_ao.png"
+  }
+}

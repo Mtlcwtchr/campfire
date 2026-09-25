@@ -1,0 +1,76 @@
+[
+  {
+    "_comment": "The default, and the one to compare the others against: a world put together to come out like this one. Seventy-one percent sea gives twenty-nine percent land, which is Earth's share to a tenth of a point, measured over five seeds at every size; the crust left to break itself up by area gives a handful of masses with one big one, which is the shape of a world with an Afro-Eurasia in it rather than one continent or a field of gravel.",
+    "name": "earthlike",
+    "label": "Like this world",
+    "note": "Seven tenths water, a few land masses with one much the largest, worn ranges and rain enough for forests. As near to Earth as these dials go.",
+    "sea_percent": 71,
+    "plates": 0,
+    "erosion_passes": 3,
+    "rainfall_percent": 100,
+    "site_spacing": 80
+  },
+  {
+    "_comment": "What kind of world to play in. These are the dials of the generator with names on them: the pieces the crust is broken into, how long the weather has worked on it, how much of it is sea and how wet it is. Everything else follows - where the ranges run, where the rain falls, which countries exist and therefore where anybody can live. \"size\" is small, medium, large or huge (64, 96, 128 or 192 cells - 35 to 104 km across), or \"cells\" for a number the interface does not offer; it is where the size dial starts rather than a fixture, and a preset that names neither starts at medium. Measured across three seeds, every preset holds its character at every size: the land share, the river density, the number of countries and the number of communities are the same to within a point. So the size is a matter of how far you want to walk, not of whether the world comes out right.",
+    "name": "fertile_crescent",
+    "label": "Fertile Crescent",
+    "note": "One continent, old worn ranges, a long river to a delta. The country this game's content was written for.",
+    "sea_percent": 62,
+    "plates": 0,
+    "erosion_passes": 2,
+    "rainfall_percent": 100,
+    "site_spacing": 80
+  },
+  {
+    "name": "young_world",
+    "label": "Young world",
+    "note": "The rock as the plates left it: sharp ranges, deep trenches, nothing weathered down yet. Hard country and a lot of stone.",
+    "sea_percent": 58,
+    "plates": 0,
+    "erosion_passes": 0,
+    "rainfall_percent": 90,
+    "site_spacing": 80
+  },
+  {
+    "name": "archipelago",
+    "label": "Archipelago",
+    "note": "Crust broken into many small pieces under a high sea: islands, straits and long coasts. Fishers and boats, if there were boats.",
+    "size": "large",
+    "sea_percent": 78,
+    "plates": 48,
+    "erosion_passes": 3,
+    "rainfall_percent": 115,
+    "site_spacing": 50
+  },
+  {
+    "name": "pangaea",
+    "label": "One land",
+    "note": "Few plates and a low sea: one great continent with a dry heart, because rain does not reach the middle of a land that size.",
+    "size": "huge",
+    "sea_percent": 46,
+    "plates": 5,
+    "erosion_passes": 4,
+    "rainfall_percent": 85,
+    "site_spacing": 110
+  },
+  {
+    "name": "green_world",
+    "label": "Green world",
+    "note": "Warm and wet, worn smooth: forest to the horizon, rivers everywhere, and the deserts pushed to the rain shadows.",
+    "sea_percent": 66,
+    "plates": 0,
+    "erosion_passes": 6,
+    "rainfall_percent": 145,
+    "site_spacing": 70
+  },
+  {
+    "name": "dry_world",
+    "label": "Dry world",
+    "note": "Little rain and a low sea: steppe and desert, with life crowded onto the few rivers that cross it.",
+    "sea_percent": 52,
+    "plates": 0,
+    "erosion_passes": 2,
+    "rainfall_percent": 60,
+    "site_spacing": 90
+  }
+]

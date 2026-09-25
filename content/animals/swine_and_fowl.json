@@ -1,0 +1,39 @@
+[
+  {
+    "_comment": "The village pig. It eats what nobody else will and turns it into meat faster than any other beast, which is why a settlement with a bad harvest still has something to kill in winter. Bred out of the boars in the marsh.",
+    "name": "pig",
+    "label": "Pig",
+    "knowledge": "herding",
+    "size_metres": 1.0,
+    "adult_age_days": 220,
+    "max_age_days": 2400,
+    "breed_interval_days": 150,
+    "breeding_stock": 6,
+    "twin_one_in": 1,
+    "slaughter": [
+      { "item": "mutton_raw", "count": 14 },
+      { "item": "hide", "count": 1 }
+    ],
+    "slaughter_work": 80
+  },
+  {
+    "_comment": "Fowl. Kept for the eggs rather than the bird: little at a time, every other day, and no work to speak of. The one animal a household can keep without a pasture.",
+    "name": "chicken",
+    "label": "Fowl",
+    "size_metres": 0.45,
+    "adult_age_days": 150,
+    "max_age_days": 2000,
+    "milk_interval_days": 2,
+    "breed_interval_days": 90,
+    "breeding_stock": 6,
+    "twin_one_in": 2,
+    "milk": [
+      { "item": "egg", "count": 2 }
+    ],
+    "slaughter": [
+      { "item": "mutton_raw", "count": 2 }
+    ],
+    "milk_work": 6,
+    "slaughter_work": 20
+  }
+]

@@ -1,0 +1,56 @@
+{
+  "id": "grass_sparse",
+  "runtime_size": 2048,
+  "runtime_files": {
+    "albedo": "grass_sparse_albedo.png",
+    "normal": "grass_sparse_normal.png",
+    "properties": "grass_sparse_properties.png"
+  },
+  "properties_channels": {
+    "r": "ao",
+    "g": "roughness",
+    "b": "height",
+    "a": "mask"
+  },
+  "mip_steps": [
+    2,
+    4,
+    8,
+    16
+  ],
+  "height_range_before_stretch": [
+    0.0063,
+    0.9551
+  ],
+  "had": {
+    "ao": true,
+    "rough": true,
+    "displacement": true,
+    "mask": true
+  },
+  "source": {
+    "site": "polyhaven",
+    "asset_id": "sparse_grass",
+    "asset_url": "https://polyhaven.com/a/sparse_grass",
+    "license": "CC0",
+    "authors": [
+      "Amal Kumar"
+    ],
+    "attribution_required": false,
+    "original_physical_metres": [
+      2.0,
+      2.0
+    ],
+    "runtime_world_scale": 2.6,
+    "resolution": "2k",
+    "files": {
+      "diffuse": "grass_sparse_diffuse.png",
+      "normal": "grass_sparse_normal.png",
+      "displacement": "grass_sparse_displacement.png",
+      "rough": "grass_sparse_rough.png",
+      "ao": "grass_sparse_ao.png",
+      "mask": "grass_sparse_mask.png"
+    }
+  },
+  "world_scale": 2.6
+}

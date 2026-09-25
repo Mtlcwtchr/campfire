@@ -1,0 +1,101 @@
+[
+  {
+    "_comment": "The water's normal maps, and the one thing in the whole set that is not CC0. These are Keith333's, CC-BY 3.0, and the licence asks for a credit - so the credit is generated from this file (tools/fetch_terrain.py writes CREDITS.md) rather than typed into it by hand. A credit typed by hand is a credit that goes stale the day somebody swaps a texture.\n\nWhat is here is normals and a foam mask, and nothing else. The colour of water is not a texture in this game and must not become one: it is worked out from depth, distance to the shore, how much the water is carrying, and the light. A photograph of water is a photograph of one lake on one afternoon, and it will be that lake in the desert too.",
+    "id": "water_calm",
+    "group": "water/normals/calm",
+    "kind": "normal",
+    "file": "GreenCalm_N.jpg",
+    "used_for": "marshes, ponds, still lakes, slow rivers",
+    "source": {
+      "site": "opengameart",
+      "url": "https://opengameart.org/sites/default/files/GreenCalm_N.jpg",
+      "pack": "Water - Batch of 15 Seamless Textures with normalmaps",
+      "pack_url": "https://opengameart.org/content/water-batch-of-15-seamless-textures-with-normalmaps",
+      "author": "Keith333",
+      "license": "CC-BY 3.0",
+      "attribution_required": true
+    }
+  },
+  {
+    "id": "water_lake",
+    "group": "water/normals/lake",
+    "kind": "normal",
+    "file": "Lake_N.jpg",
+    "used_for": "lakes, large rivers, calm sea - the middle-sized normal most water uses",
+    "source": {
+      "site": "opengameart",
+      "url": "https://opengameart.org/sites/default/files/Lake_N.jpg",
+      "pack": "Water - Batch of 15 Seamless Textures with normalmaps",
+      "pack_url": "https://opengameart.org/content/water-batch-of-15-seamless-textures-with-normalmaps",
+      "author": "Keith333",
+      "license": "CC-BY 3.0",
+      "attribution_required": true
+    }
+  },
+  {
+    "id": "water_waves",
+    "group": "water/normals/waves",
+    "kind": "normal",
+    "file": "SeaWaves_N.jpg",
+    "used_for": "open sea and hard wind",
+    "source": {
+      "site": "opengameart",
+      "url": "https://opengameart.org/sites/default/files/SeaWaves_N.jpg",
+      "pack": "Water - Batch of 15 Seamless Textures with normalmaps",
+      "pack_url": "https://opengameart.org/content/water-batch-of-15-seamless-textures-with-normalmaps",
+      "author": "Keith333",
+      "license": "CC-BY 3.0",
+      "attribution_required": true
+    }
+  },
+  {
+    "id": "water_foam",
+    "group": "water/foam",
+    "kind": "mask",
+    "file": "FoamB_S.jpg",
+    "used_for": "the shoreline net and whitecaps",
+    "_comment": "Never drawn as colour. What is kept is a one-channel mask taken out of it, and the mask is then torn about by noise and carried by the flow, so that the same net is not visible lying on the whole coast at once.",
+    "source": {
+      "site": "opengameart",
+      "url": "https://opengameart.org/sites/default/files/FoamB_S.jpg",
+      "pack": "Water - Batch of 15 Seamless Textures with normalmaps",
+      "pack_url": "https://opengameart.org/content/water-batch-of-15-seamless-textures-with-normalmaps",
+      "author": "Keith333",
+      "license": "CC-BY 3.0",
+      "attribution_required": true
+    }
+  },
+  {
+    "id": "waterfall_source",
+    "group": "water/special/waterfall_source",
+    "kind": "mask",
+    "file": "WaterFall_S.jpg",
+    "used_for": "waterfall streak mask, wet-rock breakup, turbulence",
+    "source": {
+      "site": "opengameart",
+      "url": "https://opengameart.org/sites/default/files/WaterFall_S.jpg",
+      "pack": "Water - Batch of 15 Seamless Textures with normalmaps",
+      "pack_url": "https://opengameart.org/content/water-batch-of-15-seamless-textures-with-normalmaps",
+      "author": "Keith333",
+      "license": "CC-BY 3.0",
+      "attribution_required": true
+    }
+  },
+  {
+    "id": "waterfall_normal",
+    "group": "water/special/waterfall_normal",
+    "kind": "normal",
+    "file": "WaterFall_N.jpg",
+    "used_for": "weak micro detail for waterfall only",
+    "source": {
+      "site": "opengameart",
+      "url": "https://opengameart.org/sites/default/files/WaterFall_N.jpg",
+      "pack": "Water - Batch of 15 Seamless Textures with normalmaps",
+      "pack_url": "https://opengameart.org/content/water-batch-of-15-seamless-textures-with-normalmaps",
+      "author": "Keith333",
+      "license": "CC-BY 3.0",
+      "attribution_required": true
+    }
+  }
+]
+

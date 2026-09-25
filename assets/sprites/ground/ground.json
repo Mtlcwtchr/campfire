@@ -1,0 +1,15 @@
+{
+  "format_version": 1,
+  "_comment": "Ground materials, baked by tools/bake_materials.py from the material packs: albedo times ambient occlusion times the surface lit by this world's fixed sun. The renderer multiplies these by how much light the hillside itself gets.",
+  "materials": [
+    "dirt",
+    "grass",
+    "grass_wild",
+    "marsh",
+    "rock",
+    "rock_smooth",
+    "sand",
+    "snow"
+  ],
+  "size": 512
+}

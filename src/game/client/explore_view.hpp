@@ -1,0 +1,78 @@
+#pragma once
+// Client controls/menu adapter. World ownership and rendering live in game subsystems.
+
+#include <SDL3/SDL.h>
+
+#include <array>
+#include <cstdint>
+#include <filesystem>
+#include <string>
+#include <vector>
+
+#include "engine/pipeline/runner.hpp"
+#include "engine/render/device.hpp"
+#include "engine/render/geometry/mesh_cache.hpp"
+#include "game/render/climate_textures.hpp"
+#include "game/client/camera.hpp"
+#include "game/content/ground_materials.hpp"
+#include "game/render/calc/sprite_queue.hpp"
+#include "engine/core/time.hpp"
+#include "game/render/world_renderer.hpp"
+
+namespace engine { class RenderPipeline; }
+namespace game { class TerrainCollectPass; class SpritePass; class SceneModelsPass; class FoliagePass; }
+
+namespace client {
+
+class Explorer;
+class ExploreMenu;
+
+struct ExploreViewOptions {
+    Camera::Mode cameraMode = Camera::Mode::Map;
+    int gridMode = 0;
+    // Draw the objects as edges from the first frame. The Shift+M toggle does
+    // the same thing, but a shot never sees a keystroke - and a wireframe you
+    // can only reach by hand is a wireframe you cannot put in a report.
+    bool objectMesh = false;
+    double yaw = 0.7853981633974483;
+    double pitch = 0.4636476090008061;
+    double heightOffset = 0;
+    bool iceVisible = true;
+};
+
+class ExploreView {
+public:
+    explicit ExploreView(game::WorldRenderer& renderer) : renderer_(renderer) {}
+    bool open(SDL_Window* window, const std::filesystem::path& assets, world::WorldSystem& world,
+              const Camera& camera, ExploreMenu& menu);
+    bool draw(const Camera& camera);
+#if ASR_ENABLE_PROFILING
+    bool compareGrassCulling(const Camera& camera, const std::string& path);
+#endif
+private:
+    game::WorldRenderer& renderer_;
+    ExploreMenu* menu_ = nullptr;
+    const world::WorldSystem* source_ = nullptr;
+    game::WorldRenderSettings settings_;
+};
+
+// Opens the world, shows it, and returns when the window is closed. With
+// `shotPath` it draws one settled frame into that file and returns instead,
+// which is how the terrain gets reviewed without a person at the keyboard.
+int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCells,
+                   const std::filesystem::path& assets, const std::string& shotPath,
+                   double startZoom = 0, const std::string& startAt = {}, bool measuring = false,
+                   bool closeUp = false, bool tracing = false, int shotFrame = 0,
+                   bool showMenu = false, int crowd = 0,
+                   // Which instant of the shader clock a picture is taken at.
+                   // Held, so two pictures of a moving thing are comparable -
+                   // and settable, because otherwise everything that moves can
+                   // only be reviewed at nought seconds, which for wind is the
+                   // one moment it is doing nothing.
+                   double shotTime = 0.0, const std::string& mapName = "none",
+                   double weatherDay = 0.0, int weatherPreset = 0,
+                   const core::TimeConfig& calendar = {},
+                   const std::array<float, 4>& seasons = {18.0f, 32.0f, 21.0f, 9.0f},
+                   const ExploreViewOptions& options = {});
+
+} // namespace client
