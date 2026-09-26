@@ -190,12 +190,12 @@ int main(int argc, char** argv) {
         else if (a == "--zoom" && i + 1 < argc) shotZoom = std::atof(argv[++i]);
         else if (a == "--overlay" && i + 1 < argc) shotOverlay = argv[++i];
         else if (a == "--help") {
-            std::cout << "usage: asr_client [--seed N] [--map N] [--pop N]\n"
-                      << "       asr_client --shot-menu FILE   the world-choosing screen\n"
-                      << "       asr_client --shot FILE [--day N] [--zoom PIXELS_PER_TILE]"
+            std::cout << "usage: campfire_client [--seed N] [--map N] [--pop N]\n"
+                      << "       campfire_client --shot-menu FILE   the world-choosing screen\n"
+                      << "       campfire_client --shot FILE [--day N] [--zoom PIXELS_PER_TILE]"
                       << " [--overlay none|zones|jobs]\n"
-                      << "       asr_client --world tiny|smaller|small|average|medium|large|giant\n"
-                      << "       asr_client --explore [--menu] [--seed N] [--world N]"
+                      << "       campfire_client --world tiny|smaller|small|average|medium|large|giant\n"
+                      << "       campfire_client --explore [--menu] [--seed N] [--world N]"
                       << " [--shot FILE] [--camera map|orbit|free] [--grid off|samples|mesh]"
                       << " [--object-mesh]"
                       << " [--yaw RADIANS] [--pitch RADIANS] [--height-offset METRES]"
@@ -242,7 +242,7 @@ int main(int argc, char** argv) {
     }
 
     if (exploring) {
-        SDL_Window* gpuWindow = SDL_CreateWindow("Ancient Settlement — GPU World Explorer",
+        SDL_Window* gpuWindow = SDL_CreateWindow("Campfire — World Explorer",
                                                  1280, 800, SDL_WINDOW_RESIZABLE);
         if (!gpuWindow) {
             std::cerr << "GPU explorer window creation failed: " << SDL_GetError() << "\n";
@@ -263,7 +263,7 @@ int main(int argc, char** argv) {
 
     SDL_Window* window = nullptr;
     SDL_Renderer* sdlRenderer = nullptr;
-    if (!SDL_CreateWindowAndRenderer("Ancient Settlement", 1280, 800, SDL_WINDOW_RESIZABLE,
+    if (!SDL_CreateWindowAndRenderer("Campfire", 1280, 800, SDL_WINDOW_RESIZABLE,
                                      &window, &sdlRenderer)) {
         std::cerr << "window creation failed: " << SDL_GetError() << "\n";
         SDL_Quit();

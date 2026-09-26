@@ -1,6 +1,7 @@
-# Ancient Settlement RTS
+# Campfire — «Костёр»
 
-Симуляционная RTS об автономной общине бронзового века. Источник истины по
+Campfire — собственный движок и работающий на нём клиент симуляционной RTS
+об автономной общине бронзового века. Источник истины по
 дизайну — `doc/ancient_settlement_rts_gdd_v0.1.md`. Решения, которыми закрыты
 открытые вопросы GDD, и список известных пробелов — `doc/DECISIONS.md`.
 
@@ -20,15 +21,15 @@
 ## Сборка
 
 ```bash
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
-cmake --build build
+nice cmake -S . -B cmake-build-relwithdebinfo -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
+nice cmake --build cmake-build-relwithdebinfo -j 2
 ```
 
 Клиент тянет SDL3 и SDL_image через `FetchContent` (первая конфигурация — несколько минут).
 Без него:
 
 ```bash
-cmake -S . -B build -G Ninja -DASR_BUILD_CLIENT=OFF
+cmake -S . -B cmake-build-relwithdebinfo -G Ninja -DASR_BUILD_CLIENT=OFF
 ```
 
 ## Запуск
@@ -44,6 +45,7 @@ world)**, **Headless (1 year)**, **Headless (10 years)**, **Explain decisions**,
 ```bash
 ./run.sh                 # игра
 ./run.sh game 42 180     # seed 42, карта 180
+./run.sh explore         # 3D-эксплорер Campfire
 ./run.sh headless 200    # 200 суток без графики, с отчётом
 ./run.sh explain 5000    # таблица спроса и все жители на тике 5000
 ./run.sh validate
@@ -54,32 +56,68 @@ world)**, **Headless (1 year)**, **Headless (10 years)**, **Explain decisions**,
 
 ```bash
 # посмотреть
-./build/asr_client --seed 11 --map 140
+./cmake-build-relwithdebinfo/campfire_client --seed 11 --map 140
 
 # прогнать без графики и получить отчёт
-./build/sim_runner --days 200 --seed 11 --status-every 2400
+./cmake-build-relwithdebinfo/sim_runner --days 200 --seed 11 --status-every 2400
 
 # почему община делает именно это, на конкретном тике
-./build/sim_runner --days 60 --seed 3 --quiet --explain 5000
+./cmake-build-relwithdebinfo/sim_runner --days 60 --seed 3 --quiet --explain 5000
 
 # проверить контент: все ли предметы достижимы голыми руками
-./build/content_validator
+./cmake-build-relwithdebinfo/content_validator
 
 # редактор данных и интерфейса - отдельный клиент, мир не создаётся
-./build/asr_editor --settings editor.json
+./cmake-build-relwithdebinfo/campfire_editor --settings editor.json
 
 # посмотреть на мир без игры: бесшовный террейн от метра до континента
-./build/asr_client --explore
-./build/asr_client --explore --at mountains --zoom 0.6 --shot /tmp/hills.png
+./cmake-build-relwithdebinfo/campfire_client --explore
+./cmake-build-relwithdebinfo/campfire_client --explore --at mountains --zoom 0.6 --shot /tmp/hills.png
 
 # выписка «этнос → контент» (после правок в content/)
 python3 tools/ethnos_table.py
 
 # тесты
-./build/asr_tests
+./cmake-build-relwithdebinfo/asr_tests
 ```
 
-Управление в клиенте:
+Внутренние CMake-цели `asr_client`/`asr_editor` и старые имена исполняемых файлов
+оставлены как aliases для совместимости с инструментами и CLion. Новые имена —
+`campfire_client` и `campfire_editor`. `run.sh` использует `CAMPFIRE_BUILD_DIR`
+(старый `ASR_BUILD_DIR` также поддерживается).
+
+## Внешний профайлер
+
+`tools/campfire_profiler.py` — **отдельная тулза**, не библиотека движка.
+Она подключается к PID или запускает исполняемый файл через macOS Instruments.
+В коде движка не нужны Tracy-зоны, `printf`, reflection или compiler hooks.
+Нужны macOS и Xcode; debug symbols улучшают имена стеков, но не являются инструментацией.
+
+```sh
+python3 tools/campfire_profiler.py processes
+python3 tools/campfire_profiler.py record --pid 12345 --mode cpu --seconds 10
+python3 tools/campfire_profiler.py record --mode memory --seconds 10 --debug-copy \
+  --launch ./cmake-build-relwithdebinfo/campfire_client -- --explore
+```
+
+Режимы: `cpu` (семплирование стеков), `memory` (аллокации), `gpu` (Metal),
+`system` (потоки/ожидания), `counters` (аппаратные счётчики, если доступны на машине).
+Запись сохраняется в новой папке `.cache/profiles/`: `capture.trace` открывается
+в Instruments. CPU-режим дополнительно создаёт локальные `report.html` и `summary.json`.
+`--open` открывает Instruments после записи. Ничего не отправляется в облако.
+
+Семплы CPU — статистика, не точное время каждой функции и не GPU-время.
+История аллокаций до подключения не восстанавливается: для неё нужен режим `--launch`.
+Если macOS не разрешает Allocations подключиться, `--debug-copy` создаёт в папке
+записи отдельную копию с debug-подписью. Основной бинарник и исходники не изменяются;
+SIP и системные настройки безопасности не отключаются.
+Instruments может завершить запущенный через `--launch` процесс по лимиту записи;
+для уже работающего клиента без такого завершения используйте `--pid`.
+Записанный trace при ненулевом коде xctrace отмечается предупреждением, а не скрывается.
+Ограничения доступа/счётчиков записываются как ошибки, а не как нулевые результаты.
+Старый UE-проект-донор **AncientSettlement** и исторические документы не переименованы.
+
+## Управление в клиенте
 
 | Клавиша | Действие |
 | --- | --- |

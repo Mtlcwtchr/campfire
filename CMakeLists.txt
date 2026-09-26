@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(ancient_settlement LANGUAGES CXX)
+project(campfire LANGUAGES CXX)
 
 include(FetchContent)
 
@@ -383,6 +383,25 @@ if(ASR_BUILD_CLIENT)
         target_sources(asr_client PRIVATE src/game/client/explore_diagnostics.cpp)
     endif()
 
+    # Public branding changes without breaking existing CLion targets/scripts.
+    function(campfire_binary target output)
+        set_target_properties(${target} PROPERTIES OUTPUT_NAME "${output}")
+        if(UNIX)
+            add_custom_command(TARGET ${target} POST_BUILD
+                    COMMAND "${CMAKE_COMMAND}" -E rm -f "$<TARGET_FILE_DIR:${target}>/${target}"
+                    COMMAND "${CMAKE_COMMAND}" -E create_symlink "$<TARGET_FILE_NAME:${target}>"
+                            "$<TARGET_FILE_DIR:${target}>/${target}"
+                    VERBATIM)
+        else()
+            add_custom_command(TARGET ${target} POST_BUILD
+                    COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:${target}>"
+                            "$<TARGET_FILE_DIR:${target}>/${target}${CMAKE_EXECUTABLE_SUFFIX}"
+                    VERBATIM)
+        endif()
+    endfunction()
+    campfire_binary(asr_client campfire_client)
+    campfire_binary(asr_editor campfire_editor)
+
     option(ASR_PREPARE_SCENE_MODELS "Prepare instanced nature models and impostors offline" ON)
     if(ASR_PREPARE_SCENE_MODELS)
         set(ASR_SCENE_PYTHON "" CACHE FILEPATH "Python with tools/scene_models_requirements.txt installed")
@@ -426,6 +445,12 @@ endif()
 # ---------------------------------------------------------------------------
 if(ASR_BUILD_TESTS)
     enable_testing()
+    find_package(Python3 QUIET COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME external_profiler COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_SOURCE_DIR}/tests/test_external_profiler.py")
+        set_tests_properties(external_profiler PROPERTIES TIMEOUT 30)
+    endif()
     add_executable(asr_smart_mesh_tests tests/main.cpp tests/test_smart_mesh.cpp)
     target_link_libraries(asr_smart_mesh_tests PRIVATE asr_geometry asr_warnings)
     if(ASR_BUILD_CLIENT)

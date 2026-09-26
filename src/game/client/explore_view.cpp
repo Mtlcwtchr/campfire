@@ -472,7 +472,7 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
             const auto& timing = renderer.runner().frameTiming();
             char title[320];
             std::snprintf(title, sizeof(title),
-                          "%sAncient Settlement - %.0f fps, %.1f ms - %s - %s%.0fk tris, %u draws, "
+                          "%sCampfire - %.0f fps, %.1f ms - %s - %s%.0fk tris, %u draws, "
                           "%u indirect (%u uncounted) - models %u drawn / %u occluded"
                           " - cpu %.1f (fix %.1f wait %.1f set %.1f work %.1f sub %.1f)%s",
 #ifndef __OPTIMIZE__

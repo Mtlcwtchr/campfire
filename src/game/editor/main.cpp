@@ -90,8 +90,8 @@ int main(int argc, char** argv) {
         // file says, and the file is not read yet.
         else if (a == "--content" && i + 1 < argc) ++i;
         else if (a == "--help") {
-            std::cout << "usage: asr_editor [--settings FILE] [--content DIR]\n"
-                      << "       asr_editor --shot FILE [--tab N] [--kind N] [--drop FILE]\n"
+            std::cout << "usage: campfire_editor [--settings FILE] [--content DIR]\n"
+                      << "       campfire_editor --shot FILE [--tab N] [--kind N] [--drop FILE]\n"
                       << "  Opens the data and interface editor. No world is generated.\n";
             return 0;
         }
@@ -117,7 +117,7 @@ int main(int argc, char** argv) {
     }
     SDL_Window* window = nullptr;
     SDL_Renderer* sdl = nullptr;
-    if (!SDL_CreateWindowAndRenderer("Ancient Settlement - editor", settings.width, settings.height,
+    if (!SDL_CreateWindowAndRenderer("Campfire - editor", settings.width, settings.height,
                                      SDL_WINDOW_RESIZABLE, &window, &sdl)) {
         std::cerr << "window creation failed: " << SDL_GetError() << "\n";
         SDL_Quit();

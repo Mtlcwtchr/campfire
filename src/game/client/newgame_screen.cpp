@@ -202,7 +202,7 @@ void NewGameScreen::draw(SDL_Renderer* sdl, int viewportWidth, int viewportHeigh
     }
 
     float y = 24.0f;
-    text(sdl, 24, y, "ANCIENT SETTLEMENT - a world to settle", 250, 246, 232);
+    text(sdl, 24, y, "CAMPFIRE - a world to settle", 250, 246, 232);
     y += 26;
     if (!presets_.empty()) {
         text(sdl, 24, y, "[ ] " + presets_[preset_].label, 245, 226, 150);
