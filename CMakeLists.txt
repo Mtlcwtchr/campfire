@@ -324,6 +324,7 @@ if(ASR_BUILD_CLIENT)
             src/game/render/passes/far_trees_pass.cpp
             src/game/render/passes/water_pass.cpp
             src/game/render/passes/weather_pass.cpp
+            src/game/render/passes/grade_pass.cpp
             src/game/render/passes/sky_pass.cpp src/game/render/passes/frustum_pass.cpp
             src/game/render/passes/menu_pass.cpp
             src/game/render/passes/sprite_pass.cpp

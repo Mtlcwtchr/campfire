@@ -2,6 +2,7 @@
 
 #include <SDL3_image/SDL_image.h>
 
+#include <algorithm>
 #include <cstring>
 
 namespace engine {
@@ -62,11 +63,15 @@ bool Targets::resize(Device& device, Uint32 width, Uint32 height) {
         width_ = height_ = 0;
         return false;
     }
-    // What a stage that has to see the picture behind it reads (water). A copy
-    // destination and a sampled texture, never a target.
+    // What a stage that has to see the picture behind it reads (water, the
+    // grade). A copy destination and a sampled texture, with a full mip chain
+    // for a stage that wants it blurred; generating that chain needs it to be
+    // a colour target as well. Level 0 is all the water ever reads.
     info.format = Device::kColourFormat;
-    info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+    info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
     info.sample_count = SDL_GPU_SAMPLECOUNT_1;
+    info.num_levels = 1;
+    for (Uint32 side = std::max(width, height); side > 1; side /= 2) ++info.num_levels;
     grab_ = device.makeTexture(info);
     if (!grab_) {
         width_ = height_ = 0;

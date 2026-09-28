@@ -27,7 +27,8 @@ public:
     // reading the finished picture reads this and does not care either way.
     SDL_GPUTexture* resolved() const { return resolve_ ? resolve_.get() : colour_.get(); }
     bool multisampled() const { return static_cast<bool>(resolve_); }
-    // One-sample, sampled copy of the picture taken between stages.
+    // One-sample, sampled copy of the picture taken between stages, with a
+    // full mip chain (filled only for a stage that asks, see StageInfo).
     SDL_GPUTexture* grab() const { return grab_.get(); }
     Uint32 width() const { return width_; }
     Uint32 height() const { return height_; }

@@ -96,7 +96,8 @@ engine::PassPlace MenuPass::setup(engine::Device& device, engine::RenderPipeline
             {progressPicture_.get(), sampler_.get()}});
     }
 #endif
-    return {engine::passOf(Pass::Menu), engine::stageOf(Stage::Surface),
+    // The interface's own stage, after the grade: text is not tinted.
+    return {engine::passOf(Pass::Menu), engine::stageOf(Stage::Interface),
             static_cast<engine::PassOrder>(Order::Interface)};
 }
 

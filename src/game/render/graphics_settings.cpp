@@ -22,6 +22,7 @@ void GraphicsSettings::clampAll() {
     sunIntensity = std::clamp(sunIntensity, 0.0f, 3.0f);
     ambient = std::clamp(ambient, 0.0f, 3.0f);
     exposure = std::clamp(exposure, 0.25f, 3.0f);
+    gradeStrength = std::clamp(gradeStrength, 0.0f, 1.0f);
     skyRotation = std::fmod(std::fmod(skyRotation, 360.0f) + 360.0f, 360.0f);
     cloudQuality = std::clamp(cloudQuality, 0, 2);
     cloudCoverage = std::clamp(cloudCoverage, 0.0f, 1.0f);
@@ -47,7 +48,7 @@ GraphicsSettings graphicsPreset(int quality, GraphicsSettings keep) {
     X(quality) X(antialiasing) X(resolution) X(shadows) X(shadowSoftness) X(forestProxies) X(farForest) \
     X(massClusters) X(objectError) X(vegetationMeshPixels) X(vegetationMeshKiloTriangles) X(farTrees) X(farTreesStart) \
     X(terrainBlend) X(terrainTextures) X(drawDistanceKm) X(fog) X(fogStart) X(sunElevation) X(sunAzimuth) \
-    X(sunIntensity) X(ambient) X(exposure) X(skybox) X(skyRotation) X(clouds) X(cloudQuality) \
+    X(sunIntensity) X(ambient) X(exposure) X(grade) X(gradeStrength) X(skybox) X(skyRotation) X(clouds) X(cloudQuality) \
     X(cloudCoverage) X(cloudDensity) X(cloudAltitude)
 
 GraphicsSettings loadGraphicsSettings(const std::filesystem::path& file) {

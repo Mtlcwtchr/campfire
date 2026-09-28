@@ -26,6 +26,7 @@ enum class Pass : engine::PassId {
     Sky,           // what the distance fog fades into, behind everything
     Frustum,       // the scene view's frozen cull camera
     FarTrees,      // GPU-scattered tree impostors from the object reach to the horizon
+    Grade,         // the finished picture's colour: warmth, bloom, print curve, grain
 };
 
 // One render pass on the card apiece. The world is drawn into a cleared target
@@ -34,8 +35,14 @@ enum class Stage : engine::StageId {
     World = 0,
     // Everything drawn OVER the finished opaque world: water first (it reads
     // a copy of that world - its bed through it, its shores in it), then the
-    // blended cards, weather and interface on top. Same colour and depth.
+    // blended cards, weather and anything else that is part of the picture.
     Surface = 1,
+    // The whole picture, reread and regraded: it needs a copy of everything
+    // above, which is only to be had between render passes.
+    Post = 2,
+    // What is being said to the person. After the grade, because it is not
+    // part of the picture and must not be tinted as if it were.
+    Interface = 3,
 };
 
 // Where a pass sits inside its stage. Ground and grass may be interleaved by the

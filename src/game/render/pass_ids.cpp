@@ -17,6 +17,7 @@ const char* nameOf(Pass pass) {
         case Pass::Sky:      return "sky";
         case Pass::Frustum:  return "frustum";
         case Pass::FarTrees: return "far-trees";
+        case Pass::Grade:    return "grade";
     }
     return "?";
 }

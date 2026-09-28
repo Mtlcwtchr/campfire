@@ -107,6 +107,8 @@ bool GraphicsPanel::draw(ui::Ui& ui, game::GraphicsSettings& s) {
         slider(ui, ui::widgetId("graphics.sun"), x, y, "Sun intensity", s.sunIntensity, 0, 3, "%.2f");
         slider(ui, ui::widgetId("graphics.amb"), x, y, "Sky / ambient", s.ambient, 0, 3, "%.2f");
         slider(ui, ui::widgetId("graphics.exp"), x, y, "Exposure", s.exposure, 0.25f, 3, "%.2f", true);
+        toggle(ui, ui::widgetId("graphics.grade"), x, y, "Warm grade (bloom, grain)", s.grade);
+        slider(ui, ui::widgetId("graphics.gradeamt"), x, y, "Grade strength", s.gradeStrength, 0, 1, "%.2f");
         break;
     case 2:
         toggle(ui, ui::widgetId("graphics.fog"), x, y, "Distance fog", s.fog);

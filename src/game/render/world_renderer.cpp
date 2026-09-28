@@ -14,6 +14,7 @@
 #include "game/render/passes/far_trees_pass.hpp"
 #include "game/render/passes/sky_pass.hpp"
 #include "game/render/passes/frustum_pass.hpp"
+#include "game/render/passes/grade_pass.hpp"
 #include "game/render/passes/sprite_pass.hpp"
 #include "game/render/passes/terrain_pass.hpp"
 #include "game/render/passes/water_pass.hpp"
@@ -90,8 +91,13 @@ bool WorldRenderer::synchronize() {
     runner_->add(std::move(prepare));
 
     auto drawing = std::make_unique<engine::RenderPipeline>(engine::PipelineId(Phase::Render));
+    // World, Surface (reads a copy of World), Post (reads a copy of everything,
+    // blurred down its mip chain), Interface. Aggregates in StageInfo's order:
+    // clear colour, its value, depth, clear depth, grab, grab mips.
     drawing->stages({engine::StageInfo{true, {0.07f, 0.155f, 0.195f, 1.0f}, true, true},
-                     engine::StageInfo{false, {0, 0, 0, 1}, true, false, true}});
+                     engine::StageInfo{false, {0, 0, 0, 1}, true, false, true},
+                     engine::StageInfo{false, {0, 0, 0, 1}, true, false, true, true},
+                     engine::StageInfo{false, {0, 0, 0, 1}, true, false}});
     std::vector<std::string> materials;
     for (std::size_t i = 0; i < content::kBlendedMaterials && i < ground_.size(); ++i)
         materials.push_back("ground/" + ground_[i].name);
@@ -146,6 +152,7 @@ bool WorldRenderer::synchronize() {
     drawing->add(std::make_unique<SkyPass>());
     drawing->add(std::make_unique<FrustumPass>());
     drawing->add(std::make_unique<WeatherPass>());
+    drawing->add(std::make_unique<GradePass>());
     sprites_ = drawing->add(std::make_unique<SpritePass>(spriteQueue_, std::move(spriteImages)));
     if (overlay_) if (auto overlay = overlay_(*terrain)) drawing->add(std::move(overlay));
     render_ = runner_->add(std::move(drawing));
@@ -246,6 +253,11 @@ bool WorldRenderer::draw(const client::Camera& camera, const WorldRenderSettings
         scene.clouds[2] = graphics.cloudAltitude;
         scene.clouds[3] = float(graphics.cloudSteps()); // procedural: no content needed
     }
+    // The grade (GradePass): the picture's own look, so on unless the
+    // settings turn it down. Inspection maps and the unfinished generator
+    // stages are measurements, not pictures, and are never graded.
+    scene.quality[2] = settings.useGraphics ? (graphics.grade ? graphics.gradeStrength : 0.0f) : 1.0f;
+    if (settings.map != world::MapView::Natural || !terrain.finalStage()) scene.quality[2] = 0.0f;
     if (models_) models_->drawDistance(camera.perspective() ? reach : 400000.0);
     if (models_)
         models_->prepareDensity(scene, cull.viewportWidth, scene);

@@ -50,6 +50,10 @@ struct GraphicsSettings {
     float sunIntensity = 1.0f;
     float ambient = 1.0f;
     float exposure = 1.0f;
+    // The picture's grade (GradePass): warm light, a print's curve, a golden
+    // bloom, vignette and grain. Strength blends it with the ungraded frame.
+    bool grade = true;
+    float gradeStrength = 1.0f;
     // Sky and clouds
     bool skybox = true;
     float skyRotation = 0.0f;        // degrees

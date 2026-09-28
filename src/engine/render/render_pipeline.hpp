@@ -78,6 +78,10 @@ struct StageInfo {
     // what is behind and around them: water refracting its bed and
     // reflecting its shores.
     bool grabColour = false;
+    // And fill in the copy's mip chain after it: a stage that wants the
+    // picture blurred (a glow, a grade) reads a coarser level instead of
+    // sampling a wide disc of the finest one.
+    bool grabMipmaps = false;
 };
 
 // What one state change cost, for the overlay. An honest batcher should be able

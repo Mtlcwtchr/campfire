@@ -186,6 +186,7 @@ bool RenderPipeline::run(Frame& frame) {
                 SDL_CopyGPUTextureToTexture(copy, &from, &to, frame.width, frame.height, 1, false);
                 SDL_EndGPUCopyPass(copy);
             }
+            if (info.grabMipmaps) SDL_GenerateMipmapsForGPUTexture(frame.commands, frame.grab);
         }
         SDL_GPUColorTargetInfo colour{};
         colour.texture = frame.colour;
