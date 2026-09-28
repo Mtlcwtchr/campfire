@@ -96,12 +96,15 @@ int wsSheetLevelVS(float2 p)
         if (pageAddress(p, level).z != 0.0) return level;
     return -1;
 }
-// Whether this is the SEA: no river or lake share in the page's water flags,
-// and no water standing above sea level. Lakes and rivers are page water's,
-// and must never be lifted or flooded by the sea.
+// Whether this is the SEA: no lake share in the page's water flags, no water
+// standing above sea level, and as much of it as the river's share has handed
+// over. A lake is page water's and is never flooded by the sea; a river gives
+// way to it across its estuary (the baker grades its share down over the last
+// stretch before the coast), so the sheet comes in exactly as the river goes.
 float wsSeaWeight(float4 motion, float head)
 {
-    return (1.0 - smoothstep(0.02, 0.30, saturate(motion.z) + saturate(motion.w))) *
+    return (1.0 - smoothstep(0.02, 0.30, saturate(motion.w))) *
+           (1.0 - smoothstep(0.0, 1.0, saturate(motion.z))) *
            (1.0 - smoothstep(0.6, 1.5, head));
 }
 WaterOut WaterSheetVS(WaterIn input)
@@ -246,5 +249,10 @@ float4 WaterPagePS(WaterOut input) : SV_Target0
     const float flow = saturate(water.motion.z) + saturate(water.motion.w);
     // The sea - its surf and its swash on the sand - is the sheet's.
     if (flow <= 0.0001) discard;
-    return WaterScenePS(water);
+    float4 result = WaterScenePS(water);
+    // And across an estuary the river thins out over the sea as its share is
+    // handed over, rather than ending at the texel where the ground crossed
+    // sea level.
+    result.a *= smoothstep(0.0, 1.0, saturate(flow));
+    return result;
 }

@@ -213,6 +213,7 @@ BakedPage BaseTileBaker::bakePage(TileKey key, std::int32_t sampleMetres, std::u
     water.coverage.assign(count, 0);
     water.flowX.assign(count, 0);
     water.flowY.assign(count, 0);
+    water.estuary.assign(count, 0);
     // Exact depth for the dependent passes below. Parent pages retain it for
     // refinement: quantised heights cannot reproduce depth thresholds exactly.
     std::vector<Fixed> depth(count, core::kZero);
@@ -291,6 +292,7 @@ BakedPage BaseTileBaker::bakePage(TileKey key, std::int32_t sampleMetres, std::u
                     water.shoreDecimetres[at] = parent->water.shoreDecimetres[from];
                     water.flowX[at] = parent->water.flowX[from];
                     water.flowY[at] = parent->water.flowY[from];
+                    if (from < parent->water.estuary.size()) water.estuary[at] = parent->water.estuary[from];
                     depth[at] = parent->refinementDepth[from];
                     const auto ashore = parent->refinementAshore[from];
                     if (!page.refinementAshore.empty()) page.refinementAshore[at] = ashore;
@@ -328,10 +330,22 @@ BakedPage BaseTileBaker::bakePage(TileKey key, std::int32_t sampleMetres, std::u
             tile.waterBodyId[at] = carved.wet
                                            ? static_cast<std::uint16_t>(carved.body)
                                            : static_cast<std::uint16_t>(kInvalidWaterBodyId);
-            water.surfaceQuantized[at] = quantisation_.quantise(carved.surface);
+            // The head on a dry sample is there for filtering - so the surface
+            // interpolates to its own bank instead of to sea level - and it may
+            // never stand above the sample's own ground.
+            //
+            // The renderer draws water wherever the head is over the bed, with
+            // no other test, and a reach hands its head to the whole of its
+            // valley. Where the valley floor lies under that head, beyond the
+            // bank the water actually reaches, every dry sample of it was
+            // drawn flooded at the river's level, out to the edge of the valley
+            // where the head fell back to the sea's: a sheet of water standing
+            // over dry country and ending in mid-air. Measured on the tiny
+            // world, one river edge in four hung by more than a metre.
+            water.surfaceQuantized[at] = quantisation_.quantise(
+                    carved.wet ? carved.surface : core::min(carved.surface, carved.floor));
             if (carved.wet) {
                 depth[at] = carved.surface - carved.floor;
-                water.surfaceQuantized[at] = quantisation_.quantise(carved.surface);
                 water.waterBodyId[at] = static_cast<std::uint16_t>(carved.body);
             }
             water.riverId[at] = carved.reach;
@@ -360,6 +374,8 @@ BakedPage BaseTileBaker::bakePage(TileKey key, std::int32_t sampleMetres, std::u
             }
             water.flowX[at] = unitByte(carved.flowX);
             water.flowY[at] = unitByte(carved.flowY);
+            water.estuary[at] = static_cast<std::uint8_t>(std::clamp<std::int64_t>(
+                    (carved.estuary * Fixed::fromInt(255)).roundToInt(), 0, 255));
 
             const std::int64_t macroX = floorDiv(worldX, macroMetres);
             const bool onMap = macroX >= 0 && macroY >= 0 && macroX < world_.width &&

@@ -103,8 +103,14 @@ PackedHeightPage packHeightPage(std::shared_ptr<const world::streaming::BakedPag
         out.fields[2][i * 4 + 2] = water ? std::uint16_t(p.water.coverage[i]) * 257u : 0;
         out.fields[3][i * 4] = unorm(water ? (p.water.flowX[i] / 127.0 + 1.0) * 0.5 : 0.5);
         out.fields[3][i * 4 + 1] = unorm(water ? (p.water.flowY[i] / 127.0 + 1.0) * 0.5 : 0.5);
+        // The river's share, handed over to the sea across its estuary: the
+        // sea sheet comes in as this goes out (water_pages.hlsl, wsSeaWeight),
+        // and page water fades with it.
+        const std::uint32_t estuary =
+                water && i < p.water.estuary.size() ? p.water.estuary[i] : 0u;
         out.fields[3][i * 4 + 2] = water && !ocean && !lake &&
-            p.water.riverId[i]!=world::streaming::kInvalidRiverId ? 65535 : 0;
+            p.water.riverId[i]!=world::streaming::kInvalidRiverId
+                ? static_cast<std::uint16_t>((255u - estuary) * 257u) : 0;
         out.fields[3][i * 4 + 3] = lake ? 65535 : 0;
         // All three channels must be zero, not just coverage: close-up inland
         // water can ignore coverage and use hydraulic depth. With zero kind

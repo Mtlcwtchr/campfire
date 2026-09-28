@@ -234,6 +234,10 @@ target_link_libraries(terrain_subdivision_probe PRIVATE asr_world nlohmann_json 
 add_executable(lake_edge_probe tools/lake_edge_probe.cpp)
 target_link_libraries(lake_edge_probe PRIVATE asr_world asr_warnings)
 
+# reach_probe - one river's course, head and banks, point by point.
+add_executable(reach_probe tools/reach_probe.cpp)
+target_link_libraries(reach_probe PRIVATE asr_world asr_warnings)
+
 add_executable(terrain_feature_probe tools/terrain_feature_probe.cpp)
 target_link_libraries(terrain_feature_probe PRIVATE asr_world nlohmann_json asr_warnings)
 
@@ -377,6 +381,11 @@ if(ASR_BUILD_CLIENT)
     add_executable(asr_shader_check tools/shader_check.cpp)
     target_link_libraries(asr_shader_check PRIVATE SDL3::SDL3-static
             SDL3_shadercross::SDL3_shadercross-static asr_warnings)
+
+    # water_edge_probe - where the drawn water fails to meet the drawn ground,
+    # measured on the packed pages the renderer receives.
+    add_executable(water_edge_probe tools/water_edge_probe.cpp)
+    target_link_libraries(water_edge_probe PRIVATE asr_game_render asr_world asr_warnings)
 
     # Public branding changes without breaking existing CLion targets/scripts.
     function(campfire_binary target output)

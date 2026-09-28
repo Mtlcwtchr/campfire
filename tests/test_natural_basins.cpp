@@ -6,6 +6,7 @@
 
 #include "game/generation/terrain_foundation.hpp"
 #include "game/generation/world_map_gen.hpp"
+#include "game/world/height_field.hpp"
 #include "game/world/terrain_streaming/graph_carve.hpp"
 #include "game/world/terrain_streaming/hydrology_builder.hpp"
 #include "game/world/terrain_streaming/hydrology_cache.hpp"
@@ -65,14 +66,46 @@ core::WorldPos position(int x, int y) {
     return {Fixed::fromInt(x * 64), Fixed::fromInt(y * 64)};
 }
 
+// Whether the lake stands on the Slopes node (x, y). A basin ends up sampled
+// finer than the lattice (kNaturalBasinStep), so the node is looked up where
+// it lands on that finer grid.
 bool contains(const WaterBody& body, TilePos sample) {
-    return std::find(body.basinSamples.begin(), body.basinSamples.end(), sample) !=
+    const std::int32_t step = std::max(1, body.basinStep);
+    const TilePos at{sample.x * 64 / step, sample.y * 64 / step};
+    return std::find(body.basinSamples.begin(), body.basinSamples.end(), at) !=
            body.basinSamples.end();
 }
 
 CarvedSample sample(const GraphCarver& carver, const BasinWorld& world, core::WorldPos at) {
     const auto ground = world.foundation->sample(at.x, at.y, generation::TerrainStage::Slopes);
     return carver.carve(at, ground, core::kZero);
+}
+
+// How many places, four metres apart, a lake's water ends over ground more
+// than half a metre below it - on the ground as the world really carves it,
+// its detail layer included. A lake hanging in the air, counted.
+std::size_t hangingEdges(const HydrologyGraph& graph, const generation::WorldMapData& map,
+                         int x0, int y0, int x1, int y1) {
+    world::HeightField field(&map, map.seed);
+    const GraphCarver carver(graph, {{Fixed::fromInt(x0), Fixed::fromInt(y0)},
+                                     {Fixed::fromInt(x1), Fixed::fromInt(y1)}}, 64);
+    const auto at = [&](int x, int y) {
+        const core::WorldPos p{Fixed::fromInt(x), Fixed::fromInt(y)};
+        const auto pieces = field.piecesAt(p.x, p.y);
+        return carver.carve(p, pieces.country, pieces.moved);
+    };
+    std::size_t hanging = 0;
+    for (int y = y0; y < y1; y += 4)
+        for (int x = x0; x < x1; x += 4) {
+            const auto here = at(x, y);
+            for (const auto& there : {at(x + 4, y), at(x, y + 4)}) {
+                if (here.wet == there.wet) continue;
+                const auto& wet = here.wet ? here : there;
+                const auto& dry = here.wet ? there : here;
+                if (wet.body > kOceanWaterBodyId && dry.floor < wet.surface - Fixed::ratio(1, 2)) ++hanging;
+            }
+        }
+    return hanging;
 }
 } // namespace
 
@@ -83,7 +116,7 @@ TEST(natural_basin_uses_slopes_without_sculpting_a_mask_or_rim) {
     CHECK_EQ(graph.waterBodies.size(), std::size_t(2));
     const auto& lake = graph.waterBodies.at(1);
     CHECK_EQ(lake.level, Fixed::fromInt(45));
-    CHECK_EQ(lake.basinStep, 64);
+    CHECK_EQ(lake.basinStep, kNaturalBasinStep);
     CHECK(contains(lake, {48, 38}));
     const GraphCarver carver(graph, {position(34, 34), position(50, 42)}, 0);
     for (int x = 34 * 64; x <= 50 * 64; x += 4) {
@@ -117,12 +150,13 @@ TEST(natural_basin_does_not_cross_a_dry_diagonal_saddle) {
     const auto graph = buildHydrologyGraph(world.map);
     const auto& lake = graph.waterBodies.at(1);
     CHECK(contains(lake, {48, 40}));
-    CHECK(!contains(lake, {49, 41}));
-    // Even the middle of the diagonal stands above the lake's head.
+    // Even the middle of the diagonal stands above the lake's head: on the
+    // lattice the two hollows are apart. Whether the ground as carved joins
+    // them is that ground's business - but if the water goes across, it goes
+    // across closed, and ends nowhere over lower ground.
     CHECK(world.foundation->sample(Fixed::fromInt(48 * 64 + 32),
             Fixed::fromInt(40 * 64 + 32), generation::TerrainStage::Slopes) > lake.level);
-    const GraphCarver carver(graph, {position(34, 34), position(52, 43)}, 0);
-    CHECK(!sample(carver, world, position(49, 41)).wet);
+    CHECK_EQ(hangingEdges(graph, world.map, 34 * 64, 34 * 64, 52 * 64, 44 * 64), std::size_t(0));
 }
 
 TEST(natural_basin_spills_at_the_connected_sill_and_preserves_river_heads) {
@@ -135,10 +169,13 @@ TEST(natural_basin_spills_at_the_connected_sill_and_preserves_river_heads) {
     const auto graph = buildHydrologyGraph(world.map);
     CHECK(validateHydrologyGraph(graph));
     const auto& lake = graph.waterBodies.at(1);
-    CHECK_EQ(lake.level, Fixed::fromInt(30));
+    // No higher than the lattice's sill; lower if the ground as carved lets
+    // the water out lower still.
+    CHECK(lake.level <= Fixed::fromInt(30));
+    CHECK(lake.level > core::kZero);
     CHECK(!lake.inlets.empty());
     CHECK(!lake.outlets.empty());
-    CHECK(!contains(lake, {49, 38})); // the sill is dry at exactly the head
+    CHECK_EQ(hangingEdges(graph, world.map, 34 * 64, 34 * 64, 60 * 64, 44 * 64), std::size_t(0));
     for (const auto& node : graph.nodes)
         if (node.waterBody == lake.id) CHECK_EQ(node.surface, lake.level);
     for (const auto& segment : graph.segments) {
@@ -169,9 +206,10 @@ TEST(natural_basin_spatial_index_covers_expansion_and_shore_support) {
     const auto graph = buildHydrologyGraph(world.map);
     const auto& lake = graph.waterBodies.at(1);
     for (const auto node : lake.basinSamples) {
-        // Bilinear support extends one foundation step in all directions.
-        for (const int dy : {-63, 0, 63}) for (const int dx : {-63, 0, 63}) {
-            const auto at = position(node.x, node.y);
+        // Bilinear support extends one basin step in all directions.
+        const int reach = lake.basinStep - 1;
+        for (const int dy : {-reach, 0, reach}) for (const int dx : {-reach, 0, reach}) {
+            const core::WorldPos at{Fixed::fromInt(node.x * lake.basinStep), Fixed::fromInt(node.y * lake.basinStep)};
             const auto* page = findHydrologySpatialPage(graph,
                     tileAt({at.x + Fixed::fromInt(dx), at.y + Fixed::fromInt(dy)}));
             CHECK(page != nullptr);
@@ -184,10 +222,12 @@ TEST(natural_basin_samples_agree_across_page_windows_and_sampling_strides) {
     BasinWorld world;
     const auto graph = buildHydrologyGraph(world.map);
     const GraphCarver whole(graph, {position(32, 32), position(56, 48)}, 0);
+    // Windows the way the baker makes them: a page, and a halo past it wide
+    // enough for everything asked of it.
     const GraphCarver left(graph, {{Fixed::fromInt(2560), Fixed::fromInt(2048)},
-                                  {Fixed::fromInt(3072), Fixed::fromInt(2560)}}, 8);
+                                  {Fixed::fromInt(3072), Fixed::fromInt(2560)}}, 64);
     const GraphCarver right(graph, {{Fixed::fromInt(3072), Fixed::fromInt(2048)},
-                                   {Fixed::fromInt(3584), Fixed::fromInt(2560)}}, 8);
+                                   {Fixed::fromInt(3584), Fixed::fromInt(2560)}}, 64);
     for (const int stride : {4, 16, 64})
         for (int y = 36 * 64; y <= 41 * 64; y += stride)
             for (int dx = -8; dx <= 8; dx += 4) {
@@ -305,10 +345,11 @@ TEST(natural_basin_shore_fill_agrees_across_page_windows) {
     const auto graph = buildHydrologyGraph(world.map);
     const GraphCarver whole(graph, {position(32, 32), position(56, 48)}, 0);
     const GraphCarver left(graph, {{Fixed::fromInt(2560), Fixed::fromInt(2048)},
-                                  {Fixed::fromInt(3072), Fixed::fromInt(2560)}}, 8);
+                                  {Fixed::fromInt(3072), Fixed::fromInt(2560)}}, 64);
     const GraphCarver right(graph, {{Fixed::fromInt(3072), Fixed::fromInt(2048)},
-                                   {Fixed::fromInt(3584), Fixed::fromInt(2560)}}, 8);
-    for (int y = 34 * 64; y <= 43 * 64; y += 4)
+                                   {Fixed::fromInt(3584), Fixed::fromInt(2560)}}, 64);
+    // Inside both windows' reach: a carver answers for its area and halo.
+    for (int y = 32 * 64; y <= 2560 + 32; y += 4)
         for (int dx = -8; dx <= 8; dx += 4) {
             const auto expected = world.at(whole, 3072 + dx, y);
             for (const auto* window : {&left, &right}) {

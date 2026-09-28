@@ -13,7 +13,12 @@ namespace world::streaming {
 // Bumped whenever the extraction changes what a stored graph means. It is
 // folded into `sourceFingerprint`, so an old cache is a miss rather than a
 // silently different river network.
-inline constexpr std::uint32_t kHydrologyGraphVersion = 13; // edge-connected basins and complete shoreline index
+inline constexpr std::uint32_t kHydrologyGraphVersion = 14; // lakes and courses fitted to the carved ground
+
+// The spacing a natural basin ends up sampled at: flooded first over the
+// Slopes lattice, then again over the ground as the reaches carve it, this
+// finely (buildHydrologyGraph, refineLakesOnCarvedGround).
+inline constexpr std::int32_t kNaturalBasinStep = 16;
 
 using RiverId = std::uint32_t;
 using RiverNodeId = std::uint32_t;

@@ -71,6 +71,12 @@ struct WaterTile {
     // Unit tangent of the reach, downstream, in hundred-and-twenty-sevenths.
     std::vector<std::int8_t> flowX;
     std::vector<std::int8_t> flowY;
+    // How much of this water is the sea's rather than its river's, in
+    // two-hundred-and-fifty-fifths: nought up a river, rising over its last
+    // stretch before the coast, so a river hands over to the sea instead of
+    // butting into it (see CarvedSample::estuary). Not part of valid(): a page
+    // without it is a page from before it existed, and reads as all river.
+    std::vector<std::uint8_t> estuary;
 
     [[nodiscard]] std::size_t sampleCount() const {
         return (static_cast<std::size_t>(width) + padding * 2u) *

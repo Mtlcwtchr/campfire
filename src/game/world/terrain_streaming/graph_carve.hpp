@@ -44,6 +44,10 @@ struct CarvedSample {
     core::Fixed bankDistance{};
     // Unit tangent of that reach, downstream.
     core::Fixed flowX{}, flowY{};
+    // How much of the water here is the sea's rather than that reach's: nought
+    // up a river, one past its mouth, eased between over the reach's last
+    // stretch to the coast. Nought for a reach that does not run out to sea.
+    core::Fixed estuary{};
 };
 
 // The reaches and bodies that can shape an area, gathered once.
@@ -53,7 +57,10 @@ struct CarvedSample {
 // that found, which for a page is a handful of reaches.
 class GraphCarver {
 public:
-    GraphCarver(const HydrologyGraph& graph, core::WorldRect area, std::int32_t haloMetres);
+    // `standingWater` false leaves the lakes out: the ground and the running
+    // water only, which is what a lake is refitted to (hydrology_builder).
+    GraphCarver(const HydrologyGraph& graph, core::WorldRect area, std::int32_t haloMetres,
+                bool standingWater = true);
 
     // `country` is what the coarse map says the ground stands at here and
     // `detail` is how far the detail layer has moved it. They are handed in
@@ -69,11 +76,16 @@ private:
     struct Point {
         core::WorldPos position;
         core::Fixed surface, halfWidth, depth, valleyReach;
+        core::Fixed toEnd{};   // along the course to its last point, metres
     };
     struct Reach {
         RiverId id = kInvalidRiverId;
         core::Fixed lowX, lowY, highX, highY;
         std::vector<Point> points;
+        // Runs out to sea, and how far short of its last point (which stands
+        // in the first sea cell) the coast is.
+        bool toSea = false;
+        core::Fixed coast{};
     };
     // Standing water over the macro lattice, so that restoring a basin is an
     // interpolation rather than a lookup. Read per cell it would put a

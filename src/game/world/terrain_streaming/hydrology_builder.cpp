@@ -1,9 +1,13 @@
 #include "game/world/terrain_streaming/hydrology_builder.hpp"
 
 #include "game/world/height_field.hpp"
+#include "game/world/terrain_streaming/graph_carve.hpp"
 
+#include <atomic>
 #include <memory>
 #include <mutex>
+#include <optional>
+#include <thread>
 
 #include <algorithm>
 #include <map>
@@ -591,6 +595,385 @@ void naturalBasin(WaterBody& body, const generation::TerrainFoundation& f, int m
 
 } // namespace
 
+namespace {
+// The page index: which reaches and bodies can touch which storage page.
+//
+// Keyed by (y, x) so the map's own order is the order findHydrologySpatialPage
+// binary-searches. Storage pages are square and world aligned; that a ring
+// scheduler will ask for them in a different order is not this index's
+// business.
+void indexGraph(HydrologyGraph& graph, const generation::WorldMapData& world) {
+    std::map<std::pair<std::int32_t, std::int32_t>, HydrologySpatialPage> pages;
+    const auto pageAt = [&](std::int32_t x, std::int32_t y) -> HydrologySpatialPage& {
+        HydrologySpatialPage& page = pages[{y, x}];
+        page.key = {x, y, 0};
+        return page;
+    };
+    for (const RiverSegment& segment : graph.segments) {
+        const auto columns = pageSpan(segment.bounds.min.x.toInt(), segment.bounds.max.x.toInt() + 1);
+        const auto rows = pageSpan(segment.bounds.min.y.toInt(), segment.bounds.max.y.toInt() + 1);
+        for (std::int32_t y = rows.first; y <= rows.second; ++y)
+            for (std::int32_t x = columns.first; x <= columns.second; ++x)
+                pageAt(x, y).segments.push_back(segment.id);
+    }
+    const auto indexBodySpan = [&](WaterBodyId id, std::int64_t minX, std::int64_t minY,
+                                    std::int64_t maxX, std::int64_t maxY) {
+        const auto columns = pageSpan(minX, maxX);
+        const auto rows = pageSpan(minY, maxY);
+        for (std::int32_t y = rows.first; y <= rows.second; ++y)
+            for (std::int32_t x = columns.first; x <= columns.second; ++x)
+                pageAt(x, y).waterBodies.push_back(id);
+    };
+    const auto indexBodyCell = [&](WaterBodyId id, TilePos cell, std::int64_t margin) {
+        const std::int64_t metres = generation::kMetresPerCell;
+        indexBodySpan(id, cell.x * metres - margin, cell.y * metres - margin,
+                       (cell.x + 1) * metres + margin, (cell.y + 1) * metres + margin);
+    };
+    for (std::size_t slot = 1; slot < graph.waterBodies.size(); ++slot) {
+        const auto& body = graph.waterBodies[slot];
+        if (body.basinStep == 0) {
+            // Legacy samples live at macro-cell centres. Include their entire
+            // interpolation support, not just the cell that holds the centre.
+            for (const TilePos cell : body.macroCells)
+                indexBodyCell(body.id, cell, generation::kMetresPerCell / 2);
+            continue;
+        }
+        // Natural basins can extend beyond their macro provenance. Index the
+        // actual samples, including one step of shoreline support. Coalesce
+        // row runs so a large lake does not append one page entry per sample.
+        const std::int64_t step = body.basinStep;
+        for (std::size_t first = 0; first < body.basinSamples.size();) {
+            std::size_t last = first;
+            while (last + 1 < body.basinSamples.size() &&
+                   body.basinSamples[last + 1].y == body.basinSamples[first].y &&
+                   body.basinSamples[last + 1].x == body.basinSamples[last].x + 1)
+                ++last;
+            const auto begin = body.basinSamples[first], end = body.basinSamples[last];
+            indexBodySpan(body.id, (std::int64_t(begin.x) - 1) * step,
+                           (std::int64_t(begin.y) - 1) * step,
+                           (std::int64_t(end.x) + 1) * step,
+                           (std::int64_t(end.y) + 1) * step);
+            first = last + 1;
+        }
+    }
+    // The ocean keeps no footprint of its own, so it is indexed straight off
+    // the sea mask. Without this a page query would be total for lakes and
+    // partial for the one body most of the map is made of.
+    const auto count = static_cast<std::size_t>(std::max(0, world.width)) *
+                       static_cast<std::size_t>(std::max(0, world.height));
+    for (std::size_t i = 0; i < count && i < world.cells.size(); ++i)
+        if (world.cells[i].sea)
+            indexBodyCell(kOceanWaterBodyId,
+                          {static_cast<std::int32_t>(i % std::size_t(world.width)),
+                           static_cast<std::int32_t>(i / std::size_t(world.width))}, 0);
+
+    graph.spatialPages.clear();
+    graph.spatialPages.reserve(pages.size());
+    for (auto& entry : pages) {
+        HydrologySpatialPage& page = entry.second;
+        std::sort(page.segments.begin(), page.segments.end());
+        page.segments.erase(std::unique(page.segments.begin(), page.segments.end()),
+                            page.segments.end());
+        std::sort(page.waterBodies.begin(), page.waterBodies.end());
+        page.waterBodies.erase(std::unique(page.waterBodies.begin(), page.waterBodies.end()),
+                               page.waterBodies.end());
+        graph.spatialPages.push_back(std::move(page));
+    }
+}
+
+// A carver over a window around a point, rebuilt as the point walks out of it:
+// the carve of a long course or a big lake is far more country than one
+// carver indexes.
+class WindowedCarver {
+public:
+    WindowedCarver(const HydrologyGraph& graph, bool standingWater)
+        : graph_(graph), standingWater_(standingWater) {}
+    const GraphCarver& at(WorldPos p) {
+        if (!carver_ || p.x < window_.min.x || p.y < window_.min.y || p.x >= window_.max.x ||
+            p.y >= window_.max.y) {
+            constexpr std::int64_t kWindow = 1024;
+            const std::int64_t x = floorDiv(p.x.toInt(), kWindow) * kWindow;
+            const std::int64_t y = floorDiv(p.y.toInt(), kWindow) * kWindow;
+            window_ = {{Fixed::fromInt(x), Fixed::fromInt(y)},
+                       {Fixed::fromInt(x + kWindow), Fixed::fromInt(y + kWindow)}};
+            carver_.emplace(graph_, window_, 900, standingWater_);
+        }
+        return *carver_;
+    }
+
+private:
+    const HydrologyGraph& graph_;
+    bool standingWater_;
+    std::optional<GraphCarver> carver_;
+    core::WorldRect window_{};
+};
+
+// Every lake refitted to the ground as the reaches carve it: grown into what
+// that ground holds below its level, and lowered to wherever that ground lets
+// it out, until its contour is closed.
+//
+// A natural basin is flooded over the Slopes lattice, sixty-four metres to a
+// node and before any river has cut a valley. What the page is drawn from is
+// neither: the detail layer's gullies and the reaches' valleys are cut into
+// it afterwards, and a lake whose footprint was right on the lattice came out
+// with an outlet's gorge running back into its bed, or a valley wall dropped
+// away under its rim - water standing over ground a hundred metres below it,
+// and ending in the air. The fit the lattice made is kept as where to look and
+// how high the water may be; the flood is repeated on the carved ground, every
+// sixteen metres, from every node the lattice flooded. Running water stands in
+// that ground at its own level - a river channel is not a hole in the rim,
+// only as low as the water in it - and so is the sea. Where the flood reaches
+// the edge of the country it may look at, the water has found its way out and
+// the level falls to wherever that was.
+void refineLakesOnCarvedGround(HydrologyGraph& graph, const generation::WorldMapData& world) {
+    constexpr std::int64_t kStep = kNaturalBasinStep;
+    const std::int64_t margin = generation::kMetresPerCell;
+    const std::int64_t wide = std::int64_t(std::max(0, world.width)) * generation::kMetresPerCell;
+    const std::int64_t high = std::int64_t(std::max(0, world.height)) * generation::kMetresPerCell;
+    // What each lake comes out as. Lakes are refitted each on its own - the
+    // graph is only read while they are - so they go wide across the machine
+    // and are written back together once every one is done.
+    struct Refit {
+        bool done = false;
+        Fixed level;
+        std::vector<TilePos> samples;
+    };
+    std::vector<Refit> refits(graph.waterBodies.size());
+    const auto refit = [&](const WaterBody& body, HeightField& ground, WindowedCarver& carvers, Refit& out) {
+        if (body.kind != WaterBodyKind::Lake || body.basinStep <= 0 || body.basinSamples.empty()) return;
+        const std::int64_t step = body.basinStep;
+        std::int64_t lowX = std::numeric_limits<std::int64_t>::max(), lowY = lowX;
+        std::int64_t highX = std::numeric_limits<std::int64_t>::min(), highY = highX;
+        for (const TilePos s : body.basinSamples) {
+            lowX = std::min(lowX, s.x * step); highX = std::max(highX, s.x * step);
+            lowY = std::min(lowY, s.y * step); highY = std::max(highY, s.y * step);
+        }
+        const std::int64_t x0 = floorDiv(std::max<std::int64_t>(0, lowX - margin), kStep);
+        const std::int64_t y0 = floorDiv(std::max<std::int64_t>(0, lowY - margin), kStep);
+        const std::int64_t x1 = floorDiv(std::min(wide, highX + margin), kStep);
+        const std::int64_t y1 = floorDiv(std::min(high, highY + margin), kStep);
+        const std::int64_t columns = x1 - x0 + 1, rows = y1 - y0 + 1;
+        if (columns < 3 || rows < 3 || columns * rows > 16 * 1024 * 1024) return;
+        // One carver over the lake's whole country when it is small enough
+        // for one to index, which is nearly every lake: a flood wanders back
+        // and forth across it, and a window that followed it would be rebuilt
+        // at every step.
+        std::optional<GraphCarver> whole;
+        if ((x1 - x0) * kStep <= 48 * 1024 && (y1 - y0) * kStep <= 48 * 1024)
+            whole.emplace(graph, core::WorldRect{{Fixed::fromInt(x0 * kStep), Fixed::fromInt(y0 * kStep)},
+                                                 {Fixed::fromInt(x1 * kStep), Fixed::fromInt(y1 * kStep)}},
+                          64, false);
+        const auto heightAt = [&](std::int64_t x, std::int64_t y) {
+            const WorldPos p{Fixed::fromInt(x * kStep), Fixed::fromInt(y * kStep)};
+            const auto pieces = ground.piecesAt(p.x, p.y);
+            const CarvedSample c = (whole ? *whole : carvers.at(p)).carve(p, pieces.country, pieces.moved);
+            return c.wet ? core::max(c.floor, c.surface) : c.floor;
+        };
+        std::vector<std::uint8_t> seen(static_cast<std::size_t>(columns * rows), 0);
+        using Visit = std::pair<Fixed::Raw, std::int64_t>;   // minimax spill cost, local index
+        std::priority_queue<Visit, std::vector<Visit>, std::greater<Visit>> queue;
+        const auto push = [&](std::int64_t x, std::int64_t y, Fixed floorCost) {
+            if (x < x0 || y < y0 || x > x1 || y > y1) return;
+            const auto local = static_cast<std::size_t>((y - y0) * columns + (x - x0));
+            if (seen[local]) return;
+            seen[local] = 1;
+            queue.emplace(core::max(floorCost, heightAt(x, y)).raw, std::int64_t(local));
+        };
+        for (const TilePos s : body.basinSamples)
+            push(floorDiv(s.x * step, kStep), floorDiv(s.y * step, kStep), Fixed::fromInt(-1000000));
+        Fixed level = body.level;
+        std::vector<Visit> reached;
+        while (!queue.empty()) {
+            const auto [cost, local] = queue.top();
+            queue.pop();
+            if (cost >= level.raw) break;
+            const std::int64_t x = x0 + local % columns, y = y0 + local / columns;
+            if (x == x0 || y == y0 || x == x1 || y == y1) {
+                level = Fixed::fromRaw(cost);
+                break;
+            }
+            reached.emplace_back(cost, local);
+            const Fixed here = Fixed::fromRaw(cost);
+            push(x - 1, y, here);
+            push(x + 1, y, here);
+            push(x, y - 1, here);
+            push(x, y + 1, here);
+        }
+        out.done = true;
+        out.level = core::min(body.level, level);
+        for (const auto [cost, local] : reached)
+            if (cost < out.level.raw)
+                out.samples.push_back({static_cast<std::int32_t>(x0 + local % columns),
+                                       static_cast<std::int32_t>(y0 + local / columns)});
+        std::sort(out.samples.begin(), out.samples.end(), [](TilePos a, TilePos b) {
+            return a.y < b.y || (a.y == b.y && a.x < b.x);
+        });
+    };
+    std::atomic<std::size_t> nextBody{0};
+    const auto work = [&] {
+        HeightField ground(&world, world.seed);   // a field keeps caches: one to a thread
+        WindowedCarver carvers(graph, false);
+        for (std::size_t i = nextBody++; i < graph.waterBodies.size(); i = nextBody++)
+            refit(graph.waterBodies[i], ground, carvers, refits[i]);
+    };
+    const unsigned threads = std::clamp(std::thread::hardware_concurrency(), 1u, 8u);
+    std::vector<std::thread> workers;
+    for (unsigned t = 1; t < threads; ++t) workers.emplace_back(work);
+    work();
+    for (auto& worker : workers) worker.join();
+    for (std::size_t i = 0; i < graph.waterBodies.size(); ++i) {
+        if (!refits[i].done) continue;
+        WaterBody& body = graph.waterBodies[i];
+        body.level = refits[i].level;
+        body.basinStep = static_cast<std::int32_t>(kStep);
+        body.basinSamples = std::move(refits[i].samples);
+    }
+    // The reaches that meet a lake meet it at its level.
+    for (RiverNode& node : graph.nodes) {
+        if (node.kind != RiverNodeKind::LakeInlet && node.kind != RiverNodeKind::LakeOutlet) continue;
+        if (const WaterBody* body = waterBodyOf(graph, node.waterBody); body && body->kind == WaterBodyKind::Lake)
+            node.surface = body->level;
+    }
+}
+
+// Every course's head fitted to the ground its banks END UP with - after the
+// valleys of every other reach have been cut, which is ground no fitting done
+// while the graph was still being built could see.
+//
+// Where a tributary comes down to a trunk river, the trunk's valley is cut
+// under the tributary's last stretch, tens of metres below it; the tributary
+// kept its own head over that valley and its water stood above the trunk's
+// floor, ending at its bank in a curtain thirty metres high. Measured on
+// three worlds at eight metres to the sample, one river edge in thirty was
+// such a curtain, and almost all of them were in the last cells before a
+// confluence, a mouth or a lake.
+//
+// The rule is the one the first fitting uses, applied to the ground as carve
+// makes it: at every point the head may stand no higher than the bank on
+// either side - or than another water already standing there - and no higher
+// than it stood upstream. So a tributary arriving above its trunk's valley
+// falls down the valley wall to the trunk: a waterfall, with the trunk to
+// fall into. Upstream first, twice over: a trunk fitted after the tributary
+// that meets it can still lower the ground under that tributary's end.
+void fitCoursesToCarvedGround(HydrologyGraph& graph, const generation::WorldMapData& world,
+                              const std::vector<std::size_t>& sharedFrom) {
+    if (graph.segments.empty()) return;
+    HeightField ground(&world, world.seed);
+    auto& segments = graph.segments;
+    auto& nodes = graph.nodes;
+    std::vector<RiverId> leaving(nodes.size() + 1, kInvalidRiverId);
+    for (const RiverSegment& segment : segments) leaving[segment.from] = segment.id;
+    const auto lakeLevel = [&](WaterBodyId id, Fixed& level) {
+        const WaterBody* body = waterBodyOf(graph, id);
+        if (body == nullptr || body->kind != WaterBodyKind::Lake) return false;
+        level = body->level;
+        return true;
+    };
+    // One pass a call: the caller alternates this with refitting the lakes,
+    // and the second round is what catches a trunk fitted after a tributary.
+    for (int pass = 0; pass < 1; ++pass) {
+        std::vector<std::size_t> arriving(nodes.size() + 1, 0);
+        for (const RiverSegment& segment : segments)
+            if (segment.to != kInvalidRiverNodeId) ++arriving[segment.to];
+        std::vector<Fixed> arrived(nodes.size() + 1, Fixed::fromInt(1 << 20));
+        std::vector<RiverId> order;
+        for (const RiverSegment& segment : segments)
+            if (arriving[segment.from] == 0) order.push_back(segment.id);
+        for (std::size_t next = 0; next < order.size(); ++next) {
+            RiverSegment& segment = segments[order[next] - 1];
+            auto& course = segment.course;
+            const RiverNode& from = nodes[segment.from - 1];
+            Fixed floorLevel = core::kZero;
+            Fixed level;
+            if (lakeLevel(segment.destinationWaterBody, level)) floorLevel = level;
+            Fixed running = course.front().surface;
+            const bool leavesLake = from.kind == RiverNodeKind::LakeOutlet && lakeLevel(from.waterBody, level);
+            if (leavesLake)
+                running = level;
+            else
+                running = core::min(running, arrived[segment.from]);
+            // Carve reads the course as it stands, this one included: its own
+            // valley can only rise to meet a lowered head, never fall below it.
+            // A window of its own around each stretch, as HeightField keeps:
+            // a trunk's bounds are far more country than one carver indexes.
+            std::optional<GraphCarver> carver;
+            core::WorldRect window{};
+            const auto carverFor = [&](WorldPos at) -> const GraphCarver& {
+                if (!carver || at.x < window.min.x || at.y < window.min.y || at.x >= window.max.x ||
+                    at.y >= window.max.y) {
+                    constexpr std::int64_t kWindow = 1024;
+                    const std::int64_t x = floorDiv(at.x.toInt(), kWindow) * kWindow;
+                    const std::int64_t y = floorDiv(at.y.toInt(), kWindow) * kWindow;
+                    window = {{Fixed::fromInt(x), Fixed::fromInt(y)},
+                              {Fixed::fromInt(x + kWindow), Fixed::fromInt(y + kWindow)}};
+                    carver.emplace(graph, window, 900);
+                }
+                return *carver;
+            };
+            for (std::size_t i = 0; i < course.size(); ++i) {
+                ReachPoint& point = course[i];
+                Fixed lowest = point.surface;
+                // A course leaving a lake leaves it AT the lake's level: its
+                // first point is the lake's own spill, whatever its banks.
+                if (point.halfWidth.raw > 0 && !(leavesLake && i == 0)) {
+                    const WorldPos a = course[i > 0 ? i - 1 : i].position;
+                    const WorldPos b = course[i + 1 < course.size() ? i + 1 : i].position;
+                    const Fixed dx = b.x - a.x, dy = b.y - a.y;
+                    const Fixed length = core::hypot(dx, dy);
+                    if (length.raw > 0) {
+                        // Just past where this reach's own water reaches, so
+                        // what is read is the bank and not the river.
+                        const Fixed out = point.halfWidth +
+                                          core::max(point.depth, Fixed::fromInt(kSampleMetres / 2)) +
+                                          Fixed::fromInt(kSampleMetres / 2);
+                        for (const int side : {1, -1}) {
+                            const WorldPos bank{point.position.x - dy / length * out * Fixed::fromInt(side),
+                                                point.position.y + dx / length * out * Fixed::fromInt(side)};
+                            const auto pieces = ground.piecesAt(bank.x, bank.y);
+                            const CarvedSample there = carverFor(bank).carve(bank, pieces.country, pieces.moved);
+                            // Standing water holds its own level; the river
+                            // meets it there rather than going under it.
+                            if (there.body != kInvalidWaterBodyId) continue;
+                            lowest = core::min(lowest, there.wet ? there.surface : there.floor);
+                        }
+                    }
+                }
+                running = core::min(running, lowest);
+                point.surface = core::max(running, floorLevel);
+            }
+            if (segment.to != kInvalidRiverNodeId) {
+                arrived[segment.to] = core::min(arrived[segment.to], course.back().surface);
+                const RiverId onward = leaving[segment.to];
+                if (onward != kInvalidRiverId && --arriving[segment.to] == 0) order.push_back(onward);
+            }
+        }
+        // The nodes follow the courses, and every course arriving at a node
+        // ends at that node's head: a step there is the fall into the river
+        // below, drawn over the last chord.
+        for (const RiverSegment& segment : segments) {
+            RiverNode& from = nodes[segment.from - 1];
+            if (from.kind != RiverNodeKind::LakeOutlet) from.surface = segment.course.front().surface;
+        }
+        for (RiverSegment& segment : segments) {
+            if (segment.to == kInvalidRiverNodeId) continue;
+            RiverNode& to = nodes[segment.to - 1];
+            if (leaving[to.id] == kInvalidRiverId && to.kind != RiverNodeKind::LakeInlet)
+                to.surface = core::min(to.surface, arrived[to.id]);
+            ReachPoint& tail = segment.course.back();
+            tail.surface = core::min(tail.surface, core::max(to.surface, core::kZero));
+            // Courses meeting at a confluence share its head over the stretch
+            // where their water overlaps (the sharing in buildHydrologyGraph):
+            // held there, so the fall into a lower trunk comes before the two
+            // waters meet and not in the middle of them.
+            if (to.kind == RiverNodeKind::Confluence && segment.id < sharedFrom.size() &&
+                sharedFrom[segment.id] > 0)
+                for (std::size_t i = sharedFrom[segment.id]; i < segment.course.size(); ++i)
+                    segment.course[i].surface = to.surface;
+        }
+    }
+}
+} // namespace
+
 HydrologyGraph buildHydrologyGraph(const generation::WorldMapData& world) {
     HydrologyGraph graph;
     graph.worldSeed = world.seed;
@@ -1147,6 +1530,105 @@ HydrologyGraph buildHydrologyGraph(const generation::WorldMapData& world) {
         node.downstream = outlet;
     }
 
+    // --- water that stays in its channel -------------------------------------
+    //
+    // A reach's head was decided per macro cell - the lowest ground along the
+    // cell's way down, made to fall monotonically - and then drawn along a
+    // course that wanders up to half a cell off that line, over ground nobody
+    // had looked at. Where that ground lies below the head the channel is
+    // perched: the water reaches its banks, the banks are lower than it, and
+    // it ends in mid-air a few metres out. Measured on the page the renderer
+    // draws, at four metres to the sample, one river edge in five in the
+    // worst window stood eight to fourteen metres over the ground beside it -
+    // most of them an outlet held at its lake's level while the country fell
+    // away under it.
+    //
+    // So each course is fitted to the ground it actually crosses, downstream
+    // from its source: at every point the head may be no higher than the
+    // ground either bank will stand at, and no higher than it was upstream.
+    // Where the country rises across the way the river keeps its level and
+    // cuts through; where it falls away the river falls with it - rapids, or
+    // over a scarp a waterfall - and runs on below. Nothing flows under the
+    // sea, and a reach arriving in a lake arrives at the lake's level.
+    //
+    // The bank is read where carve will put it: the country, and the quarter
+    // of the detail layer carve keeps beside a channel. Inside a lake the
+    // course is the lake's and is left alone.
+    {
+        world::HeightField ground(&world, world.seed);
+        const auto bankAt = [&](WorldPos at) {
+            const auto pieces = ground.piecesAt(at.x, at.y);
+            return pieces.country + pieces.moved * Fixed::ratio(1, 4);
+        };
+        const auto inLake = [&](WorldPos at) {
+            const std::int64_t cx = floorDiv(at.x.toInt(), generation::kMetresPerCell);
+            const std::int64_t cy = floorDiv(at.y.toInt(), generation::kMetresPerCell);
+            if (cx < 0 || cy < 0 || cx >= width || cy >= height) return false;
+            return bodyOfCell[static_cast<std::size_t>(cy * width + cx)] > 0;
+        };
+        // Upstream first. A node has at most one course leaving it, so a
+        // course is ready once everything arriving at its start is fitted.
+        std::vector<std::size_t> arriving(nodes.size() + 1, 0);
+        for (const RiverSegment& segment : segments)
+            if (segment.to != kInvalidRiverNodeId) ++arriving[segment.to];
+        std::vector<Fixed> arrived(nodes.size() + 1, Fixed::fromInt(1 << 20));
+        std::vector<RiverId> order;
+        for (const RiverSegment& segment : segments)
+            if (arriving[segment.from] == 0) order.push_back(segment.id);
+        for (std::size_t next = 0; next < order.size(); ++next) {
+            RiverSegment& segment = segments[order[next] - 1];
+            auto& course = segment.course;
+            const RiverNode& from = nodes[segment.from - 1];
+            Fixed floorLevel = core::kZero;
+            if (segment.destinationWaterBody != kInvalidWaterBodyId &&
+                bodies[segment.destinationWaterBody - 1].kind == WaterBodyKind::Lake)
+                floorLevel = bodies[segment.destinationWaterBody - 1].level;
+            Fixed running = course.front().surface;
+            if (from.kind == RiverNodeKind::LakeOutlet && from.waterBody != kInvalidWaterBodyId)
+                running = bodies[from.waterBody - 1].level;
+            else
+                running = core::min(running, arrived[segment.from]);
+            for (std::size_t i = 0; i < course.size(); ++i) {
+                ReachPoint& point = course[i];
+                Fixed lowest = point.surface;
+                if (point.halfWidth.raw > 0 && !inLake(point.position)) {
+                    const WorldPos a = course[i > 0 ? i - 1 : i].position;
+                    const WorldPos b = course[i + 1 < course.size() ? i + 1 : i].position;
+                    const Fixed dx = b.x - a.x, dy = b.y - a.y;
+                    const Fixed length = core::hypot(dx, dy);
+                    if (length.raw > 0) {
+                        const Fixed out = point.halfWidth +
+                                          core::max(point.depth, Fixed::fromInt(world::kSampleMetres / 2));
+                        const Fixed ax = -dy / length * out, ay = dx / length * out;
+                        lowest = core::min(lowest, core::min(bankAt({point.position.x + ax, point.position.y + ay}),
+                                                             bankAt({point.position.x - ax, point.position.y - ay})));
+                    }
+                }
+                running = core::min(running, lowest);
+                point.surface = core::max(running, floorLevel);
+            }
+            if (segment.to != kInvalidRiverNodeId) {
+                arrived[segment.to] = core::min(arrived[segment.to], course.back().surface);
+                const RiverId onward = outgoingOf[segment.to];
+                if (onward != kInvalidRiverId && --arriving[segments[onward - 1].from] == 0)
+                    order.push_back(onward);
+            }
+        }
+        // The heads at the nodes follow: a course starts where its node stands
+        // and every course arriving at a node ends there (the sharing below
+        // brings each arriving tail down to it).
+        for (const RiverSegment& segment : segments) {
+            RiverNode& from = nodes[segment.from - 1];
+            if (from.kind != RiverNodeKind::LakeOutlet) from.surface = segment.course.front().surface;
+        }
+        for (const RiverSegment& segment : segments) {
+            if (segment.to == kInvalidRiverNodeId) continue;
+            RiverNode& to = nodes[segment.to - 1];
+            if (outgoingOf[to.id] == kInvalidRiverId && to.kind != RiverNodeKind::LakeInlet)
+                to.surface = core::min(to.surface, arrived[to.id]);
+        }
+    }
+
     // --- Strahler order ------------------------------------------------------
     //
     // A lake is not a break in the river: its outflow continues from what ran
@@ -1155,6 +1637,9 @@ HydrologyGraph buildHydrologyGraph(const generation::WorldMapData& world) {
     for (const RiverSegment& segment : segments)
         if (segment.to != kInvalidRiverNodeId) incoming[segment.to].push_back(segment.id);
 
+    // Where each course arriving at a confluence starts sharing the junction's
+    // head (below), kept so the fitting to the carved ground can hold it there.
+    std::vector<std::size_t> sharedFrom(segments.size() + 1, 0);
     // Tributaries share water BEFORE their centrelines meet. Give that whole
     // overlap the junction's head; otherwise the carver's union of water heads
     // raises a flat tributary as a higher neighbour approaches (seed 11).
@@ -1215,6 +1700,7 @@ HydrologyGraph buildHydrologyGraph(const generation::WorldMapData& world) {
             auto& course = segments[feeders[n] - 1].course;
             // Keep the upstream node's canonical head. A single shared chord
             // still interpolates to the junction rather than altering topology.
+            sharedFrom[feeders[n]] = std::max<std::size_t>(1, firstShared[n]);
             for (std::size_t i = std::max<std::size_t>(1, firstShared[n]); i < course.size(); ++i)
                 course[i].surface = node.surface;
         }
@@ -1264,79 +1750,23 @@ HydrologyGraph buildHydrologyGraph(const generation::WorldMapData& world) {
 
     // --- page index ----------------------------------------------------------
     //
-    // Keyed by (y, x) so the map's own order is the order findHydrologySpatialPage
-    // binary-searches. Storage pages are square and world aligned; that a ring
-    // scheduler will ask for them in a different order is not this index's
-    // business.
-    std::map<std::pair<std::int32_t, std::int32_t>, HydrologySpatialPage> pages;
-    const auto pageAt = [&](std::int32_t x, std::int32_t y) -> HydrologySpatialPage& {
-        HydrologySpatialPage& page = pages[{y, x}];
-        page.key = {x, y, 0};
-        return page;
-    };
-    for (const RiverSegment& segment : segments) {
-        const auto columns = pageSpan(segment.bounds.min.x.toInt(), segment.bounds.max.x.toInt() + 1);
-        const auto rows = pageSpan(segment.bounds.min.y.toInt(), segment.bounds.max.y.toInt() + 1);
-        for (std::int32_t y = rows.first; y <= rows.second; ++y)
-            for (std::int32_t x = columns.first; x <= columns.second; ++x)
-                pageAt(x, y).segments.push_back(segment.id);
-    }
-    const auto indexBodySpan = [&](WaterBodyId id, std::int64_t minX, std::int64_t minY,
-                                    std::int64_t maxX, std::int64_t maxY) {
-        const auto columns = pageSpan(minX, maxX);
-        const auto rows = pageSpan(minY, maxY);
-        for (std::int32_t y = rows.first; y <= rows.second; ++y)
-            for (std::int32_t x = columns.first; x <= columns.second; ++x)
-                pageAt(x, y).waterBodies.push_back(id);
-    };
-    const auto indexBodyCell = [&](WaterBodyId id, TilePos cell, std::int64_t margin) {
-        const std::int64_t metres = generation::kMetresPerCell;
-        indexBodySpan(id, cell.x * metres - margin, cell.y * metres - margin,
-                       (cell.x + 1) * metres + margin, (cell.y + 1) * metres + margin);
-    };
-    for (std::size_t slot = 1; slot < bodies.size(); ++slot) {
-        const auto& body = bodies[slot];
-        if (body.basinStep == 0) {
-            // Legacy samples live at macro-cell centres. Include their entire
-            // interpolation support, not just the cell that holds the centre.
-            for (const TilePos cell : body.macroCells)
-                indexBodyCell(body.id, cell, generation::kMetresPerCell / 2);
-            continue;
-        }
-        // Natural basins can extend beyond their macro provenance. Index the
-        // actual samples, including one step of shoreline support. Coalesce
-        // row runs so a large lake does not append one page entry per sample.
-        const std::int64_t step = body.basinStep;
-        for (std::size_t first = 0; first < body.basinSamples.size();) {
-            std::size_t last = first;
-            while (last + 1 < body.basinSamples.size() &&
-                   body.basinSamples[last + 1].y == body.basinSamples[first].y &&
-                   body.basinSamples[last + 1].x == body.basinSamples[last].x + 1)
-                ++last;
-            const auto begin = body.basinSamples[first], end = body.basinSamples[last];
-            indexBodySpan(body.id, (std::int64_t(begin.x) - 1) * step,
-                           (std::int64_t(begin.y) - 1) * step,
-                           (std::int64_t(end.x) + 1) * step,
-                           (std::int64_t(end.y) + 1) * step);
-            first = last + 1;
-        }
-    }
-    // The ocean keeps no footprint of its own, so it is indexed straight off
-    // the sea mask. Without this a page query would be total for lakes and
-    // partial for the one body most of the map is made of.
-    for (std::size_t i = 0; i < count; ++i)
-        if (world.cells[i].sea) indexBodyCell(kOceanWaterBodyId, positionOf(i), 0);
+    // Built before the fittings below, which carve through it, and again after
+    // standing water has been refitted to the ground it ended up on.
+    indexGraph(graph, world);
 
-    graph.spatialPages.reserve(pages.size());
-    for (auto& entry : pages) {
-        HydrologySpatialPage& page = entry.second;
-        std::sort(page.segments.begin(), page.segments.end());
-        page.segments.erase(std::unique(page.segments.begin(), page.segments.end()),
-                            page.segments.end());
-        std::sort(page.waterBodies.begin(), page.waterBodies.end());
-        page.waterBodies.erase(std::unique(page.waterBodies.begin(), page.waterBodies.end()),
-                               page.waterBodies.end());
-        graph.spatialPages.push_back(std::move(page));
+    // --- the water fitted to the ground it ended up in --------------------------
+    //
+    // Everything above decided heads from the macro map and the uncarved
+    // country. What the page is drawn from is the country as the reaches carve
+    // it, and the standing water and the running water are both fitted to that
+    // here, the lakes first because a river leaving or entering one takes its
+    // level from it. Twice, since each moves the ground the other stands on.
+    for (int round = 0; round < 2; ++round) {
+        if (world.terrainFoundation) {
+            refineLakesOnCarvedGround(graph, world);
+            indexGraph(graph, world);
+        }
+        fitCoursesToCarvedGround(graph, world, sharedFrom);
     }
     return graph;
 }

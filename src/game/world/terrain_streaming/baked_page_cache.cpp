@@ -89,7 +89,7 @@ bool channels(Page& p, Function&& f) {
         f(p.base.walkability, n, false) && f(p.water.surfaceQuantized, n, false) &&
         f(p.water.waterBodyId, n, false) && f(p.water.riverId, n, false) &&
         f(p.water.shoreDecimetres, n, false) && f(p.water.coverage, n, false) &&
-        f(p.water.flowX, n, false) && f(p.water.flowY, n, false) &&
+        f(p.water.flowX, n, false) && f(p.water.flowY, n, false) && f(p.water.estuary, n, false) &&
         f(p.large.deltaQuantized, n, false) && f(p.medium.deltaQuantized, 0, false) &&
         f(p.materials, std::size_t(p.materialWidth) * p.materialWidth * kMaterialCount, false) &&
         f(p.refinementDepth, n, false) && f(p.refinementAshore, n, false) &&

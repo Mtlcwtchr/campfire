@@ -25,7 +25,7 @@ Fixed ease(Fixed t) {
 } // namespace
 
 GraphCarver::GraphCarver(const HydrologyGraph& graph, core::WorldRect area,
-                         std::int32_t haloMetres) {
+                         std::int32_t haloMetres, bool standingWater) {
     const Fixed halo = Fixed::fromInt(std::max(0, haloMetres));
     const core::WorldRect grown{{area.min.x - halo, area.min.y - halo},
                                 {area.max.x + halo, area.max.y + halo}};
@@ -43,7 +43,8 @@ GraphCarver::GraphCarver(const HydrologyGraph& graph, core::WorldRect area,
             const auto* page = findHydrologySpatialPage(graph, {x, y, 0});
             if (page == nullptr) continue;
             wanted.insert(wanted.end(), page->segments.begin(), page->segments.end());
-            wantedBodies.insert(wantedBodies.end(), page->waterBodies.begin(), page->waterBodies.end());
+            if (standingWater)
+                wantedBodies.insert(wantedBodies.end(), page->waterBodies.begin(), page->waterBodies.end());
         }
     std::sort(wanted.begin(), wanted.end());
     wanted.erase(std::unique(wanted.begin(), wanted.end()), wanted.end());
@@ -62,6 +63,27 @@ GraphCarver::GraphCarver(const HydrologyGraph& graph, core::WorldRect area,
             reach.points.push_back({source.position, source.surface, source.halfWidth,
                                     source.depth, source.valleyReach});
             furthest = core::max(furthest, core::max(source.valleyReach, source.halfWidth));
+        }
+        // How far each point is from the end of the course, and - for a course
+        // that runs out to sea - where along it the coast is. The coast is
+        // where the river has come down to the sea's own level: the courses
+        // are fitted to the banks they cross, and the last of the land before
+        // the sea is a bank at nought. The last knot is only the first sea
+        // cell's middle, which can be kilometres out over the shelf.
+        for (std::size_t i = reach.points.size() - 1; i-- > 0;) {
+            const Point& here = reach.points[i];
+            const Point& onward = reach.points[i + 1];
+            reach.points[i].toEnd = onward.toEnd + core::hypot(onward.position.x - here.position.x,
+                                                               onward.position.y - here.position.y);
+        }
+        reach.toSea = segment->destinationWaterBody == kOceanWaterBodyId;
+        if (reach.toSea) {
+            reach.coast = reach.points[reach.points.size() - 2].toEnd / Fixed::fromInt(2);
+            for (const Point& point : reach.points)
+                if (point.surface <= Fixed::ratio(1, 4)) {
+                    reach.coast = point.toEnd;
+                    break;
+                }
         }
         reach.lowX = reach.highX = reach.points.front().position.x;
         reach.lowY = reach.highY = reach.points.front().position.y;
@@ -327,6 +349,8 @@ CarvedSample GraphCarver::carve(WorldPos at, Fixed country, Fixed detail) const 
         Fixed distance, surface, halfWidth, depth, valleyReach;
         RiverId id = kInvalidRiverId;
         Fixed flowX, flowY;
+        Fixed toEnd, coast;
+        bool toSea = false;
     };
     constexpr std::size_t kMaxHits = 32;
     std::array<Hit, kMaxHits> hits{};
@@ -393,6 +417,9 @@ CarvedSample GraphCarver::carve(WorldPos at, Fixed country, Fixed detail) const 
                 hit.depth = profile.depth;
                 hit.valleyReach = core::max(profile.valleyReach, profile.halfWidth + core::kOne);
                 hit.id = reach.id;
+                hit.toEnd = core::lerp(a.toEnd, b.toEnd, t);
+                hit.toSea = reach.toSea;
+                hit.coast = reach.coast;
                 const Fixed length = core::hypot(dx, dy);
                 hit.flowX = length.raw > 0 ? dx / length : core::kZero;
                 hit.flowY = length.raw > 0 ? dy / length : core::kZero;
@@ -466,11 +493,17 @@ CarvedSample GraphCarver::carve(WorldPos at, Fixed country, Fixed detail) const 
     // hillside instead of stopping at a line. Worked out here and applied once
     // the reaches have had their say, because it is their valleys too.
     Fixed shoreFill = core::kZero, shoreBound = core::kZero;
+    // Whether a lake's shore is here, and at what level: what a dry sample
+    // borders, for its head (see the end).
+    bool lakeBeside = false;
+    Fixed lakeBesideLevel = core::kZero;
     if (naturalBasins_) {
         Fixed shoreLevel;
         const Fixed shore = shoreAt(at, shoreLevel);
         if (shore.raw > 0) {
             const bool inside = basinBody != kInvalidWaterBodyId;
+            lakeBeside = true;
+            lakeBesideLevel = inside ? basinLevel : shoreLevel;
             shoreFill = inside ? (cover < Fixed::ratio(1, 2)
                                           ? ease(core::kOne - cover * Fixed::fromInt(2))
                                           : core::kZero)
@@ -533,6 +566,27 @@ CarvedSample GraphCarver::carve(WorldPos at, Fixed country, Fixed detail) const 
             out.flowX = hit.flowX;
             out.flowY = hit.flowY;
             out.surface = hit.surface; // dry bank must not interpolate to sea level
+            // A river running out to sea hands over to it gradually: over the
+            // last stretch before the coast - ten widths of the river, and
+            // never less than a hundred and fifty metres - its water becomes
+            // the sea's, and a quarter of that past the coast it is the sea
+            // outright. It used to be a river up to the sample where the ground
+            // crossed sea level and the sea from the next, one texel of blend
+            // between two waters that are shaded, lit and moved differently.
+            out.estuary = core::kZero;
+            if (hit.toSea) {
+                const Fixed span = core::clamp(hit.halfWidth * Fixed::fromInt(10), Fixed::fromInt(150),
+                                               Fixed::fromInt(600));
+                const Fixed upstream = hit.toEnd - hit.coast;
+                // And only where the river is down at the sea's level: a river
+                // still coming down a coastal slope is a river, however near
+                // the coast, and the sea cannot stand where it runs (the sheet
+                // stands aside for any head over a metre and a half).
+                const Fixed atSeaLevel = core::kOne - ease((hit.surface - Fixed::ratio(3, 10)) /
+                                                           Fixed::ratio(12, 10));
+                out.estuary = (core::kOne - ease((upstream + span / Fixed::fromInt(4)) /
+                                                 (span * Fixed::ratio(5, 4)))) * atSeaLevel;
+            }
         }
         // Water finds its own level, and the level is the highest one that
         // reaches: taking the nearest channel alone let two crossing courses
@@ -558,6 +612,43 @@ CarvedSample GraphCarver::carve(WorldPos at, Fixed country, Fixed detail) const 
             (!anyWater || hit.surface.raw > highest.raw)) {
             highest = hit.surface;
             anyWater = true;
+        }
+    }
+
+    // And where the country beside a channel lies under its water, the bank is
+    // built up to hold it: a natural levee, which is what a river standing
+    // above its floodplain makes of its own silt.
+    //
+    // The courses are fitted to the ground their banks stand on (see
+    // fitCoursesToCarvedGround), so almost nowhere is this asked for. It is
+    // the case the fitting cannot lower: a reach arriving in a lake arrives at
+    // the lake's level, and where its last stretch crosses a hollow below that
+    // level its water stood over the hollow and ended at its bank in a curtain.
+    // The crest is the water's own level across the width the water reaches,
+    // falling one in three beyond it until it meets the ground, so a levee is
+    // never higher or wider than the water it holds needs. Channels are cut
+    // through it again afterwards - a levee is a bank, never a dam - and none
+    // is raised in a lake, under the sea, or at a mouth, where the water on
+    // the far side of the bank is the river's own.
+    if (!(basinBody != kInvalidWaterBodyId && out.floor < basinLevel) && out.floor.raw >= 0) {
+        Fixed levee = out.floor;
+        for (std::size_t n = 0; n < hitCount; ++n) {
+            const Hit& hit = hits[n];
+            if (hit.halfWidth.raw <= 0 || hit.distance.raw <= hit.halfWidth.raw) continue;
+            if (hit.surface < Fixed::fromInt(1)) continue;
+            const Fixed reachOfWater =
+                    hit.halfWidth + core::max(hit.depth, Fixed::fromInt(kSampleMetres / 2));
+            const Fixed beyond = core::max(hit.distance - reachOfWater, core::kZero);
+            levee = core::max(levee, hit.surface - beyond / Fixed::fromInt(3));
+        }
+        if (levee > out.floor) {
+            for (std::size_t n = 0; n < hitCount; ++n) {
+                const Hit& hit = hits[n];
+                if (hit.halfWidth.raw <= 0 || hit.distance.raw > hit.halfWidth.raw) continue;
+                const Fixed across = hit.distance / hit.halfWidth;
+                levee = core::min(levee, hit.surface - hit.depth * (core::kOne - across * across));
+            }
+            out.floor = core::max(out.floor, levee);
         }
     }
 
@@ -643,6 +734,19 @@ CarvedSample GraphCarver::carve(WorldPos at, Fixed country, Fixed detail) const 
 
     out.wet = anyWater && out.floor.raw < highest.raw;
     if (out.wet) out.surface = highest;
+    // A dry sample's head is the level of the water it borders, so the surface
+    // filters flat to the waterline instead of towards some other water.
+    //
+    // On a lake's shore that is the lake, whatever river's valley the sample
+    // also stands in. It used to be the river's head - a hundred metres below
+    // the lake, from a reach half a kilometre away - and between the last wet
+    // sample and that one the lake's surface plunged a hundred metres in a
+    // sample's width: a curtain of water hanging off the shore. The higher of
+    // the two, because a dry head is a filter and never a flood: the baker
+    // holds it to the sample's own ground.
+    else if (lakeBeside)
+        out.surface = out.reach != kInvalidRiverId ? core::max(out.surface, lakeBesideLevel)
+                                                   : lakeBesideLevel;
     return out;
 }
 
