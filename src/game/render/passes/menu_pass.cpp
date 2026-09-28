@@ -14,6 +14,10 @@
 namespace game {
 
 MenuPass::~MenuPass() {
+    if (panelUi_) panelUi_->shutdown();
+    panelUi_.reset();
+    if (panelSoftware_) SDL_DestroyRenderer(panelSoftware_);
+    if (panelSurface_) SDL_DestroySurface(panelSurface_);
     if (progressSoftware_) SDL_DestroyRenderer(progressSoftware_);
     if (progressSurface_) SDL_DestroySurface(progressSurface_);
     if (software_) SDL_DestroyRenderer(software_);
@@ -63,6 +67,22 @@ engine::PassPlace MenuPass::setup(engine::Device& device, engine::RenderPipeline
     pipeline_ = into.take(std::move(pipeline));
     bindings_ =
             into.take(std::vector<SDL_GPUTextureSamplerBinding>{{picture_.get(), sampler_.get()}});
+    {
+        // The graphics window: same trick, its own surface, and the engine's
+        // widget library (ui::Ui) drawing into a software renderer over it.
+        panelSurface_ = SDL_CreateSurface(client::GraphicsPanel::kWide, client::GraphicsPanel::kHigh,
+                                          SDL_PIXELFORMAT_ABGR8888);
+        if (!panelSurface_) { device.fail(SDL_GetError()); return {}; }
+        panelSoftware_ = SDL_CreateSoftwareRenderer(panelSurface_);
+        if (!panelSoftware_) { device.fail(SDL_GetError()); return {}; }
+        panelUi_ = std::make_unique<ui::Ui>();
+        if (!panelUi_->init(panelSoftware_)) { device.fail("graphics panel font"); return {}; }
+        info.width = client::GraphicsPanel::kWide; info.height = client::GraphicsPanel::kHigh;
+        panelPicture_ = device.makeTexture(info);
+        if (!panelPicture_) return {};
+        panelBindings_ = into.take(std::vector<SDL_GPUTextureSamplerBinding>{{panelPicture_.get(), sampler_.get()}});
+        info.width = client::ExploreMenu::kWide; info.height = client::ExploreMenu::kHigh;
+    }
 #if ASR_ENABLE_DIAGNOSTICS
     if (terrain_) {
         progressSurface_ = SDL_CreateSurface(kProgressWide, kProgressHigh, SDL_PIXELFORMAT_ABGR8888);
@@ -123,6 +143,45 @@ void MenuPass::collect(const engine::Frame& frame, engine::DrawQueue& queue) {
     item.own[1] = 16;
     item.own[2] = client::ExploreMenu::kWide;
     item.own[3] = client::ExploreMenu::kHigh;
+    queue.push(item);
+    collectPanel(frame, queue);
+}
+
+void MenuPass::collectPanel(const engine::Frame& frame, engine::DrawQueue& queue) {
+    if (!menu_.panelVisible() || !panelUi_) return;
+    auto& input = menu_.panelInput();
+    const bool moved = input.mouseX != lastPanelInput_.mouseX || input.mouseY != lastPanelInput_.mouseY ||
+                       input.down != lastPanelInput_.down || input.pressed || input.released ||
+                       input.wheel != 0;
+    if (!panelDrawn_ || menu_.panelDirty() || moved) {
+        SDL_SetRenderDrawBlendMode(panelSoftware_, SDL_BLENDMODE_NONE);
+        SDL_SetRenderDrawColor(panelSoftware_, 0, 0, 0, 0);
+        SDL_RenderClear(panelSoftware_);
+        SDL_SetRenderDrawBlendMode(panelSoftware_, SDL_BLENDMODE_BLEND);
+        panelUi_->begin(input, client::GraphicsPanel::kWide, client::GraphicsPanel::kHigh);
+        const bool changed = menu_.panel().draw(*panelUi_, menu_.graphics());
+        panelUi_->end();
+        SDL_RenderPresent(panelSoftware_);
+        std::vector<std::uint8_t> pixels(std::size_t(client::GraphicsPanel::kWide) * client::GraphicsPanel::kHigh * 4);
+        for (int y = 0; y < client::GraphicsPanel::kHigh; ++y)
+            std::memcpy(pixels.data() + std::size_t(y) * client::GraphicsPanel::kWide * 4,
+                        static_cast<const std::uint8_t*>(panelSurface_->pixels) + std::size_t(y) * panelSurface_->pitch,
+                        std::size_t(client::GraphicsPanel::kWide) * 4);
+        engine::Device::Uploader upload(*frame.device);
+        const bool copied = upload.refillRegion(panelPicture_.get(), pixels.data(), 0, 0,
+            client::GraphicsPanel::kWide, client::GraphicsPanel::kHigh, 4, 0, 0, true);
+        panelDrawn_ = upload.finish() && copied;
+        lastPanelInput_ = input;
+        if (changed) menu_.panelChanged(); else menu_.panelPainted();
+    }
+    if (!panelDrawn_) return;
+    engine::DrawItem item;
+    item.pipeline = pipeline_; item.bindings = panelBindings_;
+    item.vertexCount = 6; item.ownToVertex = true;
+    item.own[0] = std::max(0.0f, frame.scene.viewport[0] - client::GraphicsPanel::kWide - 16);
+    item.own[1] = 16;
+    item.own[2] = client::GraphicsPanel::kWide;
+    item.own[3] = client::GraphicsPanel::kHigh;
     queue.push(item);
 }
 

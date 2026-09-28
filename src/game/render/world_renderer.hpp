@@ -8,6 +8,7 @@
 #include "game/content/ground_materials.hpp"
 #include "game/render/calc/sprite_queue.hpp"
 #include "game/render/climate_textures.hpp"
+#include "game/render/graphics_settings.hpp"
 #include "game/world/environment.hpp"
 #include "game/world/weather.hpp"
 #include "game/world/world_system.hpp"
@@ -18,14 +19,31 @@ class TerrainCollectPass;
 class SpritePass;
 class SceneModelsPass;
 class FoliagePass;
+class FarTreesPass;
 class GpuTerrain;
+class ShadowClipmap;
 
 struct WorldRenderSettings {
     world::weather::Snapshot weather;
     world::MapView map = world::MapView::Natural;
     generation::TerrainStage stage = generation::TerrainStage::Final;
     bool iceVisible = true, potentialOnly = false;
+    bool shadows = true;
+    std::array<float,3> sunDirection{-0.55f,-0.55f,0.63f};
     std::array<float, 4> floodBounds{-1, -1, -1, -1};
+    // Metres of ground drawn from the eye. The distance fog is opaque there,
+    // and the far forest and object placement stop there. Perspective only.
+    double drawDistance = 30000;
+    bool fog = true;
+    // Everything the graphics settings panel controls. `drawDistance`, `fog`,
+    // `shadows` and `sunDirection` above are overridden from it when
+    // `useGraphics` is set (the explorer), and kept for older callers.
+    GraphicsSettings graphics;
+    bool useGraphics = false;
+    // The camera every decision (culling, LOD, streaming, placement, shadows)
+    // is made from. Null: the drawing camera. Set by the scene view to inspect
+    // a frozen frame from elsewhere without recomputing it.
+    const client::Camera* cull = nullptr;
 };
 
 // A presentation consumer, not a world generator. All passes share one runner,
@@ -36,8 +54,10 @@ public:
     using Overlay = std::function<std::unique_ptr<engine::DrawPass>(const GpuTerrain&)>;
     WorldRenderer();
     ~WorldRenderer();
+    // A null window with a size opens headless: nothing is presented.
     bool open(SDL_Window* window, const std::filesystem::path& assets,
-              world::WorldSystem& source, Overlay overlay = {});
+              world::WorldSystem& source, Overlay overlay = {},
+              int headlessWidth = 0, int headlessHeight = 0);
     bool draw(const client::Camera& camera, const WorldRenderSettings& settings = {});
     bool screenshot(const std::string& path);
     void holdTime(double seconds);
@@ -74,12 +94,14 @@ private:
     std::unique_ptr<world::HeightField> field_;
     engine::MeshCache cache_;
     ClimateTextures climate_;
+    std::unique_ptr<ShadowClipmap> shadows_;
     std::vector<content::GroundMaterial> ground_;
     SpriteQueue spriteQueue_;
     std::unique_ptr<engine::Runner> runner_;
     TerrainCollectPass* collect_ = nullptr;
     SpritePass* sprites_ = nullptr;
     SceneModelsPass* models_ = nullptr;
+    FarTreesPass* farTrees_ = nullptr;
     bool objectWireframe_ = false;
     FoliagePass* foliage_ = nullptr;
     engine::RenderPipeline* render_ = nullptr;
@@ -87,5 +109,11 @@ private:
     double heldTime_ = -1;
     bool skirts_ = true;
     int grid_ = 0;
+    // Multisampling the render state was built with, and what is wanted. A
+    // pipeline cannot change its sample count, so a change rebuilds.
+    int builtSamples_ = 0, wantedSamples_ = 4;
+    bool builtHalfTextures_ = false, wantedHalfTextures_ = false;
+    std::array<float, 3> skyHorizon_{0.68f, 0.71f, 0.70f}, skyZenith_{0.43f, 0.55f, 0.66f};
+    bool skyMeasured_ = false, skyAvailable_ = false;
 };
 } // namespace game

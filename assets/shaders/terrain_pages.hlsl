@@ -70,7 +70,8 @@ float4 TerrainPagePS(TerrainOut input) : SV_Target0
     input.geography.z = shape.z;
     input.weights0 = detail.weights0;
     input.weights1 = detail.weights1;
-    if (!staged) input.waterDepth = detail.head - detail.bed;
+    pageBlurredWeights(input.worldXY, detail, input.weights0, input.weights1);
+    if (!staged) input.waterDepth = shoreDepthAt(input.worldXY, detail.head - detail.bed);
     // Triplanar UVs and height tint use the shading field, not the morphing mesh.
     if (!staged) input.worldHeight = detail.bed;
     const int mode = (int)extraPS.w;
@@ -104,7 +105,7 @@ float4 TerrainPagePS(TerrainOut input) : SV_Target0
         }
         return float4(colour*lighting,1);
     }
-    float4 colour = TerrainPS(input);
+    float4 colour = terrainSurface(input);
     // Bit 0 still enables the vertex skirt floor; bits 1.. select the overlay.
     const int grid = (int)ringReserved.w / 2;
     if (grid != 0) {

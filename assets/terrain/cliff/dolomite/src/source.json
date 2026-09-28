@@ -1,0 +1,33 @@
+{
+  "site": "ue-export",
+  "project": "AncientSettlement",
+  "license": "Original asset-pack licence (not CC0)",
+  "assets": {
+    "diffuse": "/Game/ApexNature/Dolomites/Surfaces/Cliff/T_APXN_DOL_Surface_Cliff_1x1_01_COL",
+    "normal": "/Game/ApexNature/Dolomites/Surfaces/Cliff/T_APXN_DOL_Surface_Cliff_1x1_01_NRM",
+    "ord": "/Game/ApexNature/Dolomites/Surfaces/Cliff/T_APXN_DOL_Surface_Cliff_1x1_01_ORD"
+  },
+  "original_sizes": {
+    "diffuse": [
+      8192,
+      8192
+    ],
+    "normal": [
+      8192,
+      8192
+    ],
+    "ord": [
+      8192,
+      8192
+    ]
+  },
+  "runtime_world_scale": 6.0,
+  "resolution": "2048px",
+  "files": {
+    "diffuse": "cliff_dolomite_diffuse.png",
+    "normal": "cliff_dolomite_normal.png",
+    "ao": "cliff_dolomite_ao.png",
+    "rough": "cliff_dolomite_rough.png",
+    "displacement": "cliff_dolomite_displacement.png"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "site": "polyhaven",
+  "asset_id": "coast_sand_04",
+  "asset_url": "https://polyhaven.com/a/coast_sand_04",
+  "license": "CC0",
+  "authors": [
+    "Dario Barresi",
+    "Rob Tuytel"
+  ],
+  "attribution_required": false,
+  "original_physical_metres": [
+    3.94,
+    3.94
+  ],
+  "runtime_world_scale": 3.94,
+  "resolution": "2k",
+  "files": {
+    "diffuse": "ph_coast_sand_04_diffuse.png",
+    "normal": "ph_coast_sand_04_normal.png",
+    "displacement": "ph_coast_sand_04_displacement.png",
+    "rough": "ph_coast_sand_04_rough.png",
+    "ao": "ph_coast_sand_04_ao.png"
+  }
+}

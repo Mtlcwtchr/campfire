@@ -1,0 +1,33 @@
+{
+  "site": "ue-export",
+  "project": "AncientSettlement",
+  "license": "Original asset-pack licence (not CC0)",
+  "assets": {
+    "diffuse": "/Game/Namaqualand/Textures/T_gravelly_sand_diff_4k",
+    "normal": "/Game/Namaqualand/Textures/T_gravelly_sand_nor_dx_4k",
+    "ard": "/Game/Namaqualand/Textures/T_gravelly_sand_ard_4k"
+  },
+  "original_sizes": {
+    "diffuse": [
+      4096,
+      4096
+    ],
+    "normal": [
+      4096,
+      4096
+    ],
+    "ard": [
+      4096,
+      4096
+    ]
+  },
+  "runtime_world_scale": 2.6,
+  "resolution": "2048px",
+  "files": {
+    "diffuse": "sand_gravelly_diffuse.png",
+    "normal": "sand_gravelly_normal.png",
+    "ao": "sand_gravelly_ao.png",
+    "rough": "sand_gravelly_rough.png",
+    "displacement": "sand_gravelly_displacement.png"
+  }
+}

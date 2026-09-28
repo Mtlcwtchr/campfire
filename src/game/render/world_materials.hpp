@@ -15,11 +15,12 @@ inline std::shared_ptr<const engine::Material> terrain(bool adaptive, bool backd
     material->fragmentEntry = adaptive ? "TerrainPagePS" : "TerrainPS";
     return material;
 }
-inline std::shared_ptr<const engine::Material> sceneModels() {
+inline std::shared_ptr<const engine::Material> sceneModels(bool depthImpostors = false) {
     auto material = std::make_shared<engine::Material>();
     material->name = "nature/mesh-and-impostor";
     material->shader = "scene_models.hlsl";
-    material->vertexEntry = "ModelVS"; material->fragmentEntry = "ModelPS";
+    material->vertexEntry = "ModelVS";
+    material->fragmentEntry = depthImpostors ? "ModelDepthPS" : "ModelPS";
     return material;
 }
 // The vertex and instance streams scene_models.hlsl reads, spelled once.

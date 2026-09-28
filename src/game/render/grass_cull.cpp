@@ -50,7 +50,7 @@ bool GrassCuller::dispatch(const engine::Frame& frame, engine::RenderPipeline& i
         return false;
     }
     engine::ClusterSelection selection;
-    const auto* matrix = frame.scene.viewProjection;
+    const auto* matrix = engine::cullMatrix(frame.scene);
     std::copy_n(matrix, 4, selection.rowX);
     std::copy_n(matrix + 4, 4, selection.rowY);
     std::copy_n(matrix + 12, 4, selection.rowW);

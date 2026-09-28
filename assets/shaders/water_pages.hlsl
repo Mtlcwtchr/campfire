@@ -52,7 +52,7 @@ WaterOut resolveWaterPageDetail(WaterOut input)
     // coarse wetness share, and a channel narrower than the square that sampled
     // it has none - so trusting the page's cover there would lose the whole
     // brook. The mesh knows it is wet; only WHERE it ends is the page's answer.
-    input.depth = detail.head - detail.bed;
+    input.depth = shoreDepthAt(input.worldXY, detail.head - detail.bed);
     if (input.explicitSurface == 0) input.cover = detail.cover;
     input.motion = detail.motion;
     return input;

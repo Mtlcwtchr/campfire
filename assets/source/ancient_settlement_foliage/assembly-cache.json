@@ -1,0 +1,293 @@
+{
+ "/Game/Megaplant_Library/Tree_European_Beech/Instances/SKM_Branch_European_Beech_02.SKM_Branch_European_Beech_02": {
+  "asset": "/Game/Megaplant_Library/Tree_European_Beech/Instances/SKM_Branch_European_Beech_02.SKM_Branch_European_Beech_02",
+  "mesh": "assembly/part-0.ums",
+  "parts": [],
+  "nodes": [],
+  "original_triangles": 91809,
+  "triangles": 8832,
+  "material_triangles": {
+   "1": 1346,
+   "0": 7486
+  }
+ },
+ "/Game/Megaplant_Library/Tree_European_Beech/Instances/SKM_Branch_European_Beech_01.SKM_Branch_European_Beech_01": {
+  "asset": "/Game/Megaplant_Library/Tree_European_Beech/Instances/SKM_Branch_European_Beech_01.SKM_Branch_European_Beech_01",
+  "mesh": "assembly/part-1.ums",
+  "parts": [],
+  "nodes": [],
+  "original_triangles": 51995,
+  "triangles": 8191,
+  "material_triangles": {
+   "1": 410,
+   "0": 7781
+  }
+ },
+ "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_Top_01.SKM_Branch_Norway_Spruce_Top_01": {
+  "asset": "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_Top_01.SKM_Branch_Norway_Spruce_Top_01",
+  "mesh": "assembly/part-2.ums",
+  "parts": [],
+  "nodes": [],
+  "original_triangles": 183968,
+  "triangles": 8192,
+  "material_triangles": {
+   "1": 3272,
+   "0": 4920
+  }
+ },
+ "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_01.SKM_Branch_Norway_Spruce_01": {
+  "asset": "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_01.SKM_Branch_Norway_Spruce_01",
+  "mesh": "assembly/part-3.ums",
+  "parts": [],
+  "nodes": [],
+  "original_triangles": 304466,
+  "components_before_thinning": 15388,
+  "triangles": 9800,
+  "material_triangles": {
+   "0": 8875,
+   "1": 925
+  }
+ },
+ "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_02.SKM_Branch_Norway_Spruce_02": {
+  "asset": "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_02.SKM_Branch_Norway_Spruce_02",
+  "mesh": "assembly/part-4.ums",
+  "parts": [],
+  "nodes": [],
+  "original_triangles": 607261,
+  "triangles": 8192,
+  "material_triangles": {
+   "1": 7447,
+   "0": 745
+  }
+ },
+ "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_03.SKM_Branch_Norway_Spruce_03": {
+  "asset": "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_03.SKM_Branch_Norway_Spruce_03",
+  "mesh": "assembly/part-5.ums",
+  "parts": [],
+  "nodes": [],
+  "original_triangles": 470975,
+  "triangles": 8192,
+  "material_triangles": {
+   "1": 6647,
+   "0": 1545
+  }
+ },
+ "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_04.SKM_Branch_Norway_Spruce_04": {
+  "asset": "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_04.SKM_Branch_Norway_Spruce_04",
+  "mesh": "assembly/part-6.ums",
+  "parts": [],
+  "nodes": [],
+  "original_triangles": 243982,
+  "triangles": 8192,
+  "material_triangles": {
+   "1": 5532,
+   "0": 2660
+  }
+ },
+ "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_05.SKM_Branch_Norway_Spruce_05": {
+  "asset": "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_05.SKM_Branch_Norway_Spruce_05",
+  "mesh": "assembly/part-7.ums",
+  "parts": [],
+  "nodes": [],
+  "original_triangles": 449258,
+  "triangles": 8191,
+  "material_triangles": {
+   "1": 7912,
+   "0": 279
+  }
+ },
+ "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_06.SKM_Branch_Norway_Spruce_06": {
+  "asset": "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_06.SKM_Branch_Norway_Spruce_06",
+  "mesh": "assembly/part-8.ums",
+  "parts": [],
+  "nodes": [],
+  "original_triangles": 347923,
+  "triangles": 8192,
+  "material_triangles": {
+   "1": 7887,
+   "0": 305
+  }
+ },
+ "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_10.SKM_Branch_Norway_Spruce_10": {
+  "asset": "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_10.SKM_Branch_Norway_Spruce_10",
+  "mesh": "assembly/part-9.ums",
+  "parts": [],
+  "nodes": [],
+  "original_triangles": 85650,
+  "triangles": 8191,
+  "material_triangles": {
+   "1": 1770,
+   "0": 6421
+  }
+ },
+ "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_11.SKM_Branch_Norway_Spruce_11": {
+  "asset": "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_11.SKM_Branch_Norway_Spruce_11",
+  "mesh": "assembly/part-10.ums",
+  "parts": [],
+  "nodes": [],
+  "original_triangles": 29415,
+  "triangles": 8192,
+  "material_triangles": {
+   "0": 7012,
+   "1": 1180
+  }
+ },
+ "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_13.SKM_Branch_Norway_Spruce_13": {
+  "asset": "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_13.SKM_Branch_Norway_Spruce_13",
+  "mesh": "assembly/part-11.ums",
+  "parts": [],
+  "nodes": [],
+  "original_triangles": 4253,
+  "triangles": 4253,
+  "material_triangles": {
+   "0": 3254,
+   "1": 999
+  }
+ },
+ "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_Hanging_03.SKM_Branch_Norway_Spruce_Hanging_03": {
+  "asset": "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_Hanging_03.SKM_Branch_Norway_Spruce_Hanging_03",
+  "mesh": "assembly/part-12.ums",
+  "parts": [],
+  "nodes": [],
+  "original_triangles": 19998,
+  "triangles": 8192,
+  "material_triangles": {
+   "1": 716,
+   "0": 7476
+  }
+ },
+ "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_Hanging_02.SKM_Branch_Norway_Spruce_Hanging_02": {
+  "asset": "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_Hanging_02.SKM_Branch_Norway_Spruce_Hanging_02",
+  "mesh": "assembly/part-13.ums",
+  "parts": [],
+  "nodes": [],
+  "original_triangles": 25648,
+  "triangles": 8192,
+  "material_triangles": {
+   "1": 1330,
+   "0": 6862
+  }
+ },
+ "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_Hanging_01.SKM_Branch_Norway_Spruce_Hanging_01": {
+  "asset": "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_Hanging_01.SKM_Branch_Norway_Spruce_Hanging_01",
+  "mesh": "assembly/part-14.ums",
+  "parts": [],
+  "nodes": [],
+  "original_triangles": 7825,
+  "triangles": 7825,
+  "material_triangles": {
+   "1": 6497,
+   "0": 1328
+  }
+ },
+ "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Decoration_Norway_Spruce_01.SKM_Decoration_Norway_Spruce_01": {
+  "asset": "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Decoration_Norway_Spruce_01.SKM_Decoration_Norway_Spruce_01",
+  "mesh": "assembly/part-15.ums",
+  "parts": [],
+  "nodes": [],
+  "original_triangles": 3766,
+  "triangles": 3766,
+  "material_triangles": {
+   "0": 3766
+  }
+ },
+ "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Decoration_Norway_Spruce_02.SKM_Decoration_Norway_Spruce_02": {
+  "asset": "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Decoration_Norway_Spruce_02.SKM_Decoration_Norway_Spruce_02",
+  "mesh": "assembly/part-16.ums",
+  "parts": [],
+  "nodes": [],
+  "original_triangles": 3745,
+  "triangles": 3745,
+  "material_triangles": {
+   "0": 3745
+  }
+ },
+ "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Decoration_Norway_Spruce_03.SKM_Decoration_Norway_Spruce_03": {
+  "asset": "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Decoration_Norway_Spruce_03.SKM_Decoration_Norway_Spruce_03",
+  "mesh": "assembly/part-17.ums",
+  "parts": [],
+  "nodes": [],
+  "original_triangles": 1932,
+  "triangles": 1932,
+  "material_triangles": {
+   "0": 1932
+  }
+ },
+ "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Decoration_Norway_Spruce_04.SKM_Decoration_Norway_Spruce_04": {
+  "asset": "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Decoration_Norway_Spruce_04.SKM_Decoration_Norway_Spruce_04",
+  "mesh": "assembly/part-18.ums",
+  "parts": [],
+  "nodes": [],
+  "original_triangles": 3674,
+  "triangles": 3674,
+  "material_triangles": {
+   "0": 3674
+  }
+ },
+ "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Decoration_Norway_Spruce_05.SKM_Decoration_Norway_Spruce_05": {
+  "asset": "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Decoration_Norway_Spruce_05.SKM_Decoration_Norway_Spruce_05",
+  "mesh": "assembly/part-19.ums",
+  "parts": [],
+  "nodes": [],
+  "original_triangles": 2580,
+  "triangles": 2580,
+  "material_triangles": {
+   "0": 2580
+  }
+ },
+ "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Decoration_Norway_Spruce_06.SKM_Decoration_Norway_Spruce_06": {
+  "asset": "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Decoration_Norway_Spruce_06.SKM_Decoration_Norway_Spruce_06",
+  "mesh": "assembly/part-20.ums",
+  "parts": [],
+  "nodes": [],
+  "original_triangles": 1158,
+  "triangles": 1158,
+  "material_triangles": {
+   "0": 1158
+  }
+ },
+ "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Decoration_Norway_Spruce_07.SKM_Decoration_Norway_Spruce_07": {
+  "asset": "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Decoration_Norway_Spruce_07.SKM_Decoration_Norway_Spruce_07",
+  "mesh": "assembly/part-21.ums",
+  "parts": [],
+  "nodes": [],
+  "original_triangles": 1165,
+  "triangles": 1165,
+  "material_triangles": {
+   "0": 1165
+  }
+ },
+ "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Decoration_Norway_Spruce_08.SKM_Decoration_Norway_Spruce_08": {
+  "asset": "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Decoration_Norway_Spruce_08.SKM_Decoration_Norway_Spruce_08",
+  "mesh": "assembly/part-22.ums",
+  "parts": [],
+  "nodes": [],
+  "original_triangles": 1044,
+  "triangles": 1044,
+  "material_triangles": {
+   "0": 1044
+  }
+ },
+ "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Decoration_Norway_Spruce_09.SKM_Decoration_Norway_Spruce_09": {
+  "asset": "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Decoration_Norway_Spruce_09.SKM_Decoration_Norway_Spruce_09",
+  "mesh": "assembly/part-23.ums",
+  "parts": [],
+  "nodes": [],
+  "original_triangles": 1020,
+  "triangles": 1020,
+  "material_triangles": {
+   "0": 1020
+  }
+ },
+ "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Decoration_Norway_Spruce_10.SKM_Decoration_Norway_Spruce_10": {
+  "asset": "/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Decoration_Norway_Spruce_10.SKM_Decoration_Norway_Spruce_10",
+  "mesh": "assembly/part-24.ums",
+  "parts": [],
+  "nodes": [],
+  "original_triangles": 878,
+  "triangles": 878,
+  "material_triangles": {
+   "0": 878
+  }
+ }
+}

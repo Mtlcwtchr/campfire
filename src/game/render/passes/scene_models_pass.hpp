@@ -7,8 +7,12 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <chrono>
+#include <unordered_map>
+#include "engine/render/representation_selector.hpp"
 #include "engine/pipeline/pass.hpp"
 #include "engine/render/device.hpp"
+#include "engine/render/draw_arguments.hpp"
 #include "engine/render/geometry/instanced.hpp"
 #include "engine/render/mesh_renderer.hpp"
 #include "game/world/scene_scatter.hpp"
@@ -25,14 +29,16 @@
 #include "engine/render/geometry/hiz_pyramid.hpp"
 #include "engine/geometry/cluster_asset.hpp"
 #include "engine/geometry/region_mass.hpp"
+#include "game/render/forest_proxy_cache.hpp"
+#include "game/render/forest_hierarchy.hpp"
 
 namespace engine { struct Scene; class RenderPipeline; }
 namespace game {
 class GpuTerrain;
 class SceneModelsPass final : public engine::DrawPass {
 public:
-    explicit SceneModelsPass(world::ScenePlacement& source,GpuTerrain* pages=nullptr)
-        :source_(source),pages_(pages) {}
+    explicit SceneModelsPass(world::ScenePlacement& source,SDL_GPUTextureSamplerBinding shadow,GpuTerrain* pages=nullptr)
+        :source_(source),shadow_(shadow),pages_(pages) {}
     ~SceneModelsPass() override;
     engine::PassPlace setup(engine::Device&,engine::RenderPipeline&) override;
     bool anything(const engine::Frame&) const override;
@@ -41,8 +47,28 @@ public:
     // scene uniforms. Terrain consumes these regions as its density shading
     // representation; no one-frame-late handoff is allowed.
     void prepareDensity(const engine::Scene&, double viewportWidth, engine::Scene&);
+    void view(engine::camera::ViewState state);
     void focus(double x,double y) { x_=x;y_=y; }
     void worldBounds(world::terrain::ViewBounds bounds) { worldBounds_=bounds; }
+    // Metres of ground beyond which nothing of this pass is drawn: the far
+    // forest hierarchy stops there and the fog is opaque there.
+    void drawDistance(double metres) { drawDistance_=std::max(500.0,metres); }
+    [[nodiscard]] double drawDistance() const { return drawDistance_; }
+    // Graphics settings: the 32 m runtime proxies and the far hierarchy.
+    void forestOptions(bool proxies,bool far,bool mass=true) { forestProxiesOn_=proxies; farForestOn_=far; massOn_=mass; }
+    // Past this distance vegetation is always an impostor; 0 leaves it to the error.
+    // Vegetation is a mesh only when at least this many pixels tall AND among
+    // the largest that fit `triangles`; everything else is an impostor.
+    void vegetationMesh(double pixels,std::size_t triangles) {
+        vegetationMeshPixels_=pixels; vegetationTriangleBudget_=triangles;
+    }
+    // Where the GPU far trees take over (0: they are off and objects run to
+    // the draw distance). Placement stops there; placed objects dissolve
+    // over `band` metres before it.
+    void farTrees(double start,double band) { farTreesStart_=start; farTreesBand_=band; }
+    double objectReach() const {
+        return farTreesStart_>0 ? std::min(drawDistance_,farTreesStart_) : drawDistance_;
+    }
     // Draw the objects as edges. Every representation goes through it - the
     // per-object cluster cut, the impostor cards and the region aggregates -
     // so what a frame is really made of can be looked at rather than inferred.
@@ -107,6 +133,9 @@ private:
         float width=0,height=0;
         int impostor=0;
         bool vegetation=false;
+        bool depthImpostor=false;
+        int hemisphereImpostor=-1;
+        double hemisphereTexel=0;
         // The finest level, kept for baking region aggregates out of the very
         // objects this model is drawn as.
         std::shared_ptr<const MassSource> mass;
@@ -135,6 +164,7 @@ private:
     };
     struct MassBake {
         world::decor::ScatterBounds region{};
+        std::uint64_t revision=0;
         engine::geometry::RegionMass mass;
         float origin[3]{};
         std::size_t members=0;
@@ -148,7 +178,35 @@ private:
     struct Instance { float position[3],scale,yaw,phase,tint,vegetation,width,height,layer,mesh,
                             mode,coverage,layerNext,viewBlend; };
     world::ScenePlacement& source_;
+    SDL_GPUTextureSamplerBinding shadow_{};
     GpuTerrain* pages_=nullptr;
+    ForestProxyCache forestProxies_;
+    ForestHierarchy farForest_;
+    double drawDistance_=60000;
+    bool forestProxiesOn_=true,farForestOn_=true,massOn_=true;
+    double vegetationMeshPixels_=0,vegetationMeshFloor_=0;
+    std::size_t vegetationTriangleBudget_=world::decor::kMeshTriangleBudget;
+    std::vector<world::decor::MeshDemand> vegetationDemand_;   // reused every frame
+    // Per-frame working storage for collect(): cleared each frame, never
+    // freed, so steady-state frames allocate nothing here.
+    struct FrameScratch {
+        std::vector<std::vector<Instance>> batches, clusteredCards;
+        std::vector<double> batchPixels, shellAllowances, pixels;
+        std::vector<float> meshWeights, detail, hierarchyNearCoverage, complement;
+        std::vector<bool> hemisphereAllowed;
+        std::vector<char> keep, hierarchyReplaced;
+        std::vector<std::unordered_map<int,std::size_t>> cutCost;
+        std::vector<std::uint32_t> cutClusters;
+        std::vector<Instance> drawn;
+        engine::render::GatheredInstances sourceInstances;
+        std::vector<engine::render::DrawRun> runs;
+        std::vector<Instance> proxyInstances;
+        std::vector<engine::render::SourceGeometry> sourceAssets;
+        std::vector<engine::MeshRootInstance> gpuRoots;
+        std::vector<engine::DrawArguments> arguments;
+        std::vector<std::uint32_t> presentModels;
+    } scratch_;
+    double farTreesStart_=0,farTreesBand_=160;
     // A grove: nine trees merged into one surface offline and clustered, drawn
     // as an instance like anything else. `layer` is the baked impostor it
     // replaces, kept for the model with no shell.
@@ -167,12 +225,15 @@ private:
     double detailBlend_=0;
     world::terrain::ViewBounds worldBounds_;
     std::vector<world::decor::ScatterBounds> wantedRegions_;
+    world::decor::SceneRegionStats regionQuery_;
     // Members of the published scatter, grouped by the ownership region that
     // an aggregate would replace. Rebuilt only when the placement changes.
     std::map<world::decor::ScatterBounds,std::vector<engine::geometry::RegionMember>> massMembers_;
     // The snapshot the grouping above was built from. Its own tracker: the
     // entity publication consumes `published_` earlier in the same frame.
     const world::ScenePlacementSnapshot* massPublished_=nullptr;
+    std::uint64_t massObjectsVersion_=0;
+    world::ScenePlacementSnapshot::Revisions massRevisions_;
     std::vector<MassSlot> massSlots_;
     std::vector<std::future<MassBake>> massJobs_;
     std::vector<world::decor::ScatterBounds> massBaking_;
@@ -250,12 +311,13 @@ private:
     // identity lives.
     engine::ecs::Registry entities_;
     const world::ScenePlacementSnapshot* published_=nullptr;
+    std::uint64_t publishedObjectsVersion_=0;
     // The published objects as flat arrays, gathered once. Walking the registry
     // and rebuilding these every frame cost milliseconds for geometry that does
     // not move: a tree is where the scatter put it until the scatter changes.
     engine::render::GatheredInstances gathered_;
-    engine::Texture colours_,normals_;
-    engine::Sampler sampler_;
+    engine::Texture colours_,normals_,depths_;
+    engine::Sampler sampler_,depthSampler_;
     engine::MeshRenderer renderer_;
     engine::MeshRenderer wireframeRenderer_;
     bool wireframe_=false,wireframeReady_=false;
@@ -264,6 +326,21 @@ private:
     // two kilobytes are not allocated and thrown away sixty times a second.
     engine::render::Horizon horizon_;
     double x_=0,y_=0;
+    engine::camera::ViewState view_;
+    bool viewReady_=false;
+    std::chrono::steady_clock::time_point viewTime_{};
+    struct RepresentationHistory {
+        std::size_t candidate=engine::render::kNoRepresentation;
+        // Negative: never selected yet. A new entry starts AT its target
+        // representation - it used to start as a full mesh and dissolve to
+        // its impostor, so every placement publication (which resets this
+        // table) and every tree coming into view drew the whole forest as
+        // meshes for 0.4 s: the burst of triangles while moving.
+        float mesh=-1;
+        double lastUse=0;
+    };
+    std::unordered_map<std::uint32_t,RepresentationHistory> representationHistory_;
+    double selectionTime_=0;
     double meshStartPixels_=22;
     bool enabled_=false,failed_=false;
 #if ASR_ENABLE_DIAGNOSTICS

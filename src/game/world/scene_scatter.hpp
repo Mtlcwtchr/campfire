@@ -1,5 +1,6 @@
 #pragma once
 #include "engine/render/level_of_detail.hpp"
+#include "game/world/ecology.hpp"
 #include <array>
 #include <compare>
 #include <cstdint>
@@ -9,13 +10,22 @@
 
 namespace world::decor {
 // Manifest order is an explicit content contract, not a random filesystem order.
-inline constexpr std::array<const char*,5> kModels{
-    "CommonTree_1", "Pine_1", "Bush_Common", "Rock_Medium_1", "Mushroom_Common"};
+inline constexpr std::array<const char*,8> kModels{
+    "CommonTree_1", "Pine_1", "Bush_Common", "Rock_Medium_1", "Mushroom_Common",
+    "Deadwood_Log", "Deadwood_Stump", "Deadwood_Branch"};
 inline constexpr int kCell = 8, kRegion = 128, kRadius = 768;
 inline constexpr std::size_t kMaxScatterCells = 65536;
 inline constexpr std::size_t kMeshTriangleBudget = 1500000;
 inline constexpr double kImpostorFloorPixels = 0.8;
-struct Site { double height=0, water=0, slope=0, forest=0, boreal=0; };
+struct Site {
+    double height=0, water=0, slope=0, forest=0, boreal=0;
+    ecology::Cell ecology{};
+    bool hasEcology=false;
+    // The ground the renderer actually draws here (material weights, 0..1).
+    // Trees do not stand on dune sand or bare rock whatever the climate says.
+    double sand=0, rock=0, marsh=0, snow=0;
+    bool hasMaterials=false;
+};
 struct Object {
     std::uint64_t id=0;
     double x=0,y=0,z=0;
@@ -25,8 +35,9 @@ struct Object {
 };
 struct Scatter {
     std::vector<Object> objects;
+    std::uint64_t revision=0;
     std::size_t waterTilesSkipped=0,sampled=0;
-    std::array<std::size_t,5> populations{};
+    std::array<std::size_t,kModels.size()> populations{};
 };
 // Metre-scale forest masses, clearings and local groves, independent of camera.
 double forestDensity(std::uint64_t seed,double x,double y);
@@ -36,6 +47,18 @@ struct ScatterBounds {
     std::int64_t minX=0,minY=0,maxX=0,maxY=0; // half-open world-metre bounds
     auto operator<=>(const ScatterBounds&) const = default;
     [[nodiscard]] std::size_t cells() const;
+};
+struct ScatterBoundsHash {
+    std::size_t operator()(const ScatterBounds& r) const noexcept {
+        std::uint64_t h=0x9e3779b97f4a7c15ULL;
+        for (const auto v:{r.minX,r.minY,r.maxX,r.maxY}) {
+            auto x=std::uint64_t(v)+h;
+            x=(x^(x>>30))*0xbf58476d1ce4e5b9ULL;
+            x=(x^(x>>27))*0x94d049bb133111ebULL;
+            h=x^(x>>31);
+        }
+        return std::size_t(h);
+    }
 };
 Scatter scatter(std::uint64_t seed,ScatterBounds bounds,double width,double height,
                 const LandTest& land,const SiteSample& sample);

@@ -1,0 +1,55 @@
+{
+  "id": "ph_rocks_ground_05",
+  "runtime_size": 2048,
+  "runtime_files": {
+    "albedo": "ph_rocks_ground_05_albedo.png",
+    "normal": "ph_rocks_ground_05_normal.png",
+    "properties": "ph_rocks_ground_05_properties.png"
+  },
+  "properties_channels": {
+    "r": "ao",
+    "g": "roughness",
+    "b": "height",
+    "a": "mask"
+  },
+  "mip_steps": [
+    2,
+    4,
+    8,
+    16
+  ],
+  "height_range_before_stretch": [
+    63.75,
+    255.0
+  ],
+  "had": {
+    "ao": true,
+    "rough": true,
+    "displacement": true,
+    "mask": false
+  },
+  "source": {
+    "site": "polyhaven",
+    "asset_id": "rocks_ground_05",
+    "asset_url": "https://polyhaven.com/a/rocks_ground_05",
+    "license": "CC0",
+    "authors": [
+      "Rob Tuytel"
+    ],
+    "attribution_required": false,
+    "original_physical_metres": [
+      3.0,
+      3.0
+    ],
+    "runtime_world_scale": 3.0,
+    "resolution": "2k",
+    "files": {
+      "diffuse": "ph_rocks_ground_05_diffuse.png",
+      "normal": "ph_rocks_ground_05_normal.png",
+      "displacement": "ph_rocks_ground_05_displacement.png",
+      "rough": "ph_rocks_ground_05_rough.png",
+      "ao": "ph_rocks_ground_05_ao.png"
+    }
+  },
+  "world_scale": 3.0
+}

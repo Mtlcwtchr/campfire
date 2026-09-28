@@ -10,7 +10,7 @@ struct WorldPreparation {
     SurfaceReconstruction surface;
     ScenePlacement placement;
     explicit WorldPreparation(WorldBuilder::Snapshot snapshot)
-        : world(std::move(snapshot)), surface(world), placement(world) {}
+        : world(std::move(snapshot)), surface(world), placement(world, ScenePlacement::Limits::streaming()) {}
 };
 
 class WorldSystem {

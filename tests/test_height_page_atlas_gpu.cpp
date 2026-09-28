@@ -779,7 +779,7 @@ TEST(height_atlas_gpu_water_fragment_preserves_explicit_channel_when_coarse_page
     checkPageSurfaceGpu(true,true);
 }
 
-TEST(terrain_material_border_does_not_amplify_slope_rotation_far_from_origin) {
+TEST(terrain_material_border_uses_continuous_value_noise_at_world_coordinates) {
     Gpu gpu;
     CHECK(gpu.ready);
     if (!gpu.ready) return;
@@ -831,20 +831,131 @@ TEST(terrain_material_border_does_not_amplify_slope_rotation_far_from_origin) {
         const auto* pixels = static_cast<const Uint8*>(SDL_MapGPUTransferBuffer(gpu.device.handle(), transfer.get(), false));
         CHECK(pixels != nullptr);
         if (!pixels) return;
-        int largestChange = 0;
-        bool isotropicUnchanged = true;
+        int boundaryJump = 0, low = 255, high = 0;
+        bool matchesValueNoise = true;
         for (Uint32 x = 0; x < width; ++x) {
-            largestChange = std::max(largestChange, std::abs(int(pixels[x * 4]) - int(pixels[x * 4 + 1])));
-            isotropicUnchanged = isotropicUnchanged && pixels[x * 4 + 2] == pixels[x * 4 + 3];
+            matchesValueNoise = matchesValueNoise && pixels[x * 4] == pixels[x * 4 + 1];
+            boundaryJump = std::max(boundaryJump, std::abs(int(pixels[x * 4 + 2]) - int(pixels[x * 4 + 3])));
+            low = std::min(low, int(pixels[x * 4]));
+            high = std::max(high, int(pixels[x * 4]));
         }
         SDL_UnmapGPUTransferBuffer(gpu.device.handle(), transfer.get());
-        // A milliradian turn must not sweep the noise across hundreds of metres.
-        // Allow UNORM readback and float-coordinate rounding at 300 km.
-        if (largestChange > 8)
-            std::cerr << "border at " << origin[0] << ',' << origin[1]
-                      << " changes by " << largestChange << "/255 on a 0.001 rad turn\n";
-        CHECK(largestChange <= 8);
-        CHECK(isotropicUnchanged);
+        CHECK(matchesValueNoise);
+        CHECK(boundaryJump <= 2); // no lattice seam, including negative/far coordinates
+        CHECK(high - low > 32); // real variation, not a constant mask
+    }
+}
+
+TEST(terrain_material_all_pairs_lerp_multiscale_noise_without_slope_or_height_streaks) {
+    Gpu gpu;
+    CHECK(gpu.ready);
+    if (!gpu.ready) return;
+    SDL_GPUTextureCreateInfo info{};
+    info.type = SDL_GPU_TEXTURETYPE_2D_ARRAY;
+    info.format = engine::Device::kColourFormat;
+    info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+    info.width = info.height = 64;
+    info.layer_count_or_depth = 6; info.num_levels = 7;
+    auto map = gpu.device.makeTexture(info);
+    CHECK(bool(map));
+    if (!map) return;
+    engine::Device::Uploader upload(gpu.device);
+    for (int layer = 0; layer < 6; ++layer) {
+        for (int mip = 0, side = 64; mip < 7; ++mip, side /= 2) {
+            // Deliberate stripes and different mip heights must not leak into
+            // the transition, even through a steep triplanar projection.
+            std::vector<std::array<Uint8, 4>> pixels(side * side);
+            for (int y = 0; y < side; ++y) for (int x = 0; x < side; ++x)
+                pixels[y * side + x] = {128, 128, Uint8((x + layer + mip) % 2 ? 255 : 0), 255};
+            CHECK(upload.refillRegion(map.get(), pixels.data(), 0, 0, side, side, 4, layer, mip));
+        }
+    }
+    CHECK(upload.finish());
+    SDL_GPUSamplerCreateInfo samplerInfo{};
+    samplerInfo.min_filter = samplerInfo.mag_filter = SDL_GPU_FILTER_LINEAR;
+    samplerInfo.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_LINEAR;
+    samplerInfo.address_mode_u = samplerInfo.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+    samplerInfo.max_lod = 6;
+    auto sampler = gpu.device.makeSampler(samplerInfo);
+    const std::array<SDL_GPUTextureSamplerBinding, 4> bindings{{
+        {map.get(), sampler.get()}, {map.get(), sampler.get()},
+        {map.get(), sampler.get()}, {map.get(), sampler.get()}}};
+    info.type = SDL_GPU_TEXTURETYPE_2D;
+    info.usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
+    info.layer_count_or_depth = info.num_levels = 1;
+    auto target = gpu.device.makeTexture(info);
+    engine::PipelineWanted wanted;
+    wanted.shaderFile = "terrain_material_probe.hlsl";
+    wanted.vertexEntry = "TerrainMaterialProbeVS"; wanted.fragmentEntry = "TerrainMaterialProbePS";
+    wanted.depthTest = wanted.depthWrite = false;
+    auto pipeline = gpu.device.makePipeline(wanted);
+    if (!pipeline) std::cerr << gpu.device.error() << '\n';
+    CHECK(bool(target) && bool(pipeline) && bool(sampler));
+    if (!target || !pipeline || !sampler) return;
+    const auto draw = [&](int a, int b, float slope, float footprint, float rotation, float bias) {
+        std::array<Uint8, 64 * 64 * 4> pixels{};
+        auto* commands = SDL_AcquireGPUCommandBuffer(gpu.device.handle());
+        CHECK(commands != nullptr);
+        if (!commands) return pixels;
+        engine::Scene scene{};
+        scene.camera[0] = 47.3f; scene.camera[1] = -28.7f;
+        scene.extra[0] = 21; scene.extra[1] = footprint; scene.extra[2] = rotation;
+        scene.parameters[20][0] = float(a); scene.parameters[20][1] = float(b);
+        scene.parameters[20][2] = slope; scene.parameters[20][3] = bias;
+        for (int i = 0; i < 6; ++i) {
+            scene.table[i][0] = 7.0f; scene.table[i][1] = 0.2f + float(i) * 0.01f;
+            scene.table[i][2] = 0.15f; scene.table[i][3] = 3.0f + float(i);
+        }
+        SDL_PushGPUFragmentUniformData(commands, 0, &scene, sizeof(scene));
+        const std::array<float, 16> own{};
+        SDL_PushGPUFragmentUniformData(commands, 1, own.data(), sizeof(own));
+        SDL_GPUColorTargetInfo colour{};
+        colour.texture = target.get();
+        colour.load_op = SDL_GPU_LOADOP_CLEAR; colour.store_op = SDL_GPU_STOREOP_STORE;
+        auto* render = SDL_BeginGPURenderPass(commands, &colour, 1, nullptr);
+        CHECK(render != nullptr);
+        if (!render) { SDL_CancelGPUCommandBuffer(commands); return pixels; }
+        SDL_BindGPUGraphicsPipeline(render, pipeline.get());
+        SDL_BindGPUFragmentSamplers(render, 0, bindings.data(), Uint32(bindings.size()));
+        SDL_DrawGPUPrimitives(render, 3, 1, 0, 0);
+        SDL_EndGPURenderPass(render);
+        CHECK(gpu.device.submitFrame(commands));
+        CHECK(gpu.device.readTexture(target.get(), pixels.data(), 64, 64));
+        return pixels;
+    };
+    for (int a = 0; a < 6; ++a) for (int b = a + 1; b < 6; ++b) {
+        for (const float footprint : {0.08f, 1.5f, 8.0f}) for (const float angle : {0.0f, 0.7f}) {
+            const auto flat = draw(a, b, 0.0f, footprint, angle, 0.0f);
+            const auto slope = draw(a, b, 3.0f, footprint, angle, 0.0f);
+            int error = 0, slopeChange = 0, low = 255, high = 0, blended = 0;
+            for (std::size_t p = 0; p < flat.size(); p += 4) {
+                error = std::max(error, std::abs(int(flat[p]) - int(flat[p + 1])));
+                error = std::max(error, std::abs(int(slope[p]) - int(slope[p + 1])));
+                slopeChange = std::max(slopeChange, std::abs(int(flat[p]) - int(slope[p])));
+                low = std::min(low, int(flat[p])); high = std::max(high, int(flat[p]));
+                blended += flat[p] > 16 && flat[p] < 239;
+            }
+            if (error > 1 || slopeChange > 1) {
+                std::cerr << "Organic pair=" << a << ',' << b << " pixel=" << footprint
+                          << " error=" << error << " slope change=" << slopeChange << " row32(actual/expected):";
+                for (int x = 0; x < 64; x += 6) std::cerr << ' ' << int(flat[(32 * 64 + x) * 4]) << '/' << int(flat[(32 * 64 + x) * 4 + 1]);
+                std::cerr << '\n';
+            }
+            CHECK(error <= 1);
+            CHECK(slopeChange <= 1);
+            CHECK(blended > 64); // a soft transition band, not a binary noisy contour
+            // No intrusion into pure interiors - where the 64 px window is
+            // wider than the metre-scale band (at 0.08 m/px it spans 5 m).
+            if (footprint >= 1.0f) { CHECK_EQ(low, 0); CHECK_EQ(high, 255); }
+        }
+        const auto before = draw(a, b, 3.0f, 0.08f, 0.7f, -0.00001f);
+        const auto after = draw(a, b, 3.0f, 0.08f, 0.7f, 0.00001f);
+        int swapJump = 0;
+        for (int y = 0; y < 64; ++y) {
+            const int p = (y * 64 + 32) * 4; // top/under swaps at this column
+            swapJump = std::max(swapJump, std::abs(int(before[p]) - int(after[p])));
+        }
+        CHECK(swapJump <= 1);
     }
 }
 
@@ -1058,7 +1169,22 @@ TEST(terrain_materials_preserve_identity_channels_and_normals_across_zoom) {
                     CHECK(std::abs(actual[0]-140)<=1);CHECK(std::abs(actual[1]-102)<=1);
                     CHECK(std::abs(actual[2]-64)<=1);CHECK_EQ(actual[3],255);
                 }
-                if (mode == 5 || mode == 7 || mode >= 11) {
+                if (mode == 5 && footprint > 3.0f * 0.35f) {
+                    // Unresolved Perlin must converge to the noise-free blend,
+                    // not preserve a subpixel pattern (and alias on zoom-out).
+                    const float width = 0.2f * 0.62f; // fixture's grass/rock profile
+                    const float u = (0.04f + width) / (2.0f * width);
+                    const float mix = u * u * (3.0f - 2.0f * u);
+                    const std::array<int, 4> mean{
+                        int(std::lround(140 + (48 - 140) * mix)),
+                        int(std::lround(128 + (112 - 128) * mix)),
+                        int(std::lround(120 + (36 - 120) * mix)), int(std::lround(255 * mix))};
+                    for (int i = 0; i < 4; ++i) {
+                        CHECK(actual[i] >= std::min(reference[i], mean[i]) - 1);
+                        CHECK(actual[i] <= std::max(reference[i], mean[i]) + 1);
+                        if (footprint >= 3.0f) CHECK(std::abs(actual[i] - mean[i]) <= 1);
+                    }
+                } else if (mode == 5 || mode == 7 || mode >= 11) {
                     for (int i = 0; i < 4; ++i) {
                         const int tolerance = mode == 5 ? 1 : 3; // lighting/haze, not repaint
                         if (std::abs(actual[i] - reference[i]) > tolerance)
@@ -1159,10 +1285,10 @@ TEST(terrain_materials_preserve_identity_channels_and_normals_across_zoom) {
                         std::cout << "material contrast mode=" << mode << " layer=" << layer
                                   << " slope=" << slope << " pixel=" << footprint
                                   << " cv=" << contrast << '\n';
-                    // Mean-colour stability alone accepted a completely flat fill.
-                    // Grass, soil, sand, rock and mud must retain visible texture
-                    // throughout the playable zoom; clean snow is intentionally quiet.
-                    if (mode == 9 && layer != 5 && footprint >= 0.35f) {
+                    // Preserve physical close-up detail, not a minimum amount
+                    // of noise at every distance. The macro-band regression
+                    // below checks that unresolved grain does not come back.
+                    if (mode == 9 && layer != 5 && footprint <= 0.08f) {
                         if (contrast < 0.025)
                             std::cerr << materials[layer] << " lost texture at pixel=" << footprint
                                       << " slope=" << slope << " contrast=" << contrast << '\n';
@@ -1194,6 +1320,98 @@ TEST(terrain_materials_preserve_identity_channels_and_normals_across_zoom) {
             }
         }
     }
+}
+
+TEST(terrain_material_macro_bands_do_not_reintroduce_unresolved_grain) {
+    Gpu gpu;
+    CHECK(gpu.ready);
+    if (!gpu.ready) return;
+    SDL_GPUTextureCreateInfo info{};
+    info.type=SDL_GPU_TEXTURETYPE_2D_ARRAY;
+    info.format=engine::Device::kColourFormat;
+    info.usage=SDL_GPU_TEXTUREUSAGE_SAMPLER;
+    info.width=info.height=64;
+    info.layer_count_or_depth=6;info.num_levels=7;
+    std::array<engine::Texture,3> maps;
+    engine::Device::Uploader upload(gpu.device);
+    for (int map=0;map<3;++map) {
+        maps[map]=gpu.device.makeTexture(info);
+        CHECK(bool(maps[map]));
+        if (!maps[map]) return;
+        for (int layer=0;layer<6;++layer) for (int mip=0,side=64;mip<7;++mip,side/=2) {
+            std::vector<std::array<Uint8,4>> pixels(std::size_t(side*side));
+            for (int y=0;y<side;++y) for (int x=0;x<side;++x) {
+                const bool light=((x+y)&1)!=0;
+                auto& p=pixels[std::size_t(y)*std::size_t(side)+std::size_t(x)];
+                const Uint8 value=mip?128:light?224:32;
+                p=map==1?std::array<Uint8,4>{Uint8(mip?128:light?208:48),128,218,255}:
+                    std::array<Uint8,4>{value,value,value,255};
+            }
+            CHECK(upload.refillRegion(maps[map].get(),pixels.data(),0,0,side,side,4,layer,mip));
+        }
+    }
+    CHECK(upload.finish());
+    SDL_GPUSamplerCreateInfo samplerInfo{};
+    samplerInfo.min_filter=samplerInfo.mag_filter=SDL_GPU_FILTER_LINEAR;
+    samplerInfo.mipmap_mode=SDL_GPU_SAMPLERMIPMAPMODE_LINEAR;
+    samplerInfo.address_mode_u=samplerInfo.address_mode_v=SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+    samplerInfo.max_lod=6;
+    auto sampler=gpu.device.makeSampler(samplerInfo);
+    // Shadow sampling is disabled by Scene; bind a valid array in its slot too.
+    const std::array<SDL_GPUTextureSamplerBinding,4> bindings{{
+        {maps[0].get(),sampler.get()},{maps[1].get(),sampler.get()},
+        {maps[2].get(),sampler.get()},{maps[0].get(),sampler.get()}}};
+    info.type=SDL_GPU_TEXTURETYPE_2D;
+    info.usage=SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
+    info.layer_count_or_depth=info.num_levels=1;
+    auto target=gpu.device.makeTexture(info);
+    engine::PipelineWanted wanted;
+    wanted.shaderFile="terrain_material_probe.hlsl";
+    wanted.vertexEntry="TerrainMaterialProbeVS";wanted.fragmentEntry="TerrainMaterialProbePS";
+    wanted.depthTest=wanted.depthWrite=false;
+    auto pipeline=gpu.device.makePipeline(wanted);
+    CHECK(bool(target) && bool(pipeline) && bool(sampler));
+    if (!target || !pipeline || !sampler) return;
+    const auto draw=[&](int mode,float footprint,float rotation) {
+        std::array<Uint8,64*64*4> pixels{};
+        auto* commands=SDL_AcquireGPUCommandBuffer(gpu.device.handle());
+        CHECK(commands!=nullptr);
+        if (!commands) return pixels;
+        engine::Scene scene{};
+        scene.camera[0]=47.3f;scene.camera[1]=-28.7f;
+        scene.extra[0]=float(mode);scene.extra[1]=footprint;scene.extra[2]=rotation;
+        scene.viewport[0]=scene.viewport[1]=64;
+        SDL_PushGPUFragmentUniformData(commands,0,&scene,sizeof(scene));
+        const std::array<float,16> own{};
+        SDL_PushGPUFragmentUniformData(commands,1,own.data(),sizeof(own));
+        SDL_GPUColorTargetInfo colour{};
+        colour.texture=target.get();colour.load_op=SDL_GPU_LOADOP_CLEAR;colour.store_op=SDL_GPU_STOREOP_STORE;
+        auto* render=SDL_BeginGPURenderPass(commands,&colour,1,nullptr);
+        CHECK(render!=nullptr);
+        if (!render) { SDL_CancelGPUCommandBuffer(commands);return pixels; }
+        SDL_BindGPUGraphicsPipeline(render,pipeline.get());
+        SDL_BindGPUFragmentSamplers(render,0,bindings.data(),Uint32(bindings.size()));
+        SDL_DrawGPUPrimitives(render,3,1,0,0);
+        SDL_EndGPURenderPass(render);
+        CHECK(gpu.device.submitFrame(commands));
+        CHECK(gpu.device.readTexture(target.get(),pixels.data(),64,64));
+        return pixels;
+    };
+    for (int mode:{18,19,20}) for (float footprint:{0.125f,0.25f,0.5f}) for (float angle:{0.0f,0.7f}) {
+        const auto pixels=draw(mode,footprint,angle);
+        int low=255,high=0;
+        for (std::size_t p=0;p<pixels.size();p+=4) {
+            low=std::min(low,int(pixels[p]));high=std::max(high,int(pixels[p]));
+        }
+        if (high-low>3) std::cerr<<"macro grain mode="<<mode<<" footprint="<<footprint<<" range="<<high-low<<'\n';
+        CHECK(high-low<=3);
+    }
+    const auto near=draw(18,0.001f,0.0f);
+    int low=255,high=0;
+    for (std::size_t p=0;p<near.size();p+=4) {
+        low=std::min(low,int(near[p]));high=std::max(high,int(near[p]));
+    }
+    CHECK(high-low>20); // preserve actual close-up texture, don't replace it by a flat fill
 }
 
 TEST(terrain_material_array_generates_mip_tail_down_to_one_texel) {

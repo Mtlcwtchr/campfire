@@ -40,7 +40,7 @@ TEST(scene_scatter_rectangles_keep_exact_half_open_bounds_and_stable_objects) {
             return forest(x,y);
         });
         std::vector<Object> expected;
-        std::array<std::size_t,5> counts{};
+        std::array<std::size_t,kModels.size()> counts{};
         for (const auto& object:full.objects)
             if (object.x>=bounds.minX && object.x<bounds.maxX &&
                 object.y>=bounds.minY && object.y<bounds.maxY) {
@@ -88,10 +88,10 @@ TEST(scene_scatter_is_repeatable_and_models_have_stable_positions) {
     const auto b=scatter(42,4,4,5000,5000,land,forest);
     CHECK(!a.objects.empty());CHECK_EQ(a.objects,b.objects);
     CHECK(a.objects.size()<=std::size_t(2*kRadius/kCell)*(2*kRadius/kCell));
-    std::array<std::size_t,5> counts{};
+    std::array<std::size_t,kModels.size()> counts{};
     for (const auto& o:a.objects) {
         CHECK(o.x>=0 && o.y>=0 && o.x<5000 && o.y<5000);
-        CHECK(o.scale>=0.75 && o.scale<=1.4);CHECK(o.model<5);
+        CHECK(o.scale>=0.75 && o.scale<=1.4);CHECK(o.model<kModels.size());
         ++counts[o.model];
     }
     for (const auto count:counts) CHECK(count>0);
@@ -107,6 +107,16 @@ TEST(scene_scatter_neighbouring_windows_do_not_shuffle_instances) {
     std::size_t common=0;
     for (const auto& o:b.objects) if (byId.contains(o.id)) { CHECK(o==byId.at(o.id));++common; }
     CHECK(common>100);
+}
+
+TEST(scene_deadwood_is_present_on_flat_forest_ground_but_not_open_or_steep_land) {
+    const auto wooded=scatter(42,8,8,5000,5000,land,
+        [](double,double){return Site{100,0,0,1,0.4};});
+    for (std::size_t model=5;model<kModels.size();++model) CHECK(wooded.populations[model]>10);
+    for (const Site site:std::array<Site,3>{{{100,0,0,0,0},{100,0,0.6,1,0},{0,1,0,1,0}}}) {
+        const auto result=scatter(42,8,8,5000,5000,land,[&](double,double){return site;});
+        for (std::size_t model=5;model<kModels.size();++model) CHECK_EQ(result.populations[model],0u);
+    }
 }
 TEST(scene_scatter_open_water_skips_all_expensive_queries) {
     std::size_t samples=0,maskCalls=0;

@@ -1,0 +1,56 @@
+{
+  "id": "ph_mud_cracked_dry_riverbed_002",
+  "runtime_size": 2048,
+  "runtime_files": {
+    "albedo": "ph_mud_cracked_dry_riverbed_002_albedo.png",
+    "normal": "ph_mud_cracked_dry_riverbed_002_normal.png",
+    "properties": "ph_mud_cracked_dry_riverbed_002_properties.png"
+  },
+  "properties_channels": {
+    "r": "ao",
+    "g": "roughness",
+    "b": "height",
+    "a": "mask"
+  },
+  "mip_steps": [
+    2,
+    4,
+    8,
+    16
+  ],
+  "height_range_before_stretch": [
+    0.0286,
+    0.7131
+  ],
+  "had": {
+    "ao": true,
+    "rough": true,
+    "displacement": true,
+    "mask": false
+  },
+  "source": {
+    "site": "polyhaven",
+    "asset_id": "mud_cracked_dry_riverbed_002",
+    "asset_url": "https://polyhaven.com/a/mud_cracked_dry_riverbed_002",
+    "license": "CC0",
+    "authors": [
+      "Dario Barresi",
+      "Dimitrios Savva"
+    ],
+    "attribution_required": false,
+    "original_physical_metres": [
+      2.0,
+      2.0
+    ],
+    "runtime_world_scale": 2.0,
+    "resolution": "2k",
+    "files": {
+      "diffuse": "ph_mud_cracked_dry_riverbed_002_diffuse.png",
+      "normal": "ph_mud_cracked_dry_riverbed_002_normal.png",
+      "displacement": "ph_mud_cracked_dry_riverbed_002_displacement.png",
+      "rough": "ph_mud_cracked_dry_riverbed_002_rough.png",
+      "ao": "ph_mud_cracked_dry_riverbed_002_ao.png"
+    }
+  },
+  "world_scale": 2.0
+}

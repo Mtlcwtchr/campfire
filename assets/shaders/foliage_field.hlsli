@@ -52,7 +52,7 @@ inline float foliageField(float x, float y, float footprint)
     // climate allows grass at all.
     const float country = (foliageNoise(x / 940.0 + 41.3, y / 940.0 - 27.9) - 0.5) *
                           (1.0 - smoothstep(240.0, 940.0, footprint));
-    return 0.5 + fine * 0.22 + medium * 0.38 + broad * 0.28 + country * 0.34;
+    return 0.5 + fine * 0.22 + medium * 0.38 + broad * 0.34 + country * 0.52;
 }
 
 // How well this ground suits vegetation.
@@ -106,7 +106,12 @@ inline float foliageDensity(float suitability, float field)
     // above three fifths there is as much as the ground can carry, and between
     // them is the edge of a clump. Clumps and bare patches both exist now, at
     // all four of the field's scales.
-    return saturate(suitability * 2.6) * smoothstep(0.20, 0.60, field);
+    // Value-noise octaves summed stay close to their mean (about +-0.1), so
+    // the old 0.2..0.6 threshold read as an even carpet with thin edges. The
+    // field is stretched first: thick islands, bare gaps and wide meadows
+    // where the kilometre octave is high.
+    const float spread = saturate(0.5 + (field - 0.5) * 2.6);
+    return saturate(suitability * 2.6) * smoothstep(0.28, 0.66, spread);
 }
 
 struct FoliageCommunity {

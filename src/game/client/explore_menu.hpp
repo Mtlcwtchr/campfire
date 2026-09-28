@@ -26,6 +26,7 @@
 #include <utility>
 #include <vector>
 
+#include "game/client/graphics_panel.hpp"
 #include "game/generation/world_map_gen.hpp"
 #include "game/content/ground_materials.hpp"
 #include "game/world/environment.hpp"
@@ -139,10 +140,43 @@ public:
     bool dirty() const { return dirty_; }
     void draw(SDL_Renderer* into, int width, int height);
 
+    // The draw distance slider on the status strip: how far the perspective
+    // view draws, and where the distance fog becomes opaque. Logarithmic, so
+    // a pixel of the track is the same fraction of the distance at both ends.
+    static constexpr double kMinDrawDistance = 2000, kMaxDrawDistance = 60000;
+    double drawDistance() const { return double(graphics_.drawDistanceKm) * 1000.0; }
+    void drawDistance(double metres) {
+        const double clamped = std::clamp(metres, kMinDrawDistance, kMaxDrawDistance);
+        if (clamped != drawDistance()) { dirty_ = true; panelDirty_ = true; }
+        graphics_.drawDistanceKm = float(clamped / 1000.0);
+    }
+    // All graphics options (the draw distance above is one of them), edited
+    // by the F2 panel and handed to the renderer every frame.
+    game::GraphicsSettings& graphics() { return graphics_; }
+    const game::GraphicsSettings& graphics() const { return graphics_; }
+    GraphicsPanel& panel() { return panel_; }
+    bool panelVisible() const { return panelOpen_; }
+    void togglePanel() { panelOpen_ = !panelOpen_; panelDirty_ = true; dirty_ = true; }
+    // The pointer in panel pixels, filled by the explorer each frame; MenuPass
+    // repaints the panel when it changed or something else did.
+    ui::Input& panelInput() { return panelInput_; }
+    bool panelDirty() const { return panelDirty_; }
+    void panelPainted() { panelDirty_ = false; }
+    void panelChanged() { panelDirty_ = true; dirty_ = true; }
+    // The pointer over the menu picture, in its own pixels (the picture's top
+    // left is 0,0). True while the slider has it, so the camera does not.
+    bool pointer(float x, float y, bool down);
+    // Where the slider track is in the picture, for the pointer and a test.
+    static constexpr float kTrackLeft = 10, kTrackRight = 450, kTrackY = 94;
+    // Toolbar buttons on the status strip (top right of it).
+    static constexpr float kButtonY = 6, kButtonW = 108, kGraphicsButtonX = 226, kSceneButtonX = 340;
+    static double distanceAt(float x);
+    static float trackAt(double metres);
+
     // How big a picture it wants, in pixels.
     static constexpr int kWide = 460;
-    static constexpr int kHigh = 380;
-    static constexpr int kStatusHigh = 80;
+    static constexpr int kHigh = 404;
+    static constexpr int kStatusHigh = 104;
 
 private:
     void applyPreset(std::size_t index);
@@ -183,6 +217,12 @@ private:
     std::vector<std::string> inspectionLines_;
     std::string viewName_ = "map / ortho";
     std::string note_;
+    game::GraphicsSettings graphics_;
+    GraphicsPanel panel_;
+    ui::Input panelInput_;
+    bool panelOpen_ = false, panelDirty_ = true;
+    bool pointerWasDown_ = false;
+    bool dragging_ = false;
 };
 
 } // namespace client

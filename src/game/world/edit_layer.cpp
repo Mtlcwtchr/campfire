@@ -1,6 +1,7 @@
 #include "game/world/edit_layer.hpp"
 
 #include <cmath>
+#include <mutex>
 
 namespace world {
 namespace {

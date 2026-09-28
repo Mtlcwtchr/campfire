@@ -247,6 +247,30 @@ double directedSurfaceError(std::span<const Tri> samples, std::span<const Tri> t
     return worst;
 }
 
+// The same samples, averaged instead of maximised. For thinned foliage the
+// maximum is the gap to the nearest surviving blade - a number about spacing,
+// not about what the clump looks like once the survivors have grown to keep
+// its area. The mean says how far the surface moved on the whole.
+double directedMeanSurfaceError(std::span<const Tri> samples, std::span<const Tri> target,
+                                std::span<const float> positions) {
+    double total = 0, weight = 0;
+    TriangleGrid grid(target, positions);
+    for (const auto& triangle : samples) {
+        const Vector3 a = at(positions, triangle[0]);
+        const Vector3 b = at(positions, triangle[1]);
+        const Vector3 c = at(positions, triangle[2]);
+        const double area = 0.5 * length(cross(b - a, c - a));
+        const Vector3 samplePoints[]{
+                a, b, c, {(a.x + b.x + c.x) / 3, (a.y + b.y + c.y) / 3,
+                          (a.z + b.z + c.z) / 3}};
+        for (const auto& point : samplePoints) {
+            total += area * std::sqrt(grid.nearestSquared(point));
+            weight += area;
+        }
+    }
+    return weight > 0 ? total / weight : 0;
+}
+
 double surfaceError(std::span<const Tri> original, std::span<const Tri> simplified,
                     std::span<const float> positions) {
     if (original.empty() || simplified.empty()) return kInfinity;
@@ -468,7 +492,8 @@ Simplified simplifyLocked(const std::vector<Tri>& input, std::span<const float> 
                           std::size_t target, bool conservativeError,
                           std::span<const std::uint64_t> boundaryEdges,
                           std::span<const std::uint32_t> boundaryVertices,
-                          std::span<const std::uint32_t> geometricVertices) {
+                          std::span<const std::uint32_t> geometricVertices,
+                          bool rimQuadrics = false, bool travelError = true) {
     Simplified result;
     result.triangles = input;
     if (input.size() <= target) return result;
@@ -536,6 +561,40 @@ Simplified simplifyLocked(const std::vector<Tri>& input, std::span<const float> 
     // point is still part of the mixed-cut boundary and must be pinned; edge
     // locks alone would duplicate/move it and open a crack in the cut.
     locked.insert(boundaryVertices.begin(), boundaryVertices.end());
+
+    // An open edge nobody locked still carries the silhouette. Garland's edge
+    // quadric - the plane through the edge, perpendicular to its face - makes
+    // sliding along the surface cost what it costs the outline, so an open rim
+    // moves only when the error says it may instead of never.
+    if (rimQuadrics) {
+        std::unordered_map<std::uint64_t, std::uint32_t> uses;
+        for (const auto& t : input)
+            for (int e = 0; e < 3; ++e)
+                ++uses[geometricEdgeKey(geometricVertices, t[e], t[(e + 1) % 3])];
+        for (const auto& t : input) {
+            const Vector3 a = at(positions, t[0]), b = at(positions, t[1]), c = at(positions, t[2]);
+            const Vector3 normal = cross(b - a, c - a);
+            const double twice = length(normal);
+            if (twice <= 0) continue;
+            for (int e = 0; e < 3; ++e) {
+                const auto geometric = geometricEdgeKey(geometricVertices, t[e], t[(e + 1) % 3]);
+                if (uses[geometric] != 1 || rim.count(geometric)) continue;
+                const Vector3 p0 = at(positions, t[e]), p1 = at(positions, t[(e + 1) % 3]);
+                const Vector3 edge = p1 - p0;
+                const double edgeLength = length(edge);
+                if (edgeLength <= 0) continue;
+                Vector3 side = cross(edge, normal);
+                const double sideLength = length(side);
+                if (sideLength <= 0) continue;
+                side = {side.x / sideLength, side.y / sideLength, side.z / sideLength};
+                const double w = edgeLength * edgeLength;
+                for (const auto v : {t[e], t[(e + 1) % 3]}) {
+                    quadric[v].addPlane(side, -dot(side, p0), w);
+                    weight[v] += w * 0.5;
+                }
+            }
+        }
+    }
 
     // The local quadrics are merged at every collapse. The inherited error is
     // carried by the DAG edge, so rebuilding the local state from this
@@ -711,7 +770,7 @@ Simplified simplifyLocked(const std::vector<Tri>& input, std::span<const float> 
     // once the expensive steps are behind - and a level whose error equals its
     // parent's is a level no allowance can ever select.
     for (const auto v : survivors) {
-        if (conservativeError) result.error = std::max(result.error, displacement[v]);
+        if (conservativeError && travelError) result.error = std::max(result.error, displacement[v]);
         if (weight[v] <= 0) continue;
         const double squared = quadric[v].evaluate(localPosition.at(v));
         result.error = std::max(result.error, std::sqrt(std::max(0.0, squared) / weight[v]));
@@ -867,6 +926,131 @@ std::unordered_set<std::uint64_t> boundarySignature(std::span<const Tri> triangl
     return boundary;
 }
 
+// Foliage thinning, Nanite's "Preserve Area": remove a share of the group's
+// small disconnected pieces and grow the survivors about their own centres so
+// the total card area stays. Cards that touch anything locked stay exactly as
+// they are - a locked vertex is shared with a neighbouring group. Returns the
+// measured two-way distance between the group before and after.
+double thinCardsOf(std::vector<Tri>& triangles, ClusterDag& dag, std::vector<std::uint32_t>& geometricVertex,
+                   std::vector<std::uint32_t>& component,
+                   const std::unordered_set<std::uint32_t>& lockedGeometry,
+                   const std::unordered_set<std::uint32_t>& lockedVertices, const ClusterDagOptions& options,
+                   std::size_t target) {
+    if (triangles.size() <= target) return 0;
+    std::unordered_map<std::uint32_t, std::uint32_t> local;
+    std::vector<std::uint32_t> parent;
+    const auto idOf = [&](std::uint32_t geometric) {
+        const auto [it, fresh] = local.try_emplace(geometric, std::uint32_t(parent.size()));
+        if (fresh) parent.push_back(it->second);
+        return it->second;
+    };
+    const auto find = [&](std::uint32_t x) {
+        while (parent[x] != x) x = parent[x] = parent[parent[x]];
+        return x;
+    };
+    for (const auto& t : triangles) {
+        const auto a = idOf(geometricVertex[t[0]]), b = idOf(geometricVertex[t[1]]), c = idOf(geometricVertex[t[2]]);
+        parent[find(b)] = find(a);
+        parent[find(c)] = find(a);
+    }
+    std::unordered_map<std::uint32_t, std::vector<std::uint32_t>> pieces;
+    for (std::uint32_t i = 0; i < triangles.size(); ++i)
+        pieces[find(local.at(geometricVertex[triangles[i][0]]))].push_back(i);
+    struct Card {
+        std::vector<std::uint32_t> triangles;
+        double area = 0;
+        std::uint64_t order = 0;
+    };
+    std::vector<Card> cards;
+    for (auto& [root, members] : pieces) {
+        if (members.size() > options.cardTriangles) continue;
+        bool locked = false;
+        Card card;
+        std::uint32_t smallest = 0xffffffffu;
+        for (const auto i : members) {
+            const auto& t = triangles[i];
+            for (const auto v : t) {
+                locked = locked || lockedVertices.count(v) || lockedGeometry.count(geometricVertex[v]);
+                smallest = std::min(smallest, v);
+            }
+            const Vector3 a = at(dag.positions, t[0]), b = at(dag.positions, t[1]), c = at(dag.positions, t[2]);
+            card.area += 0.5 * length(cross(b - a, c - a));
+        }
+        if (locked || !(card.area > 0)) continue;
+        card.triangles = std::move(members);
+        // A fixed scramble, so which cards survive does not follow the order
+        // they were modelled in (which is usually along a branch).
+        std::uint64_t h = std::uint64_t(smallest) * 0x9E3779B97F4A7C15ull;
+        h ^= h >> 31;
+        card.order = h * 0xBF58476D1CE4E5B9ull;
+        cards.push_back(std::move(card));
+    }
+    if (cards.size() < 2) return 0;
+    std::sort(cards.begin(), cards.end(), [](const Card& a, const Card& b) { return a.order < b.order; });
+    // Remove only what the group needs to reach its target, and never more
+    // than the survival fraction allows in one level.
+    const auto maxRemoved = cards.size() - std::max<std::size_t>(1, std::size_t(std::ceil(double(cards.size()) * options.survival)));
+    const auto needed = triangles.size() - target;
+    std::size_t removedCards = 0, removedTriangles = 0;
+    while (removedCards < maxRemoved && removedTriangles < needed)
+        removedTriangles += cards[cards.size() - 1 - removedCards++].triangles.size();
+    if (removedCards == 0) return 0;
+    double all = 0, kept = 0;
+    for (std::size_t c = 0; c < cards.size(); ++c) {
+        all += cards[c].area;
+        if (c < cards.size() - removedCards) kept += cards[c].area;
+    }
+    const double grow = std::min(2.0, std::sqrt(all / std::max(kept, 1e-30)));
+
+    std::vector<char> drop(triangles.size(), 0);
+    for (std::size_t c = cards.size() - removedCards; c < cards.size(); ++c)
+        for (const auto i : cards[c].triangles) drop[i] = 1;
+    std::vector<Tri> out;
+    out.reserve(triangles.size() - removedTriangles);
+    std::vector<char> inCard(triangles.size(), 0);
+    for (std::size_t c = 0; c < cards.size() - removedCards; ++c) {
+        auto& card = cards[c];
+        Vector3 centre;
+        std::unordered_set<std::uint32_t> vertices;
+        for (const auto i : card.triangles)
+            for (const auto v : triangles[i]) vertices.insert(v);
+        for (const auto v : vertices) {
+            const auto p = at(dag.positions, v);
+            centre = {centre.x + p.x, centre.y + p.y, centre.z + p.z};
+        }
+        centre = {centre.x / double(vertices.size()), centre.y / double(vertices.size()),
+                  centre.z / double(vertices.size())};
+        // A grown card is a new surface: fresh vertices, and one fresh
+        // geometric identity per old one so attribute copies stay welded.
+        std::unordered_map<std::uint32_t, std::uint32_t> fresh, freshGeometry;
+        for (const auto v : vertices) {
+            const auto p = at(dag.positions, v);
+            const auto id = std::uint32_t(dag.sourceVertex.size());
+            dag.positions.push_back(float(centre.x + (p.x - centre.x) * grow));
+            dag.positions.push_back(float(centre.y + (p.y - centre.y) * grow));
+            dag.positions.push_back(float(centre.z + (p.z - centre.z) * grow));
+            dag.sourceVertex.push_back(dag.sourceVertex[v]);
+            const auto [g, made] = freshGeometry.try_emplace(geometricVertex[v], std::uint32_t(component.size()));
+            if (made) component.push_back(g->second);
+            geometricVertex.push_back(g->second);
+            fresh.emplace(v, id);
+        }
+        for (const auto i : card.triangles) {
+            inCard[i] = 1;
+            Tri t = triangles[i];
+            for (auto& v : t) v = fresh.at(v);
+            out.push_back(t);
+        }
+    }
+    for (std::uint32_t i = 0; i < triangles.size(); ++i)
+        if (!drop[i] && !inCard[i]) out.push_back(triangles[i]);
+    const double error = out.empty() ? kInfinity
+        : std::max(directedMeanSurfaceError(triangles, out, dag.positions),
+                   directedMeanSurfaceError(out, triangles, dag.positions));
+    triangles = std::move(out);
+    return std::isfinite(error) ? error : 0;
+}
+
 }   // namespace
 
 std::size_t ClusterDag::trianglesAt(std::size_t level) const {
@@ -937,9 +1121,13 @@ ClusterDag buildClusterDag(std::span<const float> positions, std::span<const std
     const auto vertices = positions.size() / 3;
     if (std::any_of(positions.begin(), positions.end(), [](float v) { return !std::isfinite(v); }))
         return dag;
-    auto remap = options.preserveSourceVertices ? std::vector<std::uint32_t>(vertices)
-                                               : weldPositions(positions, options.attributeKeys);
-    if (options.preserveSourceVertices)
+    const bool preserve = options.preserveSourceVertices && !options.exactFinestLevel;
+    // Normal/UV splits may disappear at coarse levels, but material copies
+    // must survive welding so the boundary locks can still distinguish them.
+    auto remap = preserve ? std::vector<std::uint32_t>(vertices)
+                          : options.exactFinestLevel ? weldPositions(positions, options.hardBoundaryKeys)
+                                                     : weldPositions(positions, options.attributeKeys);
+    if (preserve)
         for (std::uint32_t v = 0; v < vertices; ++v) remap[v] = v;
     if (remap.empty()) return dag;
     for (std::uint32_t v = 0; v < vertices; ++v)
@@ -950,6 +1138,8 @@ ClusterDag buildClusterDag(std::span<const float> positions, std::span<const std
         }
 
     std::vector<Tri> triangles;
+    // Which input triangle each level-0 triangle is, for exactFinestLevel.
+    std::vector<std::uint32_t> inputTriangle;
     triangles.reserve(indices.size() / 3);
     for (std::size_t i = 0; i + 2 < indices.size(); i += 3) {
         if (indices[i] >= vertices || indices[i + 1] >= vertices || indices[i + 2] >= vertices)
@@ -960,7 +1150,9 @@ ClusterDag buildClusterDag(std::span<const float> positions, std::span<const std
             continue;
         }
         triangles.push_back(t);
+        inputTriangle.push_back(std::uint32_t(i / 3));
     }
+
     if (triangles.empty()) return dag;
 
     std::vector<std::uint32_t> all(triangles.size());
@@ -1014,10 +1206,29 @@ ClusterDag buildClusterDag(std::span<const float> positions, std::span<const std
             manifoldComponents.insert(findComponent(std::uint32_t(edge >> 32)));
     std::unordered_set<std::uint64_t> sourceSilhouette;
     for (const auto& [edge, uses] : sourceEdges)
-        if (uses.size() != 2 &&
+        if (options.lockSourceRims && uses.size() != 2 &&
             manifoldComponents.count(findComponent(std::uint32_t(edge >> 32))))
             sourceSilhouette.insert(edge);
 
+    // The caller's own vertices, added on demand behind the welded ones. Each
+    // gets a private geometric identity so the per-vertex tables stay aligned;
+    // none of them ever takes part in simplification.
+    std::unordered_map<std::uint32_t, std::uint32_t> exactVertex;
+    const auto exact = [&](std::uint32_t source) {
+        const auto [it, fresh] = exactVertex.try_emplace(source, std::uint32_t(dag.sourceVertex.size()));
+        if (fresh) {
+            dag.positions.insert(dag.positions.end(), &positions[std::size_t(source) * 3],
+                                 &positions[std::size_t(source) * 3] + 3);
+            dag.sourceVertex.push_back(source);
+            const auto geometric = std::uint32_t(component.size());
+            geometricVertex.push_back(geometric);
+            component.push_back(geometric);
+        }
+        return it->second;
+    };
+    // Levels in a row that removed under 5% of their triangles. Carrying a
+    // stalled group is only worth it while the level around it still moves.
+    std::size_t stalledLevels = 0;
     for (std::size_t level = 0; level < options.maxLevels && !parts.empty(); ++level) {
         dag.levels = level + 1;
         // Publish this level before simplifying it: a cluster's parent error is
@@ -1028,6 +1239,15 @@ ClusterDag buildClusterDag(std::span<const float> positions, std::span<const std
             cluster.indices.first = std::uint32_t(dag.indices.size());
             Bounds box;
             for (const auto t : parts[p]) {
+                if (level == 0 && options.exactFinestLevel) {
+                    const auto first = std::size_t(inputTriangle[t]) * 3;
+                    for (int c = 0; c < 3; ++c) {
+                        const auto v = exact(indices[first + c]);
+                        dag.indices.push_back(v);
+                        box.add(at(dag.positions, v));
+                    }
+                    continue;
+                }
                 for (const auto v : triangles[t]) {
                     dag.indices.push_back(v);
                     box.add(at(dag.positions, v));
@@ -1095,6 +1315,7 @@ ClusterDag buildClusterDag(std::span<const float> positions, std::span<const std
             for (const auto vertex : triangle) ++cornerUses[geometricVertex[vertex]];
         std::vector<std::uint32_t> insideUses(component.size(), 0);
         std::vector<std::uint32_t> touchedGeometry;
+        const bool carry = options.carryStalledGroups && stalledLevels < 3;
         for (const auto& group : gathered) {
             std::vector<Tri> merged;
             double inherited = 0;
@@ -1141,7 +1362,7 @@ ClusterDag buildClusterDag(std::span<const float> positions, std::span<const std
                 for (const auto use : allEdges[geometric])
                     if (!groupTriangles.count(use.triangle)) { outside = true; break; }
                 const auto componentOf = findComponent(std::uint32_t(geometric >> 32));
-                const bool currentOpen = allEdges[geometric].size() != 2 &&
+                const bool currentOpen = options.lockSourceRims && allEdges[geometric].size() != 2 &&
                                          manifoldComponents.count(componentOf) != 0;
                 const bool sourceOpen = sourceSilhouette.count(geometric) != 0;
                 std::sort(materials.begin(), materials.end());
@@ -1167,11 +1388,47 @@ ClusterDag buildClusterDag(std::span<const float> positions, std::span<const std
             std::vector<std::uint32_t> boundaryVertices(boundaryVerticesSet.begin(),
                                                          boundaryVerticesSet.end());
             const auto target = std::size_t(double(merged.size()) * options.survival);
-            const auto simplified =
-                    simplifyLocked(merged, dag.positions, std::max<std::size_t>(1, target),
-                                   options.conservativeError, boundaryEdges, boundaryVertices,
-                                   geometricVertex);
-            if (simplified.triangles.size() >= merged.size()) continue;   // nothing moved: a root
+            // A group that cannot coarsen now. Without carrying it becomes a
+            // root; with carrying its clusters go to the next level as they are,
+            // one float of error up, to be grouped with different neighbours.
+            const auto stalled = [&] {
+                if (!carry) return;
+                const auto group_ = groups++;
+                float parentError = upperFloat(inherited);
+                for (const auto p : group)
+                    parentError = std::max(parentError,
+                        std::nextafter(dag.clusters[published[p]].error,
+                                       std::numeric_limits<float>::infinity()));
+                for (const auto p : group) {
+                    dag.clusters[published[p]].parentError = parentError;
+                    dag.clusters[published[p]].replacedBy = group_;
+                    std::vector<std::uint32_t> subset;
+                    subset.reserve(parts[p].size());
+                    for (const auto t : parts[p]) {
+                        subset.push_back(std::uint32_t(coarser.size()));
+                        coarser.push_back(triangles[t]);
+                    }
+                    nextParts.push_back(std::move(subset));
+                    nextErrors.push_back(double(parentError));
+                    nextBorn.push_back(group_);
+                }
+            };
+            std::vector<Tri> input = merged;
+            double thinError = 0;
+            if (options.thinCards) thinError = thinCardsOf(input, dag, geometricVertex, component,
+                                                           edgeBoundaryGeometry, boundaryVerticesSet,
+                                                           options, target);
+            Simplified simplified;
+            if (input.size() <= std::max<std::size_t>(1, target)) {
+                simplified.triangles = input;
+            } else {
+                simplified = simplifyLocked(input, dag.positions, std::max<std::size_t>(1, target),
+                                            options.conservativeError, boundaryEdges, boundaryVertices,
+                                            geometricVertex, !options.lockSourceRims,
+                                            options.travelError);
+            }
+            simplified.error += thinError;
+            if (simplified.triangles.size() >= merged.size()) { stalled(); continue; }   // nothing moved
             // The local link/fold checks protect each collapse, but the group
             // is the actual watertightness contract. Reject any result whose
             // open-edge signature differs from the externally visible rim;
@@ -1181,13 +1438,31 @@ ClusterDag buildClusterDag(std::span<const float> positions, std::span<const std
             // internal cut fan to be retopologised; the source silhouette is
             // still locked by boundaryEdges. Closed/manifold components get
             // the stronger whole-signature check used by the mixed-cut gate.
-            bool touchesSourceSilhouette = false;
-            for (const auto edge : boundaryEdges)
-                if (sourceSilhouette.count(edge)) { touchesSourceSilhouette = true; break; }
-            if (!touchesSourceSilhouette &&
-                boundarySignature(merged, geometricVertex) !=
-                boundarySignature(simplified.triangles, geometricVertex))
-                continue;
+            if (options.lockSourceRims) {
+                bool touchesSourceSilhouette = false;
+                for (const auto edge : boundaryEdges)
+                    if (sourceSilhouette.count(edge)) { touchesSourceSilhouette = true; break; }
+                if (!touchesSourceSilhouette &&
+                    boundarySignature(merged, geometricVertex) !=
+                    boundarySignature(simplified.triangles, geometricVertex)) {
+                    stalled();
+                    continue;
+                }
+            } else {
+                // Open rims may move now; what may not is any edge the group
+                // shares with the rest of the level. Each must still be there.
+                const auto before = boundarySignature(merged, geometricVertex);
+                const auto after = boundarySignature(simplified.triangles, geometricVertex);
+                bool broken = false;
+                for (const auto edge : boundaryEdges)
+                    if (before.count(edge) && !after.count(edge)) {
+                        bool shared = false;
+                        for (const auto use : allEdges[edge])
+                            if (!groupTriangles.count(use.triangle)) { shared = true; break; }
+                        if (shared) { broken = true; break; }
+                    }
+                if (broken) { stalled(); continue; }
+            }
 
             const double error = std::max(inherited, simplified.error);
             const auto group_ = groups++;
@@ -1262,6 +1537,7 @@ ClusterDag buildClusterDag(std::span<const float> positions, std::span<const std
             dag.converged = true;
             break;   // every group was a root: nothing left to coarsen
         }
+        stalledLevels = double(coarser.size()) > double(triangles.size()) * 0.95 ? stalledLevels + 1 : 0;
         triangles = std::move(coarser);
         parts = std::move(nextParts);
         errorOf = std::move(nextErrors);
@@ -1270,6 +1546,20 @@ ClusterDag buildClusterDag(std::span<const float> positions, std::span<const std
     for (const auto& cluster : dag.clusters)
         if (double(cluster.error) >= double(cluster.parentError)) ++dag.dominated;
     return dag;
+}
+
+ClusterDagOptions naniteProfile() {
+    ClusterDagOptions options;
+    options.conservativeError = true;
+    options.travelError = false;
+    options.groupClusters = 16;
+    options.carryStalledGroups = true;
+    options.lockSourceRims = false;
+    options.thinCards = true;
+    options.cardTriangles = 64;
+    options.maxLevels = 32;
+    options.exactFinestLevel = true;
+    return options;
 }
 
 std::vector<std::uint32_t> cutAt(const ClusterDag& dag, double allowance) {

@@ -19,11 +19,15 @@ public:
     std::uint64_t version() const { return version_; }
     const generation::WorldMapData& worldMap() const { return map_; }
     const ClimateField& climate() const { return climate_; }
+    ecology::Store& ecology() const { return ecology_; }
     streaming::PageStore& pages() const { return pages_; }
     // HeightField caches are NOT shared: each querying thread gets its own field.
     HeightField field() const { return HeightField(&map_, map_.seed); }
     decor::Scatter scatter(int x, int y, int radiusMetres = decor::kRadius) const;
     decor::Scatter scatter(decor::ScatterBounds bounds) const;
+    decor::Scatter scatter(decor::ScatterBounds bounds, const ecology::Delta& delta) const;
+    decor::Scatter scatter(decor::ScatterBounds bounds, const ecology::Delta& delta, HeightField& query) const;
+    ecology::Cell ecologyAt(double x, double y, HeightField& field, const ecology::Delta& delta) const;
     struct Landmark { std::string name; core::WorldPos where; };
     const std::vector<Landmark>& landmarks() const { return landmarks_; }
     core::WorldPos startingPoint() const;
@@ -33,6 +37,7 @@ private:
     const generation::WorldMapData map_;
     streaming::HydrologyGraph hydrology_;
     ClimateField climate_;
+    mutable ecology::Store ecology_;
     mutable streaming::PageStore pages_; // destroyed first, joins its workers
     std::vector<Landmark> landmarks_;
     void findLandmarks();

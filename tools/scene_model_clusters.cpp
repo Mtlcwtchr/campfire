@@ -301,7 +301,8 @@ bool buildGrove(const std::filesystem::path& root, const std::string& name, cons
 bool buildSource(const std::filesystem::path& file, const Mesh& mesh) {
     const auto& finest = mesh.levels.front();
     const auto source = std::span<const std::uint32_t>(mesh.indices).subspan(finest.first, finest.count);
-    const auto asset = engine::geometry::buildSourceClusterAsset(mesh.positions, source);
+    const auto asset = engine::geometry::buildSourceClusterAsset(mesh.positions, source,
+                                                                 engine::geometry::naniteProfile());
     if (asset.empty()) {
         std::cerr << file.filename() << ": cannot build full source hierarchy\n";
         return false;
@@ -412,7 +413,8 @@ int main(int argc, char** argv) {
             continue;
         }
         auto asset =
-                engine::geometry::buildClusterAsset(mesh.positions, mesh.indices, mesh.levels, {},
+                engine::geometry::buildClusterAsset(mesh.positions, mesh.indices, mesh.levels,
+                                                    engine::geometry::naniteProfile(),
                                                     mesh.attributes, mesh.materials);
         if (!mesh.levels.empty()) chainCoarsest = mesh.levels.back().count / 3;
         // The shell, at a cell a twenty-fourth of the model across. It stands in

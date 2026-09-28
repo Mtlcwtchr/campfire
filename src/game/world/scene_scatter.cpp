@@ -114,22 +114,42 @@ Scatter scatter(std::uint64_t seed,ScatterBounds bounds,double width,double heig
                 site.height<=site.water+0.4 || site.height<0 || site.slope>1.8) continue;
             const double choice=random(),forest=std::clamp(site.forest,0.0,1.0);
             const double density=forestDensity(seed,x,y);
+            // What the ground is. Sand, bare rock, standing water and snow do
+            // not carry a wood; poor soil carries a thin one.
+            const double bare=site.hasMaterials
+                ? (1-smooth(0.20,0.55,site.sand))*(1-smooth(0.30,0.65,site.rock))*
+                  (1-smooth(0.35,0.75,site.marsh)*0.7)*(1-smooth(0.30,0.60,site.snow))
+                : 1.0;
+            const double soil=site.hasEcology ? 0.25+0.75*smooth(0.12,0.55,site.ecology.fertility) : 1.0;
             const double habitat=forest*(1-smooth(0.45,0.95,site.slope))*(1-smooth(1800,2400,site.height));
-            const double trees=habitat*0.94*density;
+            const double trees=(site.hasEcology ? site.ecology.canopy*0.94*(1-smooth(0.45,0.95,site.slope))
+                                                : habitat*0.94*density)*bare*soil;
             const double scrub=noise(seed^0x529du,x,y,40);
             // Favor the transition belt, not the empty centre of a clearing.
             // The independent scrub field still breaks that belt into patches.
             const double edge=smooth(0.04,0.2,density)*(1-smooth(0.45,0.8,density));
-            const double bushes=habitat*(0.006+0.12*edge)*smooth(0.25,0.75,scrub);
-            const double mushrooms=habitat*density*0.015*(1-smooth(0.25,0.5,site.slope));
+            const double bushes=(site.hasEcology ? site.ecology.shrubs*0.28 : habitat*(0.018+0.23*edge))
+                *smooth(0.25,0.75,scrub)*(0.35+0.65*bare);
+            const double mushrooms=(site.hasEcology ? site.ecology.canopy*site.ecology.moisture*
+                (0.01+site.ecology.deadwood*0.08) : habitat*density*0.028)*(1-smooth(0.25,0.5,site.slope))*bare;
             const double outcrop=noise(seed^0xe157u,x,y,112);
-            const double rocks=(0.004+0.05*smooth(0.45,0.8,outcrop))*(1-0.7*trees);
+            const double rocks=(0.004+0.05*smooth(0.45,0.8,outcrop))*(1-0.7*trees)*
+                (site.hasEcology ? (1-site.ecology.fertility*0.8)*(1+std::min(site.slope,1.0)*4) : 1)*
+                (site.hasMaterials ? 1+3*smooth(0.30,0.70,site.rock) : 1);
+            // Deadwood fills existing candidates, never adds another world
+            // traversal or changes a site's stable ID. Keep logs off cliffs.
+            const double deadwood=(site.hasEcology ? site.ecology.deadwood*0.2 : habitat*density*0.055)
+                *(1-smooth(0.10,0.30,site.slope))*bare;
             std::uint32_t model;
             if (choice<trees)
                 model=random()<std::clamp(site.boreal+0.18,0.0,1.0)?1:0;
             else if (choice<trees+bushes) model=2;
             else if (choice<trees+bushes+mushrooms) model=4;
             else if (choice<trees+bushes+mushrooms+rocks) model=3;
+            else if (choice<trees+bushes+mushrooms+rocks+deadwood) {
+                const double kind=(choice-trees-bushes-mushrooms-rocks)/deadwood;
+                model=kind<0.4?5:(kind<0.65?6:7);
+            }
             else continue;
             ++result.populations[model];
             result.objects.push_back({id,x,y,site.height-(model==3?0.25:0.08),

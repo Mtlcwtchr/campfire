@@ -65,13 +65,19 @@ public:
     // reads the same channels, and filled the first time a pass asks.
     TerrainPass(const engine::MeshCache& cache, std::vector<std::string> materials,
                 std::vector<std::string> materialMaps,
-                ClimateTextures& climate, const world::ClimateField& field, GpuTerrain* pages = nullptr);
+                ClimateTextures& climate, const world::ClimateField& field,
+                SDL_GPUTextureSamplerBinding shadow, GpuTerrain* pages = nullptr);
 
     engine::PassPlace setup(engine::Device& device, engine::RenderPipeline& into) override;
     bool anything(const engine::Frame& frame) const override;
     void collect(const engine::Frame& frame, engine::DrawQueue& queue) override;
+    // Graphics setting: start the material chains at name@2 (half resolution,
+    // a quarter of the memory) instead of the full-resolution base level.
+    void halfTextures(bool half) { halfTextures_ = half; }
 
 private:
+    bool halfTextures_ = false;
+    SDL_GPUTextureSamplerBinding shadow_{};
     GpuTerrain* pages_ = nullptr;
     const engine::MeshCache& cache_;
     std::vector<std::string> materialNames_;

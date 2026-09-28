@@ -93,7 +93,52 @@ struct ClusterDagOptions {
     // distance, not just distance to face planes. Plane quadrics alone report
     // zero for destructive coplanar collapses and do not bound silhouette loss.
     bool conservativeError = false;
+
+    // --- what separates this builder from Nanite's (tools/mesh_lab measures it)
+    //
+    // A group that cannot simplify is carried to the next level unchanged
+    // instead of becoming a root. Its neighbours change as the level around it
+    // coarsens, so a boundary locked this time is interior the next. Nanite
+    // never stops a group: its DAG always ends in a single root cluster.
+    // Carrying stops once three levels in a row remove under 5%.
+    bool carryStalledGroups = false;
+    // Lock open source rims (sheet edges, card outlines) as if they were group
+    // boundaries. Off, they are held by edge quadrics instead - planes through
+    // the edge, perpendicular to its face - and move only as far as the error
+    // allows, which is what lets a card or a rim coarsen at all.
+    bool lockSourceRims = true;
+    // Foliage: small disconnected pieces (cards, blades) are thinned by the
+    // survival fraction and the survivors grown about their own centre to keep
+    // the group's total card area - Nanite's "Preserve Area". The error is the
+    // measured two-way distance to what was there before.
+    bool thinCards = false;
+    // With conservativeError, also count how far each surviving vertex has
+    // TRAVELLED through its collapses. A vertex sliding within a plane travels
+    // an edge length and changes nothing on screen, so this bounds the wrong
+    // thing and holds a smooth rock at full detail until the error allowance
+    // exceeds its edge length. Off, the error is the measured two-way surface
+    // distance (plus the quadric residual), which is what a viewer sees.
+    bool travelError = true;
+    // Topology from positions alone; the finest level still exact. A faceted
+    // (flat-shaded) mesh has a separate copy of every vertex per face, so by
+    // attribute identity every triangle is an island and simplifying it can
+    // only delete triangles - holes. Welding by position for the build and
+    // then rewriting the finest level's clusters onto the caller's own
+    // vertices keeps close-up geometry bit for bit while the coarse levels,
+    // which are only drawn at a distance, simplify one connected surface.
+    // (Nanite reaches the same place with attribute "wedges" on welded
+    // positions.) Overrides preserveSourceVertices and attributeKeys, but
+    // still respects hardBoundaryKeys so material seams cannot be welded away.
+    bool exactFinestLevel = false;
+    // A piece at most this many triangles, touching no locked boundary, is a card.
+    std::size_t cardTriangles = 16;
 };
+
+// The build as Nanite's is tuned: groups of about sixteen, stalled groups
+// carried, rims held by quadrics rather than locks, cards thinned with their
+// area kept, error measured as surface distance rather than vertex travel.
+// Every DAG it makes ends in one root. tools/mesh_lab compares it with UE.
+[[nodiscard]] ClusterDagOptions naniteProfile();
 
 struct ClusterDag {
     // Welded vertices: the build needs shared positions to have shared indices,

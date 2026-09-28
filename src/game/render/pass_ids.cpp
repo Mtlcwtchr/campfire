@@ -14,6 +14,9 @@ const char* nameOf(Pass pass) {
         case Pass::Sprite:   return "sprite";
         case Pass::Menu:     return "menu";
         case Pass::Models:   return "models";
+        case Pass::Sky:      return "sky";
+        case Pass::Frustum:  return "frustum";
+        case Pass::FarTrees: return "far-trees";
     }
     return "?";
 }

@@ -42,6 +42,9 @@ public:
     }
 
     bool build(Device& device);
+    // Multisampling to build with: 1 or 4 (clamped to what the device supports).
+    // Must be set before build(); a pipeline cannot change it afterwards.
+    void samples(int count) { samples_ = count; }
 
     // How long one step of the world is. A tenth of a second by default, which
     // is this game's tick; anything that steps faster than the frames arrive is
@@ -125,6 +128,7 @@ private:
 #endif
     double held_ = -1;
     std::uint32_t stepsLastFrame_ = 0;
+    int samples_ = 4;
 };
 
 } // namespace engine

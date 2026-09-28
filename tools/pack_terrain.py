@@ -145,6 +145,10 @@ def chain(array, base, normal=False):
 
 
 def pack(material, size, quiet):
+    if material.get("source", {}).get("site") == "unreal":
+        if not quiet:
+            print("  %-24s managed by prepare_ue_assets.py; retaining UE maps" % material["id"])
+        return None
     folder = TERRAIN / material["group"]
     src = folder / "src"
     if not src.exists():

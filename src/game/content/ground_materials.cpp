@@ -22,12 +22,12 @@ std::vector<GroundMaterial> builtIn() {
         m.tearMetres = tearMetres;
         return m;
     };
-    return {one("grass", "Grass", "1", 2.4f, 0.34f, 0.30f, 3.4f),
-            one("dirt", "Mud", "1", 2.0f, 0.34f, 0.34f, 3.0f),
-            one("sand", "Sand", "1", 1.6f, 0.11f, 0.16f, 1.8f),
-            one("rock", "Ground", "5", 2.6f, 0.08f, 0.22f, 1.4f),
-            one("marsh", "Swamp", "1", 2.0f, 0.44f, 0.55f, 1.2f),
-            one("snow", "Snow", "1", 3.0f, 0.28f, 0.24f, 2.6f)};
+    return {one("grass", "Grass", "1", 2.0f, 0.34f, 0.30f, 3.4f),
+            one("dirt", "Mud", "1", 2.07f, 0.34f, 0.34f, 3.0f),
+            one("sand", "Sand", "1", 3.0f, 0.11f, 0.16f, 1.8f),
+            one("rock", "Ground", "5", 3.0f, 0.08f, 0.22f, 1.4f),
+            one("marsh", "Swamp", "1", 1.3f, 0.44f, 0.55f, 1.2f),
+            one("snow", "Snow", "1", 2.0f, 0.28f, 0.24f, 2.6f)};
 }
 
 } // namespace

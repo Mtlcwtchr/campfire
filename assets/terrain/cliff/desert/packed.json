@@ -1,0 +1,65 @@
+{
+  "id": "cliff_desert",
+  "runtime_size": 2048,
+  "runtime_files": {
+    "albedo": "cliff_desert_albedo.png",
+    "normal": "cliff_desert_normal.png",
+    "properties": "cliff_desert_properties.png"
+  },
+  "properties_channels": {
+    "r": "ao",
+    "g": "roughness",
+    "b": "height",
+    "a": "mask"
+  },
+  "mip_steps": [
+    2,
+    4,
+    8,
+    16
+  ],
+  "height_range_before_stretch": [
+    0.2196,
+    1.0
+  ],
+  "had": {
+    "ao": true,
+    "rough": true,
+    "displacement": true,
+    "mask": false
+  },
+  "source": {
+    "site": "ue-export",
+    "project": "AncientSettlement",
+    "license": "Original asset-pack licence (not CC0)",
+    "assets": {
+      "diffuse": "/Game/Namaqualand/Textures/T_cliff_side_diff_4k",
+      "normal": "/Game/Namaqualand/Textures/T_cliff_side_nor_dx_4k",
+      "ard": "/Game/Namaqualand/Textures/T_cliff_side_ard_4k"
+    },
+    "original_sizes": {
+      "diffuse": [
+        4096,
+        4096
+      ],
+      "normal": [
+        4096,
+        4096
+      ],
+      "ard": [
+        4096,
+        4096
+      ]
+    },
+    "runtime_world_scale": 4.5,
+    "resolution": "2048px",
+    "files": {
+      "diffuse": "cliff_desert_diffuse.png",
+      "normal": "cliff_desert_normal.png",
+      "ao": "cliff_desert_ao.png",
+      "rough": "cliff_desert_rough.png",
+      "displacement": "cliff_desert_displacement.png"
+    }
+  },
+  "world_scale": 4.5
+}

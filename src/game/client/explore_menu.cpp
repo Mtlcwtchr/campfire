@@ -1,6 +1,7 @@
 #include "game/client/explore_menu.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 
 #include "game/client/world_dials.hpp"
@@ -72,8 +73,17 @@ void ExploreMenu::applyPreset(std::size_t index) {
 }
 
 bool ExploreMenu::handle(const SDL_Event& event) {
-    if (event.type != SDL_EVENT_KEY_DOWN || event.key.repeat) return false;
+    if (event.type != SDL_EVENT_KEY_DOWN) return false;
     const SDL_Keycode key = event.key.key;
+    // The draw distance steps by about a sixth, and repeats while held.
+    if (key == SDLK_COMMA || key == SDLK_PERIOD) {
+        drawDistance(drawDistance() * (key == SDLK_PERIOD ? 1.18 : 1.0 / 1.18));
+        return true;
+    }
+    if (event.key.repeat) return false;
+    // Graphics settings window and the scene view (freeze the cull camera).
+    if (key == SDLK_O) { togglePanel(); return true; }
+    if (key == SDLK_F) { panel_.sceneViewToggled = true; return true; }
     if ((event.key.mod & SDL_KMOD_SHIFT) && event.key.scancode>=SDL_SCANCODE_1 && event.key.scancode<=SDL_SCANCODE_8) {
         if (stagesAvailable_) terrainStage_=generation::TerrainStage(event.key.scancode-SDL_SCANCODE_1);
         else note_="This legacy world has no saved generation stages";
@@ -246,6 +256,35 @@ void ExploreMenu::built(double seconds) {
     dirty_ = true;
 }
 
+double ExploreMenu::distanceAt(float x) {
+    const double t = std::clamp(double(x - kTrackLeft) / double(kTrackRight - kTrackLeft), 0.0, 1.0);
+    return kMinDrawDistance * std::pow(kMaxDrawDistance / kMinDrawDistance, t);
+}
+
+float ExploreMenu::trackAt(double metres) {
+    const double t = std::log(std::clamp(metres, kMinDrawDistance, kMaxDrawDistance) / kMinDrawDistance) /
+                     std::log(kMaxDrawDistance / kMinDrawDistance);
+    return float(kTrackLeft + t * (kTrackRight - kTrackLeft));
+}
+
+bool ExploreMenu::pointer(float x, float y, bool down) {
+    const bool pressed = down && !pointerWasDown_;
+    pointerWasDown_ = down;
+    // Two toolbar buttons on the status strip, for a mouse-only person.
+    if (pressed && y >= kButtonY && y < kButtonY + 14) {
+        if (x >= kGraphicsButtonX && x < kGraphicsButtonX + kButtonW) { togglePanel(); dirty_ = true; return true; }
+        if (x >= kSceneButtonX && x < kSceneButtonX + kButtonW) { panel_.sceneViewToggled = true; dirty_ = true; return true; }
+    }
+    if (!down) { const bool was = dragging_; dragging_ = false; return was; }
+    // Grabbed anywhere on the slider's row, then held until released even if
+    // the pointer leaves it: a drag that drops when it strays is no slider.
+    if (!dragging_ && !(x >= kTrackLeft - 6 && x <= kTrackRight + 6 && y >= kTrackY - 9 && y <= kTrackY + 9))
+        return false;
+    dragging_ = true;
+    drawDistance(distanceAt(x));
+    return true;
+}
+
 void ExploreMenu::draw(SDL_Renderer* into, int width, int height) {
     dirty_ = false;
     SDL_SetRenderDrawBlendMode(into, SDL_BLENDMODE_NONE);
@@ -261,7 +300,30 @@ void ExploreMenu::draw(SDL_Renderer* into, int width, int height) {
         generation::kTerrainStageNames[std::size_t(terrainStage_)] : "Final (legacy; stages unavailable)"),220,225,240);
     text(into,10,36,std::string("Display: ") + world::kMapTitles[std::size_t(mapView_)],190,210,230);
     text(into,10,52,"V view   M display   0 natural",150,150,160);
-    text(into,10,64,"Shift+1..8 stage   Tab settings",150,150,160);
+    text(into,10,64,"Shift+1..8 stage   Tab world   O graphics   F scene view",150,150,160);
+    {
+        char said[64];
+        std::snprintf(said, sizeof(said), "Draw distance / fog: %.1f km   , .", drawDistance() / 1000.0);
+        text(into, 10, 78, said, 220, 225, 240);
+        const SDL_FRect track{kTrackLeft, kTrackY - 1, kTrackRight - kTrackLeft, 3};
+        SDL_SetRenderDrawColor(into, 90, 96, 110, 255);
+        SDL_RenderFillRect(into, &track);
+        const float at = trackAt(drawDistance());
+        const SDL_FRect filled{kTrackLeft, kTrackY - 1, at - kTrackLeft, 3};
+        SDL_SetRenderDrawColor(into, 170, 200, 225, 255);
+        SDL_RenderFillRect(into, &filled);
+        const SDL_FRect knob{at - 4, kTrackY - 6, 8, 12};
+        SDL_SetRenderDrawColor(into, dragging_ ? 250 : 225, dragging_ ? 235 : 230, dragging_ ? 160 : 240, 255);
+        SDL_RenderFillRect(into, &knob);
+        const auto button = [&](float x, const char* label, bool on) {
+            const SDL_FRect box{x, kButtonY, kButtonW, 14};
+            SDL_SetRenderDrawColor(into, on ? 120 : 46, on ? 96 : 52, on ? 40 : 64, 255);
+            SDL_RenderFillRect(into, &box);
+            text(into, x + 6, kButtonY + 3, label, 230, 232, 240);
+        };
+        button(kGraphicsButtonX, "Graphics  O", panelOpen_);
+        button(kSceneButtonX, "Scene view F", panel_.sceneView);
+    }
     if (!open_) return;
     float y = kStatusHigh + 4;
     if (page_ == Page::World) drawWorld(into, width, y);

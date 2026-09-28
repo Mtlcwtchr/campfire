@@ -1,0 +1,22 @@
+{
+  "Grass": {
+    "albedo": "/Game/MWLandscapeAutoMaterial/Textures/Ground/TEX_MWAM_Grass_col",
+    "normal": "/Game/MWLandscapeAutoMaterial/Textures/Ground/TEX_MWAM_Grass_nrm"
+  },
+  "Dirt": {
+    "albedo": "/Game/MWLandscapeAutoMaterial/Textures/Ground/TEX_MWAM_Dirt_col",
+    "normal": "/Game/MWLandscapeAutoMaterial/Textures/Ground/TEX_MWAM_Dirt_nrm"
+  },
+  "SandA": {
+    "albedo": "/Game/MWLandscapeAutoMaterial/Textures/Ground/TEX_MWAM_SandA_col",
+    "normal": "/Game/MWLandscapeAutoMaterial/Textures/Ground/TEX_MWAM_SandA_nrm"
+  },
+  "Rock": {
+    "albedo": "/Game/MWLandscapeAutoMaterial/Textures/Ground/TEX_MWAM_Rock_col",
+    "normal": "/Game/MWLandscapeAutoMaterial/Textures/Ground/TEX_MWAM_Rock_nrm"
+  },
+  "Snow": {
+    "albedo": "/Game/MWLandscapeAutoMaterial/Textures/Ground/TEX_MWAM_Snow_col",
+    "normal": "/Game/MWLandscapeAutoMaterial/Textures/Ground/TEX_MWAM_Snow_nrm"
+  }
+}

@@ -23,6 +23,9 @@ enum class Pass : engine::PassId {
     Sprite,        // everything drawn as a card: pawns, goods, trees, markers
     Menu,
     Models,
+    Sky,           // what the distance fog fades into, behind everything
+    Frustum,       // the scene view's frozen cull camera
+    FarTrees,      // GPU-scattered tree impostors from the object reach to the horizon
 };
 
 // One render pass on the card apiece. The world is drawn into a cleared target
@@ -36,6 +39,9 @@ enum class Stage : engine::StageId {
 // to come after everything it is over.
 enum class Order : engine::PassOrder {
     Opaque = 0,
+    // The sky: after every opaque pass (it fills only what they left empty),
+    // before blended water and cards that must be over it.
+    Sky = 150,
     Blended = 200,
     // Over everything, because it is a curtain rather than a thing in the world.
     Cover = 250,

@@ -321,6 +321,7 @@ void RenderPipeline::issue(Frame& frame, std::size_t from, std::size_t to) {
                 frame.work->unknownIndirectDraws += item.indirectDraws;
             }
             ++frame.work->draws;
+            if (item.author < frame.work->drawsByAuthor.size()) ++frame.work->drawsByAuthor[item.author];
         }
     }
 }

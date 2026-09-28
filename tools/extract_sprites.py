@@ -782,12 +782,25 @@ def main():
         'sprites': {},
     }
 
-    # Small grass clumps used by the procedural foliage pass. Keep them in the
-    # source pack: they are already transparent, CC0, and do not need slicing.
-    foliage = OUT / 'raw_srcs' / 'kenney_foliageSprites' / 'PNG' / 'Shaded'
-    for variant, number in enumerate(range(52, 58)):
-        source = foliage / f'sprite_{number:04}.png'
-        if source.exists():
+    ue_models = ROOT / 'assets/generated/scene_models'
+    if (ue_models / '.ue-imported').exists():
+        views = json.loads((ue_models / 'manifest.json').read_text())['grass']
+        if len(views) != 6:
+            raise ValueError('UE grass requires six views')
+        for variant, name in enumerate(views):
+            if Path(name).name != name:
+                raise ValueError('unsafe UE grass path')
+            with Image.open(ue_models / name) as image:
+                manifest['sprites'][f'foliage/grass_{variant}'] = {
+                    'file': '../generated/scene_models/' + name,
+                    'size': [image.width, image.height],
+                }
+    else:
+        foliage = OUT / 'raw_srcs' / 'kenney_foliageSprites' / 'PNG' / 'Shaded'
+        for variant, number in enumerate(range(52, 58)):
+            source = foliage / f'sprite_{number:04}.png'
+            if not source.exists():
+                continue
             with Image.open(source) as image:
                 manifest['sprites'][f'foliage/grass_{variant}'] = {
                     'file': source.relative_to(OUT).as_posix(),

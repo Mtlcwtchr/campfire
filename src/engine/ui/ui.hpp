@@ -124,6 +124,9 @@ public:
     int width() const { return width_; }
     int height() const { return height_; }
     SDL_Renderer* renderer() const { return sdl_; }
+    // Retained surfaces can reuse their pixels while widgets still process input.
+    // The caller owns invalidation; ordinary immediate-mode callers leave this on.
+    void painting(bool enabled) { painting_ = enabled; }
 
     // --- drawing ---------------------------------------------------------
     void rect(const Rect& r, const Colour& c);
@@ -172,6 +175,7 @@ private:
     void setColour(const Colour& c);
 
     SDL_Renderer* sdl_ = nullptr;
+    bool painting_ = true;
     Theme theme_;
     Input* input_ = nullptr;
     int width_ = 0, height_ = 0;

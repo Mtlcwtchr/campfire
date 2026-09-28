@@ -6,6 +6,7 @@
 #include "game/render/world_materials.hpp"
 #include "engine/render/systems/instance_hierarchy_select.hpp"
 #include "engine/geometry/cluster_morph.hpp"
+#include "engine/render/hemisphere_impostor.hpp"
 #include "engine/core/diagnostics.hpp"
 #include <nlohmann/json.hpp>
 #include <algorithm>
@@ -17,6 +18,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include <numbers>
 #include <stdexcept>
 #include <unordered_map>
 
@@ -60,7 +62,9 @@ constexpr std::size_t kMassMinimumMembers=12;
 // compete with the placement pool for the same cores.
 inline std::size_t massJobLimit() {
     const auto cores=std::size_t(std::max(1u,std::thread::hardware_concurrency()));
-    return std::clamp<std::size_t>(cores/3,2,4);
+    // Leave cores for terrain, placement, shadows and the frame thread. Four
+    // expensive DAG builds completing together also meant four uploads at once.
+    return std::clamp<std::size_t>(cores/6,1,2);
 }
 // Where a frame's object time actually goes, printed beside the scene debug
 // line. Guessing at this produced two full culls per frame that nobody noticed.
@@ -78,27 +82,56 @@ constexpr auto kSpatialRepresentations=
     engine::render::representationBit(engine::geometry::InstanceRepresentation::DensityShading);
 }
 SceneModelsPass::~SceneModelsPass() { reset(); }
+void SceneModelsPass::view(engine::camera::ViewState state) {
+    const auto now=std::chrono::steady_clock::now();
+    const double dt=std::chrono::duration<double>(now-viewTime_).count();
+    if (viewReady_ && dt>0.001 && dt<0.5 && state.orthographic==view_.orthographic) {
+        for (int i=0;i<3;++i) state.velocity[i]=(state.position[i]-view_.position[i])/dt;
+    }
+    view_=state;viewReady_=state.valid();viewTime_=now;
+}
 void SceneModelsPass::reset() {
+    forestProxies_.clear();
+    farForest_.clear();
     placement_.reset();failed_=false;
     detailBlend_=0;detailWanted_=true;
     wantedRegions_.clear();
+    regionQuery_={};
     massMembers_.clear();massWeights_.clear();massPublished_=nullptr;
+    massObjectsVersion_=publishedObjectsVersion_=0;
     massRefused_.clear();massError_.clear();
     for (auto& slot:massSlots_) slot.live=false;
     entities_.clear();published_=nullptr;
     gathered_={};
+    representationHistory_.clear();selectionTime_=0;viewReady_=false;
 }
 void SceneModelsPass::updatePlacement(const engine::Scene& scene,double viewportWidth) {
+    // Every decision here is the cull camera's (the scene view may be flying elsewhere).
+    const float* eye=engine::cullEye(scene);
     world::decor::SceneView view;
-    std::copy_n(scene.viewProjection,16,view.matrix.begin());
+    std::copy_n(engine::cullMatrix(scene),16,view.matrix.begin());
     view.world=worldBounds_;view.viewportWidth=viewportWidth;
-    view.pixelsPerMetre=scene.camera[3];
+    view.pixelsPerMetre=eye[3];
     for (const auto& model:models_) view.maxExtent=std::max(view.maxExtent,model.extent()*1.4);
     const bool perspective=view.matrix[12]!=0 || view.matrix[13]!=0 || view.matrix[14]!=0;
-    view.priorityX=perspective?scene.camera[0]:x_;
-    view.priorityY=perspective?scene.camera[1]:y_;
-    wantedRegions_=scene.extra[2]>0.01f?world::decor::visibleSceneRegions(view):
+    view.priorityX=perspective?eye[0]:x_;
+    view.priorityY=perspective?eye[1]:y_;
+    if (viewReady_) view.predictPriority(view_);
+    world::decor::SceneRegionBudget budget;
+    budget.regions=source_.limits().regions;
+    // Enough traversal for the whole orbital view, not a bubble around the eye.
+    budget.nodes=std::max<std::size_t>(budget.nodes,budget.regions*8);
+    regionQuery_={};
+    wantedRegions_=scene.extra[2]>0.01f?world::decor::visibleSceneRegions(view,budget,&regionQuery_):
                                        std::vector<world::decor::ScatterBounds>{};
+    // Nothing past the draw distance is admitted: the fog is opaque there, so
+    // placing, gathering and culling objects beyond it is work nobody sees.
+    if (perspective) std::erase_if(wantedRegions_,[&](const auto& r) {
+        const double dx=std::max({double(r.minX)-eye[0],0.0,eye[0]-double(r.maxX)});
+        const double dy=std::max({double(r.minY)-eye[1],0.0,eye[1]-double(r.maxY)});
+        const double reach=objectReach();
+        return dx*dx+dy*dy>reach*reach;
+    });
     detailWanted_=!wantedRegions_.empty();
     source_.updateRegions(wantedRegions_,true);
     failed_=!source_.error().empty();
@@ -135,11 +168,18 @@ std::string SceneModelsPass::report() const {
         {"sampled_sites",scatter_.sampled},{"water_tiles_skipped",scatter_.waterTilesSkipped},
         {"focus_m",{x_,y_}},{"requested_regions",wantedRegions_.size()},
         {"resident_regions",placement_?placement_->regions.size():0},
+        {"placement_budget_limited",regionQuery_.limited || source_.stats().limited},
+        {"placement_query_nodes",regionQuery_.visited},{"placement_region_limit",source_.limits().regions},
+        {"placement_cached_regions",source_.stats().cached},{"placement_in_flight_regions",source_.stats().inFlight},
+        {"placement_started_regions",source_.stats().started},{"placement_collected_regions",source_.stats().collected},
+        {"placement_published_regions",source_.stats().published},
         {"detail_requested",detailWanted_},{"detail_blend",detailBlend_},
         {"grove_impostors",proxyCards_},{"grove_blocks",proxyBlocks_},{"grove_max_focus_distance_m",proxyReach_},
         {"grove_candidate_step_m",0},{"grove_budget",32768},{"grove_root_bytes",proxyBytes_},
         {"view_wide_vegetation",worldBounds_.maxX>worldBounds_.minX},
         {"lod_mesh_pixels",{meshStartPixels_,meshStartPixels_*(38.0/22)}},{"impostor_views",8},
+        {"hemisphere_views",engine::render::kHemisphereViews},
+        {"hemisphere_models",std::count_if(models_.begin(),models_.end(),[](const auto& m){return m.hemisphereImpostor>=0;})},
         // Per level of the shared chain, finest first: how many objects were
         // drawn at it and what that cost. A frame that spends everything on
         // level zero is the retopology not working, whatever the total says.
@@ -175,15 +215,29 @@ engine::PassPlace SceneModelsPass::setup(engine::Device& device,engine::RenderPi
             const auto p=std::filesystem::path(file);
             require(p==p.filename() && file!="." && file!="..","invalid model resource path");return root/p;
         };
-        std::vector<std::filesystem::path> colourPaths,normalPaths;
+        std::vector<std::filesystem::path> colourPaths,normalPaths,depthPaths;
         for (const auto& p:content.at("colours")) colourPaths.push_back(safePath(p.get<std::string>()));
         for (const auto& p:content.at("normals")) normalPaths.push_back(safePath(p.get<std::string>()));
-        require(!colourPaths.empty() && colourPaths.size()==normalPaths.size() && colourPaths.size()<=128,"invalid model layers");
+        require(!colourPaths.empty() && colourPaths.size()==normalPaths.size() && colourPaths.size()<=512,"invalid model layers");
         std::vector<std::vector<std::filesystem::path>> colourMips,normalMips;
         for (const auto& p:colourPaths) colourMips.push_back({p});
         for (const auto& p:normalPaths) normalMips.push_back({p});
         colours_=device.loadArrayMipped(colourMips,true);normals_=device.loadArrayMipped(normalMips,true);
         if (!colours_ || !normals_) return {};
+        const bool depthAtlas=content.contains("depth_atlas");
+        if (depthAtlas) {
+            const auto& atlas=content.at("depth_atlas");
+            require(atlas.at("encoding")=="rg16-view-b-coverage-a-v1" &&
+                atlas.at("layers").size()==colourPaths.size(),"invalid depth atlas contract");
+            for (const auto& p:atlas.at("layers")) depthPaths.push_back(safePath(p.get<std::string>()));
+            depths_=device.loadDataArray(depthPaths);
+            if (!depths_) return {};
+            SDL_GPUSamplerCreateInfo nearest{};
+            nearest.min_filter=nearest.mag_filter=SDL_GPU_FILTER_NEAREST;
+            nearest.address_mode_u=nearest.address_mode_v=nearest.address_mode_w=SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+            depthSampler_=device.makeSampler(nearest);
+            if (!depthSampler_) return {};
+        }
         engine::Device::Uploader upload(device);
         // One vertex buffer and one index buffer for the whole catalogue, the
         // impostor card included. Every model's indices are offset into them,
@@ -191,13 +245,42 @@ engine::PassPlace SceneModelsPass::setup(engine::Device& device,engine::RenderPi
         // one per model and level.
         std::vector<Vertex> allVertices;
         std::vector<std::uint32_t> allIndices;
+        std::vector<std::shared_ptr<const engine::render::ImpostorAtlas>> proxySources;
+        const auto* proxyOption=std::getenv("ASR_FOREST_PROXIES");
+        const bool useProxies=!proxyOption || std::strcmp(proxyOption,"0")!=0;
         for (const auto& m:content.at("models")) {
             require(m.at("name")==world::decor::kModels[models_.size()],"unexpected scene model ordering");
             Model model;model.width=m.at("width");model.height=m.at("height");
             model.impostor=m.at("impostor");model.vegetation=m.at("vegetation");
+            model.depthImpostor=m.value("depth_impostor",false);
+            require(!model.depthImpostor || depthAtlas,"model requires missing depth atlas");
             require(std::isfinite(model.width+model.height) && model.width>0 && model.height>0 &&
                 model.width<100 && model.height<100 && model.impostor>=0 &&
                 std::size_t(model.impostor+8)<=colourPaths.size(),"invalid model bounds/layers");
+            if (m.contains("hemisphere_impostor")) {
+                const auto& hemi=m.at("hemisphere_impostor");
+                require(model.depthImpostor && hemi.at("layout")==engine::render::kHemisphereLayout &&
+                    hemi.at("views")==engine::render::kHemisphereViews,"invalid hemisphere layout");
+                model.hemisphereImpostor=hemi.at("first").get<int>();
+                const double side=hemi.at("side"), centre=hemi.at("center_z");
+                const int resolution=hemi.at("resolution").get<int>();
+                require(model.hemisphereImpostor>=0 &&
+                    std::uint64_t(model.hemisphereImpostor)+engine::render::kHemisphereViews<=colourPaths.size() &&
+                    std::isfinite(side+centre) && std::abs(side-std::hypot(model.width,model.height))<0.001 &&
+                    std::abs(centre-model.height*0.5)<0.001 && resolution>=16 && resolution<=4096,"invalid hemisphere frame");
+                model.hemisphereTexel=side/resolution;
+            }
+            std::shared_ptr<const engine::render::ImpostorAtlas> proxySource;
+            if (useProxies && model.vegetation && model.hemisphereImpostor>=0) {
+                std::vector<std::array<std::filesystem::path,3>> paths;
+                for (unsigned view=0;view<21;++view) {
+                    const auto layer=std::size_t(model.hemisphereImpostor)+view;
+                    paths.push_back({colourPaths[layer],normalPaths[layer],depthPaths[layer]});
+                }
+                proxySource=engine::render::ImpostorGpuCache::loadLeaf(paths,{0,0,model.height*.5},std::hypot(model.width,model.height));
+                if (!proxySource) std::cerr<<"Forest proxy source unavailable: "<<m.at("name")<<": "<<SDL_GetError()<<'\n';
+            }
+            proxySources.push_back(std::move(proxySource));
             std::ifstream mesh(safePath(m.at("mesh").get<std::string>()),std::ios::binary);
             char magic[4]{};std::uint32_t vertices=0,count=0;
             mesh.read(magic,4);mesh.read(reinterpret_cast<char*>(&vertices),4);mesh.read(reinterpret_cast<char*>(&count),4);
@@ -515,12 +598,12 @@ engine::PassPlace SceneModelsPass::setup(engine::Device& device,engine::RenderPi
         static_assert(sizeof(Instance)==materials::SceneModelStreams::kInstanceBytes);
         static_assert(offsetof(Instance,mode)==12*sizeof(float));
         const auto wanted=materials::sceneModelLayout();
-        if (!renderer_.material.setup(device,into,materials::sceneModels(),wanted)) return {};
+        if (!renderer_.material.setup(device,into,materials::sceneModels(depthAtlas),wanted)) return {};
         // The same shader and the same streams, rasterised as edges. Built
         // beside the solid one so switching to it costs nothing at the moment
         // it is asked for.
         {
-            auto lines=std::make_shared<engine::Material>(*materials::sceneModels());
+            auto lines=std::make_shared<engine::Material>(*materials::sceneModels(depthAtlas));
             lines->name="nature/mesh-and-impostor/wireframe";
             lines->wireframe=true;
             lines->blend=false;
@@ -533,7 +616,16 @@ engine::PassPlace SceneModelsPass::setup(engine::Device& device,engine::RenderPi
         sampler.mipmap_mode=SDL_GPU_SAMPLERMIPMAPMODE_LINEAR;
         sampler.address_mode_u=sampler.address_mode_v=sampler.address_mode_w=SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
         sampler_=device.makeSampler(sampler);if (!sampler_) return {};
-        renderer_.material.textures({{colours_.get(),sampler_.get()},{normals_.get(),sampler_.get()}});
+        std::vector<SDL_GPUTextureSamplerBinding> textures{
+            {colours_.get(),sampler_.get()},{normals_.get(),sampler_.get()},shadow_};
+        if (depthAtlas) textures.push_back({depths_.get(),depthSampler_.get()});
+        renderer_.material.textures(textures);
+        if (wireframeReady_) wireframeRenderer_.material.textures(textures);
+        const char* farSwitch=std::getenv("ASR_FAR_FOREST");
+        if (useProxies && !(farSwitch && std::string_view(farSwitch)=="0") &&
+            !farForest_.setup(device,into,proxySources,shadow_,wanted))
+            std::cerr<<"scene models: far forest hierarchy unavailable\n";
+        if (useProxies) forestProxies_.setup(device,into,std::move(proxySources),shadow_,wanted);
         for (auto& model:models_) model.renderer.material=renderer_.material;
         // Built after the catalogue is complete: the error spans point into
         // models_, which must not grow again once a system holds one.
@@ -712,8 +804,22 @@ int SceneModelsPass::massSlotOf(const world::decor::ScatterBounds& region) const
 // placement changes: this is the whole scatter, and it does not move.
 void SceneModelsPass::updateRegionMembers() {
     if (placement_.get()==massPublished_) return;
+    if (placement_ && placement_->objectsVersion==massObjectsVersion_) {
+        massPublished_=placement_.get();
+        return;
+    }
+    massObjectsVersion_=placement_?placement_->objectsVersion:0;
     massMembers_.clear();
-    massRefused_.clear();massError_.clear();
+    const auto changed = [&](const auto& region) {
+        if (!placement_) return true;
+        const auto old = massRevisions_.find(region);
+        const auto now = placement_->regionRevisions.find(region);
+        return old == massRevisions_.end() || now == placement_->regionRevisions.end() || old->second != now->second;
+    };
+    std::erase_if(massRefused_, [&](const auto& key) { return changed(key.first); });
+    std::erase_if(massError_, [&](const auto& entry) { return changed(entry.first.first); });
+    for (auto& slot:massSlots_) if (slot.live && changed(slot.region)) slot.live=false;
+    massRevisions_ = placement_ ? placement_->regionRevisions : decltype(massRevisions_){};
     massPublished_=placement_.get();
     if (placement_) {
         const auto floorRegion=[](double v) {
@@ -746,7 +852,7 @@ void SceneModelsPass::updateRegionMembers() {
 void SceneModelsPass::updateMassRegions(const engine::render::ScreenScale& screen,
                                         double pixelError) {
     massWeights_.clear();
-    if (!massReady_ || !enabled_) return;
+    if (!massReady_ || !enabled_ || !massOn_) return;
     ++massClock_;
     updateRegionMembers();
 
@@ -817,6 +923,8 @@ void SceneModelsPass::updateMassRegions(const engine::render::ScreenScale& scree
         job=massJobs_.erase(job);
         const auto pending=std::find(massBaking_.begin(),massBaking_.end(),baked.region);
         if (pending!=massBaking_.end()) massBaking_.erase(pending);
+        const auto revision=massRevisions_.find(baked.region);
+        if (revision==massRevisions_.end() || revision->second!=baked.revision) continue;
         const auto& tier=kMassTiers[std::min<std::size_t>(baked.tier,std::size(kMassTiers)-1)];
         if (baked.mass.empty() || baked.mass.positions.size()/3>tier.vertices ||
             baked.mass.indices.size()>tier.indices) {
@@ -896,6 +1004,7 @@ void SceneModelsPass::updateMassRegions(const engine::render::ScreenScale& scree
         massError_[{baked.region,baked.tier}]=slot.error;
         geometry_[massGeometryBase_+std::uint32_t(chosen)]=
             {slot.vertexBase,{},slot.clusters,slot.indexBase,{},0,{},0,0};
+        break; // at most one aggregate adoption/upload in a frame
     }
 
     for (const auto& want:wanted) {
@@ -922,12 +1031,13 @@ void SceneModelsPass::updateMassRegions(const engine::render::ScreenScale& scree
         massBaking_.push_back(want.region);
         massJobs_.push_back(std::async(std::launch::async,
             [region=want.region,members=massMembers_[want.region],holds=std::move(holds),
-             sources=std::move(sources),origin,tier=want.tier]() mutable {
+             sources=std::move(sources),origin,tier=want.tier,revision=massRevisions_.at(want.region)]() mutable {
                 engine::geometry::RegionMassOptions options;
                 options.cellMetres=kMassTiers[std::size_t(tier)].cellMetres;
                 options.minimumMembers=kMassMinimumMembers;
                 MassBake baked;
                 baked.region=region;
+                baked.revision=revision;
                 baked.tier=tier;
                 std::copy_n(origin,3,baked.origin);
                 baked.members=members.size();
@@ -961,20 +1071,22 @@ void SceneModelsPass::prepareDensity(const engine::Scene& input, double viewport
     if (input.extra[2]<=0.01f) return;
     static const world::decor::Scatter empty;
     const auto& scatter=placement_?placement_->scatter:empty;
-    if (placement_.get()!=published_) {
+    if (placement_.get()!=published_ && (!placement_ || placement_->objectsVersion!=publishedObjectsVersion_)) {
         world::decor::publishScatter(entities_,scatter,std::uint32_t(models_.size()));
         published_=placement_.get();
+        publishedObjectsVersion_=placement_?placement_->objectsVersion:0;
         gathered_=engine::render::gatherInstances(entities_);
+        representationHistory_.clear(); // registry identities can be reused on publication
     }
-    const auto* m=input.viewProjection;
+    const auto* m=engine::cullMatrix(input);
     engine::render::ScreenScale screen;
     for (int i=0;i<4;++i) { screen.rowX[i]=m[i];screen.rowY[i]=m[4+i];screen.rowW[i]=m[12+i]; }
     const bool perspective=m[12]!=0 || m[13]!=0 || m[14]!=0;
     screen.focal=perspective
             ? std::hypot(std::hypot(double(m[0]),double(m[1])),double(m[2]))*
               std::max(1.0,viewportWidth)*0.5 : 0;
-    screen.scale=input.camera[3];
-    screen.allowance=world::decor::kLevelPixelError;
+    screen.scale=engine::cullEye(input)[3];
+    screen.allowance=viewReady_?view_.quality.geometryErrorPx:world::decor::kLevelPixelError;
     PhaseClock clock;
     // The regions the objects are grouped into, which is a fact about where
     // they stand and not about where the camera is. Grouped once per published
@@ -1006,8 +1118,8 @@ void SceneModelsPass::prepareDensity(const engine::Scene& input, double viewport
         // the same rule the instance hierarchy applied to its very-far stage,
         // over the same 128 m cell, without rebuilding anything per frame.
         const double radius=world::decor::kRegion*0.7071;
-        const double weight=1.0-fade(world::decor::kLevelPixelError*0.6,
-                                     world::decor::kLevelPixelError,
+        const double weight=1.0-fade(screen.allowance*0.6,
+                                     screen.allowance,
                                      radius*0.5*pixelsPerMetre);
         if (!(weight>0)) continue;
         densityWeights_[region]=float(weight);
@@ -1038,7 +1150,8 @@ void SceneModelsPass::collect(const engine::Frame& frame,engine::DrawQueue& queu
     // Texture2D: that was the source of the Metal corruption. Keep Hi-Z
     // opt-out available for driver triage and use it only on single-sample
     // targets until depth resolve is implemented.
-    const bool useHiZ = std::getenv("ASR_DISABLE_HIZ") == nullptr &&
+    // Hi-Z is the DRAWING camera's depth: useless, and wrong, for a frozen cull camera.
+    const bool useHiZ = std::getenv("ASR_DISABLE_HIZ") == nullptr && frame.scene.cullState[1] < 0.5f &&
                         frame.device && frame.device->samples() == SDL_GPU_SAMPLECOUNT_1;
     if (useHiZ && frame.device && pipeline_ && hiz_.ensure(*frame.device,*pipeline_,frame.width,frame.height))
         hiz_.recordBuild(frame,*pipeline_);
@@ -1058,12 +1171,19 @@ void SceneModelsPass::collect(const engine::Frame& frame,engine::DrawQueue& queu
     // arbitrary runtime node and is deliberately not a selectable shape.
     const auto cardSlot=models_.size()*levels_;
     const std::size_t groveSlots=groves_.size()*2; // merged shell, then canopy proxy
-    std::vector<std::vector<Instance>> batches(cardSlot+1+groveSlots);
+    // Per-frame working storage lives in scratch_ and is cleared, not
+    // reallocated: every frame used to build and free a few dozen vectors
+    // sized by the whole selection.
+    auto& batches=scratch_.batches;
+    for (auto& batch:batches) batch.clear();
+    batches.resize(cardSlot+1+groveSlots);
     // How large the biggest instance of each batch is on screen, which is what
     // sets the allowance the cluster cut is taken at.
-    std::vector<double> batchPixels(batches.size(),0.0);
-    std::vector<double> shellAllowances(groveSlots,std::numeric_limits<double>::infinity());
-    const auto& s=frame.scene;const auto* m=s.viewProjection;
+    auto& batchPixels=scratch_.batchPixels;batchPixels.assign(batches.size(),0.0);
+    auto& shellAllowances=scratch_.shellAllowances;
+    shellAllowances.assign(groveSlots,std::numeric_limits<double>::infinity());
+    // Culling, LOD and GPU cluster selection all use the cull camera.
+    const auto& s=frame.scene;const auto* m=engine::cullMatrix(s);
     const bool sceneGpu=std::getenv("ASR_DISABLE_SCENE_GPU")==nullptr;
     // Keeps every calculation and submits nothing. The only way to tell what a
     // frame spends on deciding what to draw from what it spends drawing it.
@@ -1074,6 +1194,7 @@ void SceneModelsPass::collect(const engine::Frame& frame,engine::DrawQueue& queu
     const bool loaded=bool(placement_);
     const double targetBlend=loaded && detailWanted_?1:0;
     const double dt=std::clamp(frame.step,0.0,0.1);
+    selectionTime_+=dt;
     detailBlend_+=std::clamp(targetBlend-detailBlend_,-dt*2,dt*2);
     // The scatter becomes entities once, when the region changes; from here the
     // frame is three passes over flat arrays and never looks at a decor::Object
@@ -1084,8 +1205,8 @@ void SceneModelsPass::collect(const engine::Frame& frame,engine::DrawQueue& queu
     }
     engine::render::ScreenScale screen;
     for (int i=0;i<4;++i) { screen.rowX[i]=m[i];screen.rowY[i]=m[4+i];screen.rowW[i]=m[12+i]; }
-    screen.focal=perspective?focal:0;screen.scale=s.camera[3];
-    screen.allowance=world::decor::kLevelPixelError;
+    screen.focal=perspective?focal:0;screen.scale=engine::cullEye(s)[3];
+    screen.allowance=viewReady_?view_.quality.geometryErrorPx:world::decor::kLevelPixelError;
     // The skyline the ground makes from here, so a forest behind a ridge is
     // dropped before it is transformed, levelled and drawn for the depth test
     // to throw away pixel by pixel.
@@ -1160,17 +1281,37 @@ void SceneModelsPass::collect(const engine::Frame& frame,engine::DrawQueue& queu
     // The mass batch. Regions far enough that their baked aggregate is within
     // the same pixel error everything else is held to are drawn as one instance
     // each, and their members are not drawn at all.
-    updateMassRegions(screen,world::decor::kLevelPixelError);
+    updateMassRegions(screen,screen.allowance);
+    {
+        ForestHierarchy::Inputs far;
+        far.world=source_.world();far.bounds=worldBounds_;far.view=view_;
+        far.density=s.vegetationDensity;far.drawDistance=drawDistance_;
+        far.enabled=viewReady_ && !wireframe_ && s.extra[2]>0.01f && farForestOn_;
+        farForest_.update(frame,far);
+    }
+    const auto farCovered=[this](double x,double y){return farForest_.covered(x,y);};
+    forestProxies_.update(frame,placement_.get(),view_,viewReady_ && !wireframe_ && forestProxiesOn_,farCovered);
+    for (const auto& proxy:forestProxies_.draws()) {
+        const auto x=std::int64_t(std::floor(double(proxy.key.x)/128))*128;
+        const auto y=std::int64_t(std::floor(double(proxy.key.y)/128))*128;
+        massWeights_.erase({x,y,x+128,y+128}); // never overlap a full-region mesh and one of its proxies
+    }
+    // A far node owns whole 128 m regions: their aggregate meshes give way.
+    if (!farForest_.draws().empty())
+        std::erase_if(massWeights_,[&](const auto& entry) {
+            return farForest_.covered(double(entry.first.minX)+1,double(entry.first.minY)+1);
+        });
     collectMassMs_=clock.lap();
 
     // How large each survivor is on screen, kept rather than recomputed: the
     // budget needs it once and the emission needs it again.
-    std::vector<double> pixels(selected.instances.size());
-    std::vector<world::decor::MeshDemand> demands;
-    demands.reserve(selected.instances.size());
+    const auto selectedCount=selected.instances.size();
+    auto& pixels=scratch_.pixels;pixels.assign(selectedCount,0.0);
+    auto& meshWeights=scratch_.meshWeights;meshWeights.assign(selectedCount,1.0f);
+    auto& hemisphereAllowed=scratch_.hemisphereAllowed;hemisphereAllowed.assign(selectedCount,false);
     // Startup fade only. Distance to camera focus is not a visibility criterion.
-    std::vector<float> detail(selected.instances.size());
-    std::vector<char> keep(selected.instances.size(),0);
+    auto& detail=scratch_.detail;detail.assign(selectedCount,0.0f);
+    auto& keep=scratch_.keep;keep.assign(selectedCount,0);
     // One pass to size everything, so the batch's own allowance is known before
     // the budget is asked what a batch costs.
     for (const auto& batch:selected.batches) {
@@ -1185,6 +1326,14 @@ void SceneModelsPass::collect(const engine::Frame& frame,engine::DrawQueue& queu
             pixels[at]=model.extent()*instance.scale*screen.pixelsPerMetreAt(centre,depth);
             detail[at]=float(detailBlend_);
             keep[at]=world::decor::objectLod(pixels[at],0).coverage*detail[at]>0;
+            // Past the draw distance the fog is opaque: an object there is
+            // drawn for nobody. Regions are admitted at 128 m, this is exact.
+            if (keep[at] && perspective) {
+                const float* eyeAt=engine::cullEye(s);
+                const double ox=instance.position[0]-eyeAt[0],oy=instance.position[1]-eyeAt[1];
+                const double reach=objectReach();
+                if (ox*ox+oy*oy>reach*reach) keep[at]=0;
+            }
             if (!keep[at]) { ASR_DIAGNOSTIC(++culled_;++faded_);continue; }
             batchPixels[slot]=std::max(batchPixels[slot],pixels[at]);
         }
@@ -1193,8 +1342,28 @@ void SceneModelsPass::collect(const engine::Frame& frame,engine::DrawQueue& queu
     // their individual model. Until a spatial node owns geometry baked from its
     // actual members, intermediate generic grove shapes are unavailable and the
     // hierarchy descends to individuals; very-far nodes become terrain density.
-    std::vector<char> hierarchyReplaced(selected.instances.size(),0);
-    std::vector<float> hierarchyNearCoverage(selected.instances.size(),1);
+    auto& hierarchyReplaced=scratch_.hierarchyReplaced;hierarchyReplaced.assign(selectedCount,0);
+    auto& hierarchyNearCoverage=scratch_.hierarchyNearCoverage;hierarchyNearCoverage.assign(selectedCount,1.0f);
+    // How far a coarser proxy covering each instance has faded in: 1 hides it,
+    // between 0 and 1 it is drawn on the complementary pixels (a dissolve).
+    auto& complement=scratch_.complement;complement.assign(selectedCount,0.0f);
+    for (const auto& batch:selected.batches) if (forestProxies_.covers(batch.mesh))
+        for (std::uint32_t i=0;i<batch.count;++i) {
+            const auto at=batch.first+i;const auto& member=selected.instances[at];
+            const auto cell=ForestProxyCache::key(member.position[0],member.position[1]);
+            for (const auto& proxy:forestProxies_.draws()) if (proxy.key==cell) {
+                if (proxy.weight>=1) hierarchyReplaced[at]=1;
+                else complement[at]=std::max(complement[at],float(proxy.weight));
+            }
+        }
+    if (!farForest_.draws().empty())
+        for (const auto& batch:selected.batches) if (farForest_.covers(batch.mesh))
+            for (std::uint32_t i=0;i<batch.count;++i) {
+                const auto at=batch.first+i;const auto& member=selected.instances[at];
+                const double w=farForest_.coverage(member.position[0],member.position[1]);
+                if (w>=1) hierarchyReplaced[at]=1;
+                else if (w>0) complement[at]=std::max(complement[at],float(w));
+            }
     if (!massWeights_.empty()) {
         const auto floorRegion=[](float v) {
             return std::int64_t(std::floor(double(v)/world::decor::kRegion))*world::decor::kRegion;
@@ -1256,8 +1425,10 @@ void SceneModelsPass::collect(const engine::Frame& frame,engine::DrawQueue& queu
     // once per batch: one number for every instance of a batch charges distant
     // trees what the nearest one costs. Each bucket is rounded DOWN to its finer
     // edge, so a memoised answer is an upper bound on the instance that reads it.
-    std::vector<std::unordered_map<int,std::size_t>> cutCost(models_.size());
-    std::vector<std::uint32_t> cutClusters;
+    auto& cutCost=scratch_.cutCost;
+    for (auto& costs:cutCost) costs.clear();
+    cutCost.resize(models_.size());
+    auto& cutClusters=scratch_.cutClusters;cutClusters.clear();
     const auto sourceTriangles=[&](std::uint32_t mesh,double allowance) {
         const auto& model=models_[mesh];
         const int bucket=int(std::floor(std::log2(std::max(allowance,1e-6))*4));
@@ -1275,6 +1446,30 @@ void SceneModelsPass::collect(const engine::Frame& frame,engine::DrawQueue& queu
         entry->second=cut/3;
         return entry->second;
     };
+    // Which vegetation may be a mesh, decided on the SCREEN: how tall it is in
+    // pixels (so the viewport, the field of view and the zoom all count), and
+    // a triangle budget that the largest trees claim first. In a dense wood
+    // the old metres line still admitted every tree within it as a mesh;
+    // now only as many as the budget holds are, and the rest are impostors
+    // however near. Worked out once per frame over the whole selection.
+    vegetationMeshFloor_=0;
+    if (viewReady_ && vegetationMeshPixels_>0) {
+        vegetationDemand_.clear();
+        for (const auto& batch:selected.batches) {
+            const auto& model=models_[batch.mesh];
+            if (!model.vegetation) continue;
+            const auto level=std::min<std::size_t>(batch.level,model.levels.size()-1);
+            const std::size_t chain=model.levels[level].count/3 +
+                (level<model.cardLevels.size()?model.cardLevels[level].count/3:0);
+            for (std::uint32_t i=0;i<batch.count;++i) {
+                const auto at=batch.first+i;
+                if (!keep[at] || hierarchyReplaced[at] || pixels[at]<vegetationMeshPixels_) continue;
+                vegetationDemand_.push_back({pixels[at],chain});
+            }
+        }
+        vegetationMeshFloor_=std::max(vegetationMeshPixels_,
+            world::decor::meshPixelThreshold(vegetationDemand_,vegetationTriangleBudget_));
+    }
     for (const auto& batch:selected.batches) {
         const auto& model=models_[batch.mesh];
         const auto level=std::min<std::size_t>(batch.level,model.levels.size()-1);
@@ -1285,24 +1480,88 @@ void SceneModelsPass::collect(const engine::Frame& frame,engine::DrawQueue& queu
             if (!keep[at] || hierarchyReplaced[at]) continue;
             std::size_t triangles=chain;
             if (model.clusterReady && pixels[at]>0) {
-                const double allowance=world::decor::kLevelPixelError*model.extent()/pixels[at];
+                const double allowance=screen.allowance*model.extent()/pixels[at];
                 triangles=sourceTriangles(batch.mesh,allowance)+
                     (level<model.cardLevels.size()?model.cardLevels[level].count/3:0);
             }
-            demands.push_back({pixels[at],triangles});
+            if (viewReady_) {
+                const auto& source=selected.instances[at];
+                const double radius=std::hypot(model.width*0.5,model.height*0.5)*source.scale;
+                const engine::render::RepresentationBounds bounds{
+                    {source.position[0],source.position[1],source.position[2]+model.height*0.5*source.scale},radius};
+                const auto direction=view_.directionFrom(bounds.centre);
+                // Legacy side-view depth cannot recover top-down surfaces.
+                // Hemisphere assets override this with their contributing views
+                // below, without relaxing the shared quality profile.
+                const double azimuth=std::atan2(direction[1],direction[0]);
+                const double step=std::numbers::pi/4;
+                // Atlas azimuth names its screen-right vector, not its eye vector.
+                const double baked=source.yaw+std::round((azimuth-std::numbers::pi/2-source.yaw)/step)*step+std::numbers::pi/2;
+                std::array<engine::render::RepresentationCandidate,2> candidates;
+                candidates[0].estimatedCost=double(triangles);
+                candidates[0].errorMetres=level<model.errors.size()?model.errors[level]*source.scale:0;
+                candidates[1].kind=engine::render::RepresentationKind::Impostor;
+                candidates[1].estimatedCost=(model.depthImpostor?12.0:8.0)+
+                    pixels[at]*pixels[at]*(model.depthImpostor?0.06:0.04);
+                candidates[1].bakedDirection={std::cos(baked),std::sin(baked),0};
+                candidates[1].angularErrorMetres=radius;
+                candidates[1].errorMetres=radius*2*std::sin(step*0.25); // bound the second dithered view too
+                candidates[1].residualDepth=model.width*source.scale;
+                if (model.hemisphereImpostor>=0) {
+                    const auto hemisphere=engine::render::selectHemisphere(direction,source.yaw);
+                    hemisphereAllowed[at]=hemisphere.has_value();
+                    candidates[1].resident=hemisphere.has_value();
+                    if (hemisphere) {
+                        // Bound every contributing direction, not just the closest
+                        // one. Depth cannot invent hidden surfaces between views.
+                        candidates[1].bakedDirection=direction;
+                        candidates[1].angularErrorMetres=0;
+                        candidates[1].errorMetres=radius*2*std::sin(hemisphere->maxAngle*0.5)+
+                            model.hemisphereTexel*source.scale;
+                        candidates[1].residualDepth=std::hypot(model.width,model.height)*source.scale;
+                        candidates[1].estimatedCost=16.0+pixels[at]*pixels[at]*0.08;
+                    }
+                }
+                auto& history=representationHistory_[std::uint32_t(selected.owners[at])];
+                const auto choice=engine::render::selectRepresentation(view_,bounds,candidates,history.candidate);
+                history.candidate=choice.candidate;history.lastUse=selectionTime_;
+                float target=choice.kind==engine::render::RepresentationKind::Impostor?0.0f:1.0f;
+                // Vegetation past the mesh line is a baked impostor whatever the
+                // error says: a simplified cluster cut sheds leaf cards and a
+                // stand of them reads thinner than the forest it is. The line
+                // has a little hysteresis so a tree on it does not flicker.
+                // Vegetation under the screen-size floor (see above) is a baked
+                // impostor whatever the error says. A little hysteresis so a
+                // tree on the line does not flicker between the two.
+                if (model.vegetation && vegetationMeshFloor_>0 && target>0 &&
+                    pixels[at]<vegetationMeshFloor_*(history.mesh>0.5f?0.92:1.0) &&
+                    (model.hemisphereImpostor<0 || hemisphereAllowed[at])) target=0.0f;
+                // Same dissolve length as the proxies: a representation change
+                // is never faster than ~0.4 s, so it never reads as a pop.
+                // Something seen for the first time has nothing to dissolve from.
+                if (history.mesh<0) history.mesh=target;
+                history.mesh+=std::clamp(target-history.mesh,-float(dt/0.4),float(dt/0.4));
+                meshWeights[at]=history.mesh;
+            }
         }
     }
-    meshStartPixels_=world::decor::meshPixelThreshold(demands);
+    std::erase_if(representationHistory_,[&](const auto& entry) {
+        return selectionTime_-entry.second.lastUse>view_.quality.residencySeconds;
+    });
     collectBudgetMs_=clock.lap();
-    std::vector<Instance> sourceDrawn;
-    engine::render::GatheredInstances sourceInstances;
+    auto& sourceDrawn=scratch_.drawn;sourceDrawn.clear();
+    auto& sourceInstances=scratch_.sourceInstances;
+    sourceInstances.instances.clear();sourceInstances.owners.clear();sourceInstances.batches.clear();
+    sourceInstances.invisible=sourceInstances.rejected=0;
     sourceDrawn.reserve(selected.drawn());
     sourceInstances.instances.reserve(selected.drawn());
     sourceInstances.owners.reserve(selected.drawn());
     // The solid source cluster cut and its alpha cards are separate draw
     // representations. Keep one companion batch per model/chain level so the
     // normal draw planner can emit card ranges without re-emitting the DAG.
-    std::vector<std::vector<Instance>> clusteredCards(models_.size()*levels_);
+    auto& clusteredCards=scratch_.clusteredCards;
+    for (auto& cards:clusteredCards) cards.clear();
+    clusteredCards.resize(models_.size()*levels_);
     const auto addSourceInstance=[&](const engine::render::LevelBatch& batch,
                                      const engine::render::GatheredInstance& source,
                                      const Instance& instance) {
@@ -1322,8 +1581,24 @@ void SceneModelsPass::collect(const engine::Frame& frame,engine::DrawQueue& queu
             if (!keep[at] || hierarchyReplaced[at]) continue;
             const auto& source=selected.instances[at];
             auto lod=world::decor::objectLod(pixels[at],0,meshStartPixels_);
+            if (viewReady_) lod.mesh=meshWeights[at];
+            if (model.hemisphereImpostor>=0 && viewReady_ && !hemisphereAllowed[at]) lod.mesh=1;
             lod.coverage*=detail[at]*hierarchyNearCoverage[at];
-            const auto views=world::decor::impostorPair(rightAngle,source.yaw);
+            // Hand-over to the GPU far trees: placed vegetation dissolves over
+            // the band in which those dissolve in.
+            if (farTreesStart_>0 && lod.coverage>0) {
+                const float* eyeAt=engine::cullEye(s);
+                const double d=std::hypot(source.position[0]-eyeAt[0],source.position[1]-eyeAt[1]);
+                lod.coverage*=float(1.0-fade(farTreesStart_-farTreesBand_,farTreesStart_,d));
+            }
+            if (complement[at]>0) lod.coverage=-complement[at]; // the pixels the proxy has not taken yet
+            double objectRightAngle=rightAngle;
+            if (viewReady_) {
+                const auto direction=view_.directionFrom({source.position[0],source.position[1],
+                    source.position[2]+model.height*0.5*source.scale});
+                objectRightAngle=std::atan2(direction[1],direction[0])-std::numbers::pi/2;
+            }
+            const auto views=world::decor::impostorPair(objectRightAngle,source.yaw);
             Instance instance{{source.position[0],source.position[1],source.position[2]},
                 source.scale,source.yaw,source.phase,source.tint,
                 model.vegetation?1.0f:0.0f,model.width,model.height,
@@ -1360,7 +1635,15 @@ void SceneModelsPass::collect(const engine::Frame& frame,engine::DrawQueue& queu
                 }
                 ASR_DIAGNOSTIC(++meshes_);
             }
-            if (lod.mesh<1) { instance.mode=1;batches[cardSlot].push_back(instance);ASR_DIAGNOSTIC(++cards_); }
+            if (lod.mesh<1) {
+                instance.mode=model.depthImpostor?2.0f:1.0f;
+                if (model.hemisphereImpostor>=0 && hemisphereAllowed[at]) {
+                    instance.mode=3;
+                    instance.layer=instance.layerNext=float(model.hemisphereImpostor);
+                    instance.viewBlend=0; // per-pixel four-view selection shares the engine layout
+                }
+                batches[cardSlot].push_back(instance);ASR_DIAGNOSTIC(++cards_);
+            }
         }
     }
     // Do not synthesize geometry for terrain pages by stretching the fixed 3x3
@@ -1369,8 +1652,8 @@ void SceneModelsPass::collect(const engine::Frame& frame,engine::DrawQueue& queu
     // and consumed by terrain.hlsl.
     // Every instance of the frame in one buffer, in run order, so a draw
     // argument can name its own run by a plain index into it.
-    std::vector<Instance> drawn=std::move(sourceDrawn);
-    std::vector<engine::render::DrawRun> runs;
+    auto& drawn=sourceDrawn;   // the same pooled vector, extended below
+    auto& runs=scratch_.runs;runs.clear();
     drawn.reserve(selected.drawn()+proxyCards_);
     for (std::size_t i=0;i<batches.size();++i) {
         const auto& instances=batches[i];if (instances.empty()) continue;
@@ -1385,7 +1668,7 @@ void SceneModelsPass::collect(const engine::Frame& frame,engine::DrawQueue& queu
         // drawn coarser than its own size asked for.
         double allowance=0;
         if (mesh && models_[asset].clusterReady && batchPixels[i]>0)
-            allowance=world::decor::kLevelPixelError*models_[asset].extent()/batchPixels[i];
+            allowance=screen.allowance*models_[asset].extent()/batchPixels[i];
         if (shell) allowance=shellAllowances[i-cardSlot-1];
         runs.push_back({asset,level,std::uint32_t(drawn.size()),
                         std::uint32_t(instances.size()),allowance});
@@ -1431,7 +1714,7 @@ void SceneModelsPass::collect(const engine::Frame& frame,engine::DrawQueue& queu
             if (!(pixelsPerMetre>0) || !std::isfinite(pixelsPerMetre)) continue;
             // The aggregate is baked at world scale, so its allowance is the
             // pixel error in metres - no instance scale to divide out.
-            const double allowance=world::decor::kLevelPixelError/pixelsPerMetre;
+            const double allowance=screen.allowance/pixelsPerMetre;
             runs.push_back({massGeometryBase_+std::uint32_t(slot),0,
                             std::uint32_t(drawn.size()),1,allowance});
             ++massRunCount;
@@ -1440,21 +1723,57 @@ void SceneModelsPass::collect(const engine::Frame& frame,engine::DrawQueue& queu
             ASR_DIAGNOSTIC(++massDrawn_);
         }
     }
-    const auto sourceAssets=[&] {
-        std::vector<engine::render::SourceGeometry> assets(models_.size());
-        for (std::size_t model=0;model<models_.size();++model) {
-            const auto& source=models_[model];
-            assets[model]={source.clusters,&source.clusterIndex,source.clusterBase,
-                source.vertexBase,{std::hypot(source.width,source.height)*0.6,
-                                   source.height*0.5},0,source.clusterVertexBase};
+    if (!forestProxies_.draws().empty()) {
+        auto& instances=scratch_.proxyInstances;instances.clear();
+        for (const auto& proxy:forestProxies_.draws()) {
+            // Own fade, or the complement of a far node fading in over it.
+            const double far=farForest_.coverage(double(proxy.key.x)+ForestProxyCache::kCell*.5,
+                                                 double(proxy.key.y)+ForestProxyCache::kCell*.5);
+            const float coverage=far>0?-float(far):float(detailBlend_*proxy.weight);
+            instances.push_back({{float(proxy.centre[0]),float(proxy.centre[1]),float(proxy.centre[2])},
+                1,0,0,1,1,float(proxy.side),0,float(proxy.slot*21),0,4,coverage,float(proxy.slot*21),0});
+            forestProxies_.protect(proxy.slot,device_->nextSubmission());
         }
-        return assets;
-    }();
+        engine::DrawItem item;item.author=5;forestProxies_.apply(item);
+        item.vertex[0]=shared_.vertices.get();item.vertexOffset[0]=std::uint32_t(cardVertexBase_)*sizeof(Vertex);
+        item.instancesFromArena=true;item.vertexStreams=2;
+        item.vertexOffset[1]=frame.instances->add(std::span<const Instance>(instances));
+        item.index=shared_.indices.get();item.indexSize=SDL_GPU_INDEXELEMENTSIZE_32BIT;
+        item.firstIndex=cardRange_.first;item.indexCount=cardRange_.count;item.instances=std::uint32_t(instances.size());
+        queue.push(item);
+    }
+    if (!farForest_.draws().empty()) {
+        // The same quad, mode and instance layout as the 32 m proxies; only
+        // the atlas arrays differ, so it is its own material instance.
+        auto& instances=scratch_.proxyInstances;instances.clear();
+        for (const auto& proxy:farForest_.draws()) {
+            const float coverage=proxy.coverage<0?float(proxy.coverage):float(detailBlend_*proxy.coverage);
+            instances.push_back({{float(proxy.centre[0]),float(proxy.centre[1]),float(proxy.centre[2])},
+                1,0,0,1,1,float(proxy.side),0,float(proxy.slot*21),0,4,coverage,float(proxy.slot*21),0});
+            farForest_.protect(proxy.slot,device_->nextSubmission());
+        }
+        engine::DrawItem item;item.author=5;farForest_.apply(item);
+        item.vertex[0]=shared_.vertices.get();item.vertexOffset[0]=std::uint32_t(cardVertexBase_)*sizeof(Vertex);
+        item.instancesFromArena=true;item.vertexStreams=2;
+        item.vertexOffset[1]=frame.instances->add(std::span<const Instance>(instances));
+        item.index=shared_.indices.get();item.indexSize=SDL_GPU_INDEXELEMENTSIZE_32BIT;
+        item.firstIndex=cardRange_.first;item.indexCount=cardRange_.count;item.instances=std::uint32_t(instances.size());
+        queue.push(item);
+    }
+    // Pooled: resized, never shrunk, so steady frames do not reallocate.
+    auto& sourceAssets=scratch_.sourceAssets;
+    sourceAssets.resize(models_.size());
+    for (std::size_t model=0;model<models_.size();++model) {
+        const auto& source=models_[model];
+        sourceAssets[model]={source.clusters,&source.clusterIndex,source.clusterBase,
+            source.vertexBase,{std::hypot(source.width,source.height)*0.6,
+                               source.height*0.5},0,source.clusterVertexBase};
+    }
     auto regularPlan=engine::render::planDraws(runs,geometry_);
     collectEmitMs_=clock.lap();
     const auto instanceAt=frame.instances->add(std::span<const Instance>(drawn));
     bool gpuSource=false;
-    std::vector<engine::MeshRootInstance> gpuRoots;
+    auto& gpuRoots=scratch_.gpuRoots;gpuRoots.clear();
     std::size_t gpuCandidateCount=0;
     if (sceneGpu && gpuReady_ && gpuMeshRoots_.ready() && !sourceInstances.instances.empty() &&
         engine::render::sourceFitsGpuCapacity(sourceInstances,sourceAssets,
@@ -1543,18 +1862,40 @@ void SceneModelsPass::collect(const engine::Frame& frame,engine::DrawQueue& queu
     const auto totalTriangles=sourcePlan.plan.triangles+regularPlan.triangles;
     meshTriangles_+=sourcePlan.plan.triangles;
 #endif
+    std::size_t gpuSubmitted=0;
     if (gpuSource && submitDraws) {
-        engine::DrawItem gpuItem;
-        gpuItem.author=5;
-        (wireframe_?wireframeRenderer_:renderer_).material.apply(gpuItem);
-        gpuItem.vertex[0]=shared_.vertices.get();
-        gpuItem.vertex[1]=gpuInstances_.get();
-        gpuItem.vertexStreams=2;
-        gpuItem.index=shared_.indices.get();
-        gpuItem.indexSize=SDL_GPU_INDEXELEMENTSIZE_32BIT;
-        gpuItem.indirect=gpuClusters_.arguments();
-        gpuItem.indirectDraws=std::uint32_t(gpuClusterBuckets_);
-        queue.push(gpuItem);
+        // One indirect record per cluster bucket of every model is what the
+        // GPU path used to submit - and on Metal each record is a draw command
+        // whether its instance count is zero or not. Buckets are contiguous per
+        // model, so only the models with a root this frame are submitted, as
+        // runs of neighbouring models, each run one ranged indirect draw.
+        auto& present=scratch_.presentModels;present.clear();
+        for (const auto& batch:sourceInstances.batches) present.push_back(batch.mesh);
+        std::sort(present.begin(),present.end());
+        present.erase(std::unique(present.begin(),present.end()),present.end());
+        for (std::size_t i=0;i<present.size();) {
+            const auto first=models_[present[i]].gpuClusterBase;
+            std::size_t end=first+models_[present[i]].clusters.size();
+            std::size_t j=i+1;
+            while (j<present.size() && models_[present[j]].gpuClusterBase==end) {
+                end+=models_[present[j]].clusters.size();
+                ++j;
+            }
+            engine::DrawItem gpuItem;
+            gpuItem.author=5;
+            (wireframe_?wireframeRenderer_:renderer_).material.apply(gpuItem);
+            gpuItem.vertex[0]=shared_.vertices.get();
+            gpuItem.vertex[1]=gpuInstances_.get();
+            gpuItem.vertexStreams=2;
+            gpuItem.index=shared_.indices.get();
+            gpuItem.indexSize=SDL_GPU_INDEXELEMENTSIZE_32BIT;
+            gpuItem.indirect=gpuClusters_.arguments();
+            gpuItem.indirectOffset=std::uint32_t(first*sizeof(engine::DrawArguments));
+            gpuItem.indirectDraws=std::uint32_t(end-first);
+            queue.push(gpuItem);
+            gpuSubmitted+=end-first;
+            i=j;
+        }
     }
     if (gpuHierarchySource) {
         engine::DrawItem hierarchyItem;
@@ -1578,7 +1919,7 @@ void SceneModelsPass::collect(const engine::Frame& frame,engine::DrawQueue& queu
     // count: the records grow with what is visible, the commands do not.
     if (frame.arguments && submitDraws &&
         (!regularPlan.draws.empty() || (!gpuSource && !sourcePlan.plan.draws.empty()))) {
-        std::vector<engine::DrawArguments> arguments;
+        auto& arguments=scratch_.arguments;arguments.clear();
         arguments.reserve(regularPlan.draws.size()+sourcePlan.plan.draws.size());
         arguments.insert(arguments.end(),regularPlan.draws.begin(),regularPlan.draws.end());
         std::size_t triangles=regularPlan.triangles;
@@ -1604,9 +1945,24 @@ void SceneModelsPass::collect(const engine::Frame& frame,engine::DrawQueue& queu
         item.indirectTriangles=triangles;
         queue.push(item);
     }
+    if (std::getenv("ASR_SCENE_DEBUG") && frame.index%120==0) {
+        const auto far=farForest_.stats();
+        std::cerr<<"far-forest bakes="<<far.bakes<<" failed="<<far.failed<<" uploaded-views="<<far.uploads
+                 <<" drawn="<<farForest_.draws().size()<<" drawn-total="<<far.drawnTotal
+                 <<" wanted="<<far.wanted<<" visited="<<far.visited<<" jobs="<<far.jobs
+                 <<" store="<<far.storeEntries<<"/"<<(far.storeBytes>>20)<<"MiB pressure="<<far.pressure
+                 <<(far.limited?" limited":"")<<" draw-distance="<<drawDistance_
+                 <<" invisible="<<far.invisible<<" below="<<far.below<<" coarse="<<far.coarse<<" pruned="<<far.pruned<<" update-ms="<<far.updateMs<<" worst-update-ms="<<far.worstUpdateMs<<" upload-ms="<<far.uploadMs<<'\n';
+        for (int level=1;level<4;++level)
+            std::cerr<<"  far-level "<<level<<" drawn="<<far.drawnAt[level]<<" wanted="<<far.wantedAt[level]
+                     <<" baked="<<far.bakedAt[level]<<" mean-total-error-m="<<far.totalError[level]
+                     <<" mean-view-error-m="<<far.viewError[level]<<" mean-bake-ms="<<far.bakeMs[level]<<'\n';
+    }
     if (!gpuSource && !gpuHierarchySource && regularPlan.draws.empty() &&
         sourcePlan.plan.draws.empty()) return;
     if (std::getenv("ASR_SCENE_DEBUG") && frame.index%120==0) {
+        std::cerr<<"forest-proxy bakes="<<forestProxies_.bakes()<<" uploaded-views="<<forestProxies_.uploads()
+                 <<" drawn="<<forestProxies_.draws().size()<<" drawn-total="<<forestProxies_.drawnTotal()<<'\n';
         double reach=0;
         for (std::size_t i=0;i<selected.instances.size();++i)
             if (keep[i] && !hierarchyReplaced[i]) {
@@ -1627,6 +1983,11 @@ void SceneModelsPass::collect(const engine::Frame& frame,engine::DrawQueue& queu
         std::cerr << "scene-debug selected=" << selected.instances.size()
                   << " regions=" << (placement_?placement_->regions.size():0) << '/' << wantedRegions_.size()
                   << " complete=" << (placement_ && placement_->complete)
+                  << " placement-limited=" << (regionQuery_.limited || source_.stats().limited)
+                  << " query-nodes=" << regionQuery_.visited
+                  << " cached=" << source_.stats().cached << " in-flight=" << source_.stats().inFlight
+                  << " started/collected/published=" << source_.stats().started << '/'
+                  << source_.stats().collected << '/' << source_.stats().published
                   << " visible-reach-m=" << reach
                   << " mass-drawn=" << massRunCount
                   << " mass-records=" << massRecords
@@ -1656,9 +2017,10 @@ void SceneModelsPass::collect(const engine::Frame& frame,engine::DrawQueue& queu
                   << " hierarchy=" << collectHierarchyMs_ << " budget=" << collectBudgetMs_
                   << " emit=" << collectEmitMs_ << " plan=" << collectPlanMs_ << "]\n";
     }
+    (void)gpuSubmitted;
     ASR_DIAGNOSTIC(draws_=std::size_t(gpuSource)+std::size_t(gpuHierarchySource)+
         (!regularPlan.draws.empty())+(!gpuSource&&!sourcePlan.plan.draws.empty());
-        indirectDraws_=(gpuSource?gpuClusterBuckets_:0)+(gpuHierarchySource?gpuHierarchyBuckets_:0)+
+        indirectDraws_=(gpuSource?gpuSubmitted:0)+(gpuHierarchySource?gpuHierarchyBuckets_:0)+
             regularPlan.draws.size()+(!gpuSource?sourcePlan.plan.draws.size():0);
         clusterDraws_=gpuSource?gpuClusterBuckets_:sourcePlan.plan.fromClusters+regularPlan.fromClusters;
         cardDraws_=regularPlan.fromCards;crownDraws_=regularPlan.fromCrown;triangles_=totalTriangles);

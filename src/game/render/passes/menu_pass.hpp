@@ -15,8 +15,11 @@
 
 #include <SDL3/SDL.h>
 
+#include <memory>
+
 #include "engine/pipeline/pass.hpp"
 #include "engine/render/device.hpp"
+#include "engine/ui/ui.hpp"
 
 namespace client { class ExploreMenu; }
 
@@ -36,8 +39,17 @@ public:
 
 private:
     void collectProgress(const engine::Frame& frame, engine::DrawQueue& queue);
+    void collectPanel(const engine::Frame& frame, engine::DrawQueue& queue);
     client::ExploreMenu& menu_;
     const GpuTerrain* terrain_ = nullptr;
+    // The graphics settings window: its own surface and immediate-mode Ui.
+    SDL_Surface* panelSurface_ = nullptr;
+    SDL_Renderer* panelSoftware_ = nullptr;
+    std::unique_ptr<ui::Ui> panelUi_;
+    engine::Texture panelPicture_;
+    engine::BindingSet panelBindings_ = engine::kNoBindings;
+    ui::Input lastPanelInput_;
+    bool panelDrawn_ = false;
     static constexpr int kProgressWide = 516, kProgressHigh = 380;
     SDL_Surface* progressSurface_ = nullptr;
     SDL_Renderer* progressSoftware_ = nullptr;

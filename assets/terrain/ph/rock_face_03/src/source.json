@@ -1,0 +1,24 @@
+{
+  "site": "polyhaven",
+  "asset_id": "rock_face_03",
+  "asset_url": "https://polyhaven.com/a/rock_face_03",
+  "license": "CC0",
+  "authors": [
+    "Dario Barresi",
+    "Rico Cilliers"
+  ],
+  "attribution_required": false,
+  "original_physical_metres": [
+    2.7,
+    2.7
+  ],
+  "runtime_world_scale": 2.7,
+  "resolution": "2k",
+  "files": {
+    "diffuse": "ph_rock_face_03_diffuse.png",
+    "normal": "ph_rock_face_03_normal.png",
+    "displacement": "ph_rock_face_03_displacement.png",
+    "rough": "ph_rock_face_03_rough.png",
+    "ao": "ph_rock_face_03_ao.png"
+  }
+}

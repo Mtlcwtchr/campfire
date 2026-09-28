@@ -1,0 +1,1581 @@
+[
+  {
+    "role": "CommonTree_1",
+    "asset": "/Game/Megaplant_Static/Tree_European_Beech/SM_Tree_European_Beech_01_A",
+    "prepared_lod0_triangles": 9256,
+    "visual_id": "CommonTree_1/forest/10",
+    "catalogue_verification": "/Users/antonslauta/Documents/UProjects/AncientSettlement/Saved/AssetBudget/meshes.json",
+    "nanite_triangles": 9256,
+    "materials": [
+      {
+        "asset": "/Game/Megaplant_Static/Materials/MI_AS_European_Beech_Bark_01.MI_AS_European_Beech_Bark_01",
+        "class": "MaterialInstanceConstant",
+        "textures": {
+          "Albedo": "/Game/Megaplant_Library/Tree_European_Beech/Textures/T_European_Beech_Bark_01_C.T_European_Beech_Bark_01_C",
+          "PackedNormal": "/Game/Megaplant_Library/Tree_European_Beech/Textures/T_European_Beech_Bark_01_NAH.T_European_Beech_Bark_01_NAH"
+        },
+        "scalars": {
+          "RoughnessConstant": "0.8500000238418579",
+          "Deciduous": "1.0",
+          "IsLeaves": "0.0",
+          "Evergreen": "0.0",
+          "HeightCm": "1200.0",
+          "SwayCm": "35.0",
+          "FlutterCm": "2.5"
+        },
+        "vectors": {}
+      },
+      {
+        "asset": "/Game/Megaplant_Static/Materials/MI_AS_European_Beech_Foliage_01.MI_AS_European_Beech_Foliage_01",
+        "class": "MaterialInstanceConstant",
+        "textures": {
+          "Albedo": "/Game/Megaplant_Library/Tree_European_Beech/Textures/T_European_Beech_Foliage_01_CA.T_European_Beech_Foliage_01_CA",
+          "PackedNormal": "/Game/Megaplant_Library/Tree_European_Beech/Textures/T_European_Beech_Foliage_01_NT.T_European_Beech_Foliage_01_NT"
+        },
+        "scalars": {
+          "RoughnessConstant": "0.550000011920929",
+          "Deciduous": "1.0",
+          "IsLeaves": "1.0",
+          "Evergreen": "0.0",
+          "HeightCm": "1200.0",
+          "SwayCm": "35.0",
+          "FlutterCm": "2.5"
+        },
+        "vectors": {}
+      }
+    ]
+  },
+  {
+    "role": "Pine_1",
+    "asset": "/Game/Megaplant_Static/Tree_Norway_Spruce/SM_Tree_Norway_Spruce_01_A",
+    "prepared_lod0_triangles": 8961,
+    "visual_id": "Pine_1/forest/0",
+    "catalogue_verification": "/Users/antonslauta/Documents/UProjects/AncientSettlement/Saved/AssetBudget/meshes.json",
+    "nanite_triangles": 8961,
+    "materials": [
+      {
+        "asset": "/Game/Megaplant_Static/Materials/MI_AS_Norway_Spruce_Bark_01.MI_AS_Norway_Spruce_Bark_01",
+        "class": "MaterialInstanceConstant",
+        "textures": {
+          "Albedo": "/Game/Megaplant_Library/Tree_Norway_Spruce/Textures/T_Norway_Spruce_Bark_01_C.T_Norway_Spruce_Bark_01_C",
+          "PackedNormal": "/Game/Megaplant_Library/Tree_Norway_Spruce/Textures/T_Norway_Spruce_Bark_01_NAH.T_Norway_Spruce_Bark_01_NAH"
+        },
+        "scalars": {
+          "RoughnessConstant": "0.8500000238418579",
+          "Deciduous": "0.0",
+          "IsLeaves": "0.0",
+          "Evergreen": "1.0",
+          "HeightCm": "1200.0",
+          "SwayCm": "35.0",
+          "FlutterCm": "2.5"
+        },
+        "vectors": {}
+      },
+      {
+        "asset": "/Game/Megaplant_Static/Materials/MI_AS_Norway_Spruce_Foliage_01.MI_AS_Norway_Spruce_Foliage_01",
+        "class": "MaterialInstanceConstant",
+        "textures": {
+          "Albedo": "/Game/Megaplant_Library/Tree_Norway_Spruce/Textures/T_Norway_Spruce_Foliage_01_CA.T_Norway_Spruce_Foliage_01_CA",
+          "PackedNormal": "/Game/Megaplant_Library/Tree_Norway_Spruce/Textures/T_Norway_Spruce_Foliage_01_NT.T_Norway_Spruce_Foliage_01_NT"
+        },
+        "scalars": {
+          "RoughnessConstant": "0.550000011920929",
+          "Deciduous": "0.0",
+          "IsLeaves": "1.0",
+          "Evergreen": "1.0",
+          "HeightCm": "1200.0",
+          "SwayCm": "35.0",
+          "FlutterCm": "2.5"
+        },
+        "vectors": {}
+      },
+      {
+        "asset": "/Game/Megaplant_Static/Materials/MI_AS_Norway_Spruce_Decorations_01.MI_AS_Norway_Spruce_Decorations_01",
+        "class": "MaterialInstanceConstant",
+        "textures": {
+          "Albedo": "/Game/Megaplant_Library/Tree_Norway_Spruce/Textures/T_Norway_Spruce_Decorations_01_C.T_Norway_Spruce_Decorations_01_C",
+          "PackedNormal": "/Game/Megaplant_Library/Tree_Norway_Spruce/Textures/T_Norway_Spruce_Decorations_01_NAH.T_Norway_Spruce_Decorations_01_NAH"
+        },
+        "scalars": {
+          "RoughnessConstant": "0.550000011920929",
+          "Deciduous": "0.0",
+          "IsLeaves": "1.0",
+          "Evergreen": "1.0",
+          "HeightCm": "1200.0",
+          "SwayCm": "35.0",
+          "FlutterCm": "2.5"
+        },
+        "vectors": {}
+      }
+    ]
+  },
+  {
+    "role": "Bush_Common",
+    "asset": "/Game/Light_Foliage/Meshes/SM_Bush_01",
+    "prepared_lod0_triangles": 408,
+    "visual_id": "Bush_Common/0",
+    "catalogue_verification": "/Users/antonslauta/Documents/UProjects/AncientSettlement/Saved/AssetBudget/meshes.json",
+    "nanite_triangles": 408,
+    "materials": [
+      {
+        "asset": "/Game/Light_Foliage/Materials/MI_Bush_01.MI_Bush_01",
+        "class": "MaterialInstanceConstant",
+        "textures": {
+          "Normal": "/Game/Light_Foliage/Textures/T_Bush_01_Normal.T_Bush_01_Normal",
+          "Mask": "/Game/Light_Foliage/Textures/T_Bush_01_Mask.T_Bush_01_Mask"
+        },
+        "scalars": {
+          "Specular": "0.0",
+          "Roughnes": "1.0",
+          "SSS_BaseColor_Amount": "1.0",
+          "SSS_Amount": "2.0",
+          "Opacity_Amount": "1.0",
+          "WindPower": "0.5",
+          "WindSpeed": "0.4000000059604645",
+          "FakeShadowDistance": "1000.0",
+          "NNN": "1.0"
+        },
+        "vectors": {
+          "Tint_2": [
+            0.22395800054073334,
+            0.2132440060377121,
+            0.04473099857568741,
+            0.0
+          ],
+          "Tint_3": [
+            0.02524399943649769,
+            0.03385400027036667,
+            0.013224000111222267,
+            0.0
+          ],
+          "Tint_1": [
+            0.04427099972963333,
+            0.025895999744534492,
+            0.0059910002164542675,
+            0.0
+          ],
+          "SSS_Color": [
+            0.006661000195890665,
+            0.008929000236093998,
+            0.0020719999447464943,
+            1.0
+          ]
+        },
+        "graph": {
+          "material": "/Game/Light_Foliage/Materials/Master_Materials/M_Master_Foliage.M_Master_Foliage",
+          "roots": {
+            "colour": "MaterialExpressionStaticSwitchParameter_4",
+            "opacity": "MaterialExpressionStaticSwitchParameter_1"
+          },
+          "nodes": {
+            "MaterialExpressionStaticSwitchParameter_1": {
+              "class": "MaterialExpressionStaticSwitchParameter",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionAdd_1",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionMaterialFunctionCall_8",
+                  "output": "Result"
+                }
+              ],
+              "input_names": [
+                "True",
+                "False"
+              ],
+              "parameter_name": "is Shrub",
+              "default_value": "False"
+            },
+            "MaterialExpressionMaterialFunctionCall_8": {
+              "class": "MaterialExpressionMaterialFunctionCall",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionLinearInterpolate_31",
+                  "output": ""
+                }
+              ],
+              "input_names": [
+                "Alpha Threshold",
+                "Random"
+              ],
+              "material_function": "/Engine/Functions/Engine_MaterialFunctions02/Utility/DitherTemporalAA.DitherTemporalAA"
+            },
+            "MaterialExpressionLinearInterpolate_31": {
+              "class": "MaterialExpressionLinearInterpolate",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionConstant_17",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionClamp_4",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionPerInstanceFadeAmount_6",
+                  "output": ""
+                }
+              ],
+              "input_names": [
+                "A",
+                "B",
+                "Alpha"
+              ],
+              "const_a": "0.0",
+              "const_b": "0.0",
+              "const_alpha": "0.5"
+            },
+            "MaterialExpressionPerInstanceFadeAmount_6": {
+              "class": "MaterialExpressionPerInstanceFadeAmount",
+              "inputs": [],
+              "input_names": []
+            },
+            "MaterialExpressionClamp_4": {
+              "class": "MaterialExpressionClamp",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionLinearInterpolate_30",
+                  "output": ""
+                }
+              ],
+              "input_names": [
+                "None",
+                "Min",
+                "Max"
+              ]
+            },
+            "MaterialExpressionLinearInterpolate_30": {
+              "class": "MaterialExpressionLinearInterpolate",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionMultiply_28",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionMultiply_28",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionCustom_1",
+                  "output": ""
+                }
+              ],
+              "input_names": [
+                "A",
+                "B",
+                "Alpha"
+              ],
+              "const_a": "0.0",
+              "const_b": "0.5",
+              "const_alpha": "0.5"
+            },
+            "MaterialExpressionCustom_1": {
+              "class": "MaterialExpressionCustom",
+              "inputs": [],
+              "input_names": [
+                "None"
+              ]
+            },
+            "MaterialExpressionMultiply_28": {
+              "class": "MaterialExpressionMultiply",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionAdd_1",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionConstant_0",
+                  "output": ""
+                }
+              ],
+              "input_names": [
+                "A",
+                "B"
+              ],
+              "const_a": "0.0",
+              "const_b": "1.0"
+            },
+            "MaterialExpressionConstant_0": {
+              "class": "MaterialExpressionConstant",
+              "inputs": [],
+              "input_names": [],
+              "r": "6.0"
+            },
+            "MaterialExpressionAdd_1": {
+              "class": "MaterialExpressionAdd",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionAdd_0",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionTextureSampleParameter2D_1",
+                  "output": "B"
+                }
+              ],
+              "input_names": [
+                "A",
+                "B"
+              ],
+              "const_a": "0.0",
+              "const_b": "1.0"
+            },
+            "MaterialExpressionTextureSampleParameter2D_1": {
+              "class": "MaterialExpressionTextureSampleParameter2D",
+              "inputs": [],
+              "input_names": [
+                "UVs",
+                "Apply View MipBias"
+              ],
+              "parameter_name": "Mask",
+              "texture": "/Engine/MaterialTemplates/LayerBlends/T_DefaultMaskTexture.T_DefaultMaskTexture"
+            },
+            "MaterialExpressionAdd_0": {
+              "class": "MaterialExpressionAdd",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionTextureSampleParameter2D_1",
+                  "output": "R"
+                },
+                {
+                  "node": "MaterialExpressionTextureSampleParameter2D_1",
+                  "output": "R"
+                }
+              ],
+              "input_names": [
+                "A",
+                "B"
+              ],
+              "const_a": "0.0",
+              "const_b": "1.0"
+            },
+            "MaterialExpressionConstant_17": {
+              "class": "MaterialExpressionConstant",
+              "inputs": [],
+              "input_names": [],
+              "r": "0.0"
+            },
+            "MaterialExpressionStaticSwitchParameter_4": {
+              "class": "MaterialExpressionStaticSwitchParameter",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionLinearInterpolate_2",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionLinearInterpolate_16",
+                  "output": ""
+                }
+              ],
+              "input_names": [
+                "True",
+                "False"
+              ],
+              "parameter_name": "is Shrub",
+              "default_value": "False"
+            },
+            "MaterialExpressionLinearInterpolate_16": {
+              "class": "MaterialExpressionLinearInterpolate",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionLinearInterpolate_2",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionMultiply_21",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionClamp_7",
+                  "output": ""
+                }
+              ],
+              "input_names": [
+                "A",
+                "B",
+                "Alpha"
+              ],
+              "const_a": "0.0",
+              "const_b": "1.0",
+              "const_alpha": "0.5"
+            },
+            "MaterialExpressionClamp_7": {
+              "class": "MaterialExpressionClamp",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionPower_2",
+                  "output": ""
+                }
+              ],
+              "input_names": [
+                "None",
+                "Min",
+                "Max"
+              ]
+            },
+            "MaterialExpressionPower_2": {
+              "class": "MaterialExpressionPower",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionDivide_5",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionConstant_5",
+                  "output": ""
+                }
+              ],
+              "input_names": [
+                "Base",
+                "Exp"
+              ]
+            },
+            "MaterialExpressionConstant_5": {
+              "class": "MaterialExpressionConstant",
+              "inputs": [],
+              "input_names": [],
+              "r": "50.0"
+            },
+            "MaterialExpressionDivide_5": {
+              "class": "MaterialExpressionDivide",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionDistance_3",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionScalarParameter_7",
+                  "output": ""
+                }
+              ],
+              "input_names": [
+                "A",
+                "B"
+              ],
+              "const_a": "1.0",
+              "const_b": "2.0"
+            },
+            "MaterialExpressionScalarParameter_7": {
+              "class": "MaterialExpressionScalarParameter",
+              "inputs": [],
+              "input_names": [],
+              "parameter_name": "FakeShadowDistance",
+              "default_value": "1000.0"
+            },
+            "MaterialExpressionDistance_3": {
+              "class": "MaterialExpressionDistance",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionWorldPosition_2",
+                  "output": "XYZ"
+                },
+                {
+                  "node": "MaterialExpressionCameraPositionWS_0",
+                  "output": ""
+                }
+              ],
+              "input_names": [
+                "A",
+                "B"
+              ]
+            },
+            "MaterialExpressionCameraPositionWS_0": {
+              "class": "MaterialExpressionCameraPositionWS",
+              "inputs": [],
+              "input_names": []
+            },
+            "MaterialExpressionWorldPosition_2": {
+              "class": "MaterialExpressionWorldPosition",
+              "inputs": [],
+              "input_names": []
+            },
+            "MaterialExpressionMultiply_21": {
+              "class": "MaterialExpressionMultiply",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionLinearInterpolate_2",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionOneMinus_2",
+                  "output": ""
+                }
+              ],
+              "input_names": [
+                "A",
+                "B"
+              ],
+              "const_a": "0.0",
+              "const_b": "1.0"
+            },
+            "MaterialExpressionOneMinus_2": {
+              "class": "MaterialExpressionOneMinus",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionMaterialFunctionCall_6",
+                  "output": "RadialGradientExponential"
+                }
+              ],
+              "input_names": [
+                "None"
+              ]
+            },
+            "MaterialExpressionMaterialFunctionCall_6": {
+              "class": "MaterialExpressionMaterialFunctionCall",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionConstant_15",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionConstant_14",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionConstant_16",
+                  "output": ""
+                }
+              ],
+              "input_names": [
+                "UVs",
+                "CenterPosition",
+                "Radius",
+                "Density",
+                "Invert Density"
+              ],
+              "material_function": "/Engine/Functions/Engine_MaterialFunctions01/Gradient/RadialGradientExponential.RadialGradientExponential"
+            },
+            "MaterialExpressionConstant_16": {
+              "class": "MaterialExpressionConstant",
+              "inputs": [],
+              "input_names": [],
+              "r": "1.2999999523162842"
+            },
+            "MaterialExpressionConstant_14": {
+              "class": "MaterialExpressionConstant",
+              "inputs": [],
+              "input_names": [],
+              "r": "0.5"
+            },
+            "MaterialExpressionConstant_15": {
+              "class": "MaterialExpressionConstant",
+              "inputs": [],
+              "input_names": [],
+              "r": "0.699999988079071"
+            },
+            "MaterialExpressionLinearInterpolate_2": {
+              "class": "MaterialExpressionLinearInterpolate",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionLinearInterpolate_1",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionVectorParameter_0",
+                  "output": "RGB"
+                },
+                {
+                  "node": "MaterialExpressionTextureSampleParameter2D_1",
+                  "output": "B"
+                }
+              ],
+              "input_names": [
+                "A",
+                "B",
+                "Alpha"
+              ],
+              "const_a": "0.0",
+              "const_b": "1.0",
+              "const_alpha": "0.5"
+            },
+            "MaterialExpressionVectorParameter_0": {
+              "class": "MaterialExpressionVectorParameter",
+              "inputs": [],
+              "input_names": [],
+              "parameter_name": "Tint_1",
+              "default_value": "<Struct 'LinearColor' (0x994cb05a0ec) {r: 0.000000, g: 0.102411, b: 1.000000, a: 0.000000}>"
+            },
+            "MaterialExpressionLinearInterpolate_1": {
+              "class": "MaterialExpressionLinearInterpolate",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionLinearInterpolate_0",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionVectorParameter_2",
+                  "output": "RGB"
+                },
+                {
+                  "node": "MaterialExpressionTextureSampleParameter2D_1",
+                  "output": "G"
+                }
+              ],
+              "input_names": [
+                "A",
+                "B",
+                "Alpha"
+              ],
+              "const_a": "0.0",
+              "const_b": "1.0",
+              "const_alpha": "0.5"
+            },
+            "MaterialExpressionVectorParameter_2": {
+              "class": "MaterialExpressionVectorParameter",
+              "inputs": [],
+              "input_names": [],
+              "parameter_name": "Tint_3",
+              "default_value": "<Struct 'LinearColor' (0x994cb05a36c) {r: 0.023787, g: 1.000000, b: 0.000000, a: 0.000000}>"
+            },
+            "MaterialExpressionLinearInterpolate_0": {
+              "class": "MaterialExpressionLinearInterpolate",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionConstant3Vector_1",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionVectorParameter_1",
+                  "output": "RGB"
+                },
+                {
+                  "node": "MaterialExpressionTextureSampleParameter2D_1",
+                  "output": "R"
+                }
+              ],
+              "input_names": [
+                "A",
+                "B",
+                "Alpha"
+              ],
+              "const_a": "0.0",
+              "const_b": "1.0",
+              "const_alpha": "0.5"
+            },
+            "MaterialExpressionVectorParameter_1": {
+              "class": "MaterialExpressionVectorParameter",
+              "inputs": [],
+              "input_names": [],
+              "parameter_name": "Tint_2",
+              "default_value": "<Struct 'LinearColor' (0x994cb05a22c) {r: 1.000000, g: 0.000000, b: 0.004263, a: 0.000000}>"
+            },
+            "MaterialExpressionConstant3Vector_1": {
+              "class": "MaterialExpressionConstant3Vector",
+              "inputs": [],
+              "input_names": [],
+              "constant": "<Struct 'LinearColor' (0x994c4cb5840) {r: 0.009076, g: 0.011161, b: 0.002883, a: 0.000000}>"
+            }
+          }
+        },
+        "switches": {
+          "is Shrub": false,
+          "Billboard": false,
+          "Grass": true,
+          "FacingLeaf": false
+        }
+      },
+      {
+        "asset": "/Game/Light_Foliage/Materials/MI_Branch.MI_Branch",
+        "class": "MaterialInstanceConstant",
+        "textures": {
+          "Normal": "/Game/Light_Foliage/Textures/T_Bush_04_Normal.T_Bush_04_Normal",
+          "Mask": "/Game/Light_Foliage/Textures/T_Bush_Branch_Mask.T_Bush_Branch_Mask"
+        },
+        "scalars": {
+          "Specular": "0.10000000149011612",
+          "Roughnes": "1.0",
+          "SSS_BaseColor_Amount": "1.0",
+          "SSS_Amount": "2.0",
+          "Opacity_Amount": "1.0",
+          "WindPower": "0.10000000149011612",
+          "WindSpeed": "0.4000000059604645",
+          "FakeShadowDistance": "1000.0",
+          "NNN": "1.0"
+        },
+        "vectors": {
+          "Tint_2": [
+            0.04854299873113632,
+            0.05989599972963333,
+            0.01575399935245514,
+            0.0
+          ],
+          "Tint_3": [
+            0.16927100718021393,
+            0.12846200168132782,
+            0.08375199884176254,
+            0.0
+          ],
+          "Tint_1": [
+            0.23958300054073334,
+            0.22662200033664703,
+            0.01808599941432476,
+            0.0
+          ],
+          "SSS_Color": [
+            0.006661000195890665,
+            0.008929000236093998,
+            0.0020719999447464943,
+            1.0
+          ]
+        },
+        "graph": {
+          "material": "/Game/Light_Foliage/Materials/Master_Materials/M_Master_Foliage.M_Master_Foliage",
+          "roots": {
+            "colour": "MaterialExpressionStaticSwitchParameter_4",
+            "opacity": "MaterialExpressionStaticSwitchParameter_1"
+          },
+          "nodes": {
+            "MaterialExpressionStaticSwitchParameter_1": {
+              "class": "MaterialExpressionStaticSwitchParameter",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionAdd_1",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionMaterialFunctionCall_8",
+                  "output": "Result"
+                }
+              ],
+              "input_names": [
+                "True",
+                "False"
+              ],
+              "parameter_name": "is Shrub",
+              "default_value": "False"
+            },
+            "MaterialExpressionMaterialFunctionCall_8": {
+              "class": "MaterialExpressionMaterialFunctionCall",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionLinearInterpolate_31",
+                  "output": ""
+                }
+              ],
+              "input_names": [
+                "Alpha Threshold",
+                "Random"
+              ],
+              "material_function": "/Engine/Functions/Engine_MaterialFunctions02/Utility/DitherTemporalAA.DitherTemporalAA"
+            },
+            "MaterialExpressionLinearInterpolate_31": {
+              "class": "MaterialExpressionLinearInterpolate",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionConstant_17",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionClamp_4",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionPerInstanceFadeAmount_6",
+                  "output": ""
+                }
+              ],
+              "input_names": [
+                "A",
+                "B",
+                "Alpha"
+              ],
+              "const_a": "0.0",
+              "const_b": "0.0",
+              "const_alpha": "0.5"
+            },
+            "MaterialExpressionPerInstanceFadeAmount_6": {
+              "class": "MaterialExpressionPerInstanceFadeAmount",
+              "inputs": [],
+              "input_names": []
+            },
+            "MaterialExpressionClamp_4": {
+              "class": "MaterialExpressionClamp",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionLinearInterpolate_30",
+                  "output": ""
+                }
+              ],
+              "input_names": [
+                "None",
+                "Min",
+                "Max"
+              ]
+            },
+            "MaterialExpressionLinearInterpolate_30": {
+              "class": "MaterialExpressionLinearInterpolate",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionMultiply_28",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionMultiply_28",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionCustom_1",
+                  "output": ""
+                }
+              ],
+              "input_names": [
+                "A",
+                "B",
+                "Alpha"
+              ],
+              "const_a": "0.0",
+              "const_b": "0.5",
+              "const_alpha": "0.5"
+            },
+            "MaterialExpressionCustom_1": {
+              "class": "MaterialExpressionCustom",
+              "inputs": [],
+              "input_names": [
+                "None"
+              ]
+            },
+            "MaterialExpressionMultiply_28": {
+              "class": "MaterialExpressionMultiply",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionAdd_1",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionConstant_0",
+                  "output": ""
+                }
+              ],
+              "input_names": [
+                "A",
+                "B"
+              ],
+              "const_a": "0.0",
+              "const_b": "1.0"
+            },
+            "MaterialExpressionConstant_0": {
+              "class": "MaterialExpressionConstant",
+              "inputs": [],
+              "input_names": [],
+              "r": "6.0"
+            },
+            "MaterialExpressionAdd_1": {
+              "class": "MaterialExpressionAdd",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionAdd_0",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionTextureSampleParameter2D_1",
+                  "output": "B"
+                }
+              ],
+              "input_names": [
+                "A",
+                "B"
+              ],
+              "const_a": "0.0",
+              "const_b": "1.0"
+            },
+            "MaterialExpressionTextureSampleParameter2D_1": {
+              "class": "MaterialExpressionTextureSampleParameter2D",
+              "inputs": [],
+              "input_names": [
+                "UVs",
+                "Apply View MipBias"
+              ],
+              "parameter_name": "Mask",
+              "texture": "/Engine/MaterialTemplates/LayerBlends/T_DefaultMaskTexture.T_DefaultMaskTexture"
+            },
+            "MaterialExpressionAdd_0": {
+              "class": "MaterialExpressionAdd",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionTextureSampleParameter2D_1",
+                  "output": "R"
+                },
+                {
+                  "node": "MaterialExpressionTextureSampleParameter2D_1",
+                  "output": "R"
+                }
+              ],
+              "input_names": [
+                "A",
+                "B"
+              ],
+              "const_a": "0.0",
+              "const_b": "1.0"
+            },
+            "MaterialExpressionConstant_17": {
+              "class": "MaterialExpressionConstant",
+              "inputs": [],
+              "input_names": [],
+              "r": "0.0"
+            },
+            "MaterialExpressionStaticSwitchParameter_4": {
+              "class": "MaterialExpressionStaticSwitchParameter",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionLinearInterpolate_2",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionLinearInterpolate_16",
+                  "output": ""
+                }
+              ],
+              "input_names": [
+                "True",
+                "False"
+              ],
+              "parameter_name": "is Shrub",
+              "default_value": "False"
+            },
+            "MaterialExpressionLinearInterpolate_16": {
+              "class": "MaterialExpressionLinearInterpolate",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionLinearInterpolate_2",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionMultiply_21",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionClamp_7",
+                  "output": ""
+                }
+              ],
+              "input_names": [
+                "A",
+                "B",
+                "Alpha"
+              ],
+              "const_a": "0.0",
+              "const_b": "1.0",
+              "const_alpha": "0.5"
+            },
+            "MaterialExpressionClamp_7": {
+              "class": "MaterialExpressionClamp",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionPower_2",
+                  "output": ""
+                }
+              ],
+              "input_names": [
+                "None",
+                "Min",
+                "Max"
+              ]
+            },
+            "MaterialExpressionPower_2": {
+              "class": "MaterialExpressionPower",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionDivide_5",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionConstant_5",
+                  "output": ""
+                }
+              ],
+              "input_names": [
+                "Base",
+                "Exp"
+              ]
+            },
+            "MaterialExpressionConstant_5": {
+              "class": "MaterialExpressionConstant",
+              "inputs": [],
+              "input_names": [],
+              "r": "50.0"
+            },
+            "MaterialExpressionDivide_5": {
+              "class": "MaterialExpressionDivide",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionDistance_3",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionScalarParameter_7",
+                  "output": ""
+                }
+              ],
+              "input_names": [
+                "A",
+                "B"
+              ],
+              "const_a": "1.0",
+              "const_b": "2.0"
+            },
+            "MaterialExpressionScalarParameter_7": {
+              "class": "MaterialExpressionScalarParameter",
+              "inputs": [],
+              "input_names": [],
+              "parameter_name": "FakeShadowDistance",
+              "default_value": "1000.0"
+            },
+            "MaterialExpressionDistance_3": {
+              "class": "MaterialExpressionDistance",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionWorldPosition_2",
+                  "output": "XYZ"
+                },
+                {
+                  "node": "MaterialExpressionCameraPositionWS_0",
+                  "output": ""
+                }
+              ],
+              "input_names": [
+                "A",
+                "B"
+              ]
+            },
+            "MaterialExpressionCameraPositionWS_0": {
+              "class": "MaterialExpressionCameraPositionWS",
+              "inputs": [],
+              "input_names": []
+            },
+            "MaterialExpressionWorldPosition_2": {
+              "class": "MaterialExpressionWorldPosition",
+              "inputs": [],
+              "input_names": []
+            },
+            "MaterialExpressionMultiply_21": {
+              "class": "MaterialExpressionMultiply",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionLinearInterpolate_2",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionOneMinus_2",
+                  "output": ""
+                }
+              ],
+              "input_names": [
+                "A",
+                "B"
+              ],
+              "const_a": "0.0",
+              "const_b": "1.0"
+            },
+            "MaterialExpressionOneMinus_2": {
+              "class": "MaterialExpressionOneMinus",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionMaterialFunctionCall_6",
+                  "output": "RadialGradientExponential"
+                }
+              ],
+              "input_names": [
+                "None"
+              ]
+            },
+            "MaterialExpressionMaterialFunctionCall_6": {
+              "class": "MaterialExpressionMaterialFunctionCall",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionConstant_15",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionConstant_14",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionConstant_16",
+                  "output": ""
+                }
+              ],
+              "input_names": [
+                "UVs",
+                "CenterPosition",
+                "Radius",
+                "Density",
+                "Invert Density"
+              ],
+              "material_function": "/Engine/Functions/Engine_MaterialFunctions01/Gradient/RadialGradientExponential.RadialGradientExponential"
+            },
+            "MaterialExpressionConstant_16": {
+              "class": "MaterialExpressionConstant",
+              "inputs": [],
+              "input_names": [],
+              "r": "1.2999999523162842"
+            },
+            "MaterialExpressionConstant_14": {
+              "class": "MaterialExpressionConstant",
+              "inputs": [],
+              "input_names": [],
+              "r": "0.5"
+            },
+            "MaterialExpressionConstant_15": {
+              "class": "MaterialExpressionConstant",
+              "inputs": [],
+              "input_names": [],
+              "r": "0.699999988079071"
+            },
+            "MaterialExpressionLinearInterpolate_2": {
+              "class": "MaterialExpressionLinearInterpolate",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionLinearInterpolate_1",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionVectorParameter_0",
+                  "output": "RGB"
+                },
+                {
+                  "node": "MaterialExpressionTextureSampleParameter2D_1",
+                  "output": "B"
+                }
+              ],
+              "input_names": [
+                "A",
+                "B",
+                "Alpha"
+              ],
+              "const_a": "0.0",
+              "const_b": "1.0",
+              "const_alpha": "0.5"
+            },
+            "MaterialExpressionVectorParameter_0": {
+              "class": "MaterialExpressionVectorParameter",
+              "inputs": [],
+              "input_names": [],
+              "parameter_name": "Tint_1",
+              "default_value": "<Struct 'LinearColor' (0x994cb05a0ec) {r: 0.000000, g: 0.102411, b: 1.000000, a: 0.000000}>"
+            },
+            "MaterialExpressionLinearInterpolate_1": {
+              "class": "MaterialExpressionLinearInterpolate",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionLinearInterpolate_0",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionVectorParameter_2",
+                  "output": "RGB"
+                },
+                {
+                  "node": "MaterialExpressionTextureSampleParameter2D_1",
+                  "output": "G"
+                }
+              ],
+              "input_names": [
+                "A",
+                "B",
+                "Alpha"
+              ],
+              "const_a": "0.0",
+              "const_b": "1.0",
+              "const_alpha": "0.5"
+            },
+            "MaterialExpressionVectorParameter_2": {
+              "class": "MaterialExpressionVectorParameter",
+              "inputs": [],
+              "input_names": [],
+              "parameter_name": "Tint_3",
+              "default_value": "<Struct 'LinearColor' (0x994cb05a36c) {r: 0.023787, g: 1.000000, b: 0.000000, a: 0.000000}>"
+            },
+            "MaterialExpressionLinearInterpolate_0": {
+              "class": "MaterialExpressionLinearInterpolate",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionConstant3Vector_1",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionVectorParameter_1",
+                  "output": "RGB"
+                },
+                {
+                  "node": "MaterialExpressionTextureSampleParameter2D_1",
+                  "output": "R"
+                }
+              ],
+              "input_names": [
+                "A",
+                "B",
+                "Alpha"
+              ],
+              "const_a": "0.0",
+              "const_b": "1.0",
+              "const_alpha": "0.5"
+            },
+            "MaterialExpressionVectorParameter_1": {
+              "class": "MaterialExpressionVectorParameter",
+              "inputs": [],
+              "input_names": [],
+              "parameter_name": "Tint_2",
+              "default_value": "<Struct 'LinearColor' (0x994cb05a22c) {r: 1.000000, g: 0.000000, b: 0.004263, a: 0.000000}>"
+            },
+            "MaterialExpressionConstant3Vector_1": {
+              "class": "MaterialExpressionConstant3Vector",
+              "inputs": [],
+              "input_names": [],
+              "constant": "<Struct 'LinearColor' (0x994c4cb5840) {r: 0.009076, g: 0.011161, b: 0.002883, a: 0.000000}>"
+            }
+          }
+        },
+        "switches": {
+          "is Shrub": false,
+          "Billboard": false,
+          "Grass": false,
+          "FacingLeaf": false
+        }
+      }
+    ]
+  },
+  {
+    "role": "Rock_Medium_1",
+    "asset": "/Game/Fab/Megascans/Mossy_Forest_Rock/Mossy_Forest_Rock_vimrfjsaw_Mid",
+    "prepared_lod0_triangles": 2500,
+    "visual_id": "Rock_Boulder/3",
+    "catalogue_verification": "/Users/antonslauta/Documents/UProjects/AncientSettlement/Saved/AssetBudget/meshes.json",
+    "nanite_triangles": 2500,
+    "materials": [
+      {
+        "asset": "/Game/Fab/Megascans/Mossy_Forest_Rock/MI_AS_Mossy_Forest_Rock.MI_AS_Mossy_Forest_Rock",
+        "class": "MaterialInstanceConstant",
+        "textures": {
+          "Albedo": "/Game/Fab/Megascans/Mossy_Forest_Rock/Mossy_Forest_Rock_vimrfjsaw_Mid_2K_BaseColor.Mossy_Forest_Rock_vimrfjsaw_Mid_2K_BaseColor",
+          "Normal": "/Game/Fab/Megascans/Mossy_Forest_Rock/Mossy_Forest_Rock_vimrfjsaw_Mid_2K_Normal.Mossy_Forest_Rock_vimrfjsaw_Mid_2K_Normal",
+          "Mask": "/Game/Fab/Megascans/Mossy_Forest_Rock/Mossy_Forest_Rock_vimrfjsaw_Mid_2K_Roughness.Mossy_Forest_Rock_vimrfjsaw_Mid_2K_Roughness",
+          "AlbedoWinter": "/Game/EuropeanHornbeam/Textures/TwoSided/Summer/T_EuropeanHornbeam_TwoSided_Summer_Albedo.T_EuropeanHornbeam_TwoSided_Summer_Albedo",
+          "NormalWinter": "/Game/EuropeanHornbeam/Textures/TwoSided/Summer/T_EuropeanHornbeam_TwoSided_Summer_Normal.T_EuropeanHornbeam_TwoSided_Summer_Normal",
+          "MaskWinter": "/Game/EuropeanHornbeam/Textures/TwoSided/Summer/T_EuropeanHornbeam_TwoSided_Summer_Mask.T_EuropeanHornbeam_TwoSided_Summer_Mask",
+          "PackedNormal": "/Engine/EngineResources/WhiteSquareTexture.WhiteSquareTexture"
+        },
+        "scalars": {
+          "Layout": "3.0",
+          "RoughnessConstant": "0.6000000238418579",
+          "HasWinter": "0.0",
+          "IsLeaves": "0.0",
+          "Evergreen": "0.0",
+          "HeightCm": "60.0",
+          "SwayCm": "0.0",
+          "FlutterCm": "0.0"
+        },
+        "vectors": {}
+      }
+    ]
+  },
+  {
+    "role": "Mushroom_Common",
+    "asset": "/Game/Fab/Megascans/Bolete_Mushrooms/qdzrT_LOD0_TIER2_000",
+    "prepared_lod0_triangles": 300,
+    "visual_id": "Forest_Mushroom/1",
+    "catalogue_verification": "/Users/antonslauta/Documents/UProjects/AncientSettlement/Saved/AssetBudget/meshes.json",
+    "nanite_triangles": 300,
+    "materials": [
+      {
+        "asset": "/Game/Fab/Megascans/Bolete_Mushrooms/MI_AS_Bolete_Mushrooms.MI_AS_Bolete_Mushrooms",
+        "class": "MaterialInstanceConstant",
+        "textures": {
+          "Albedo": "/Game/Fab/Megascans/Bolete_Mushrooms/Bolete_Mushrooms_qdzrT_Mid_2K_BaseColor.Bolete_Mushrooms_qdzrT_Mid_2K_BaseColor",
+          "Normal": "/Game/Fab/Megascans/Bolete_Mushrooms/Bolete_Mushrooms_qdzrT_Mid_2K_Normal.Bolete_Mushrooms_qdzrT_Mid_2K_Normal",
+          "Mask": "/Game/Fab/Megascans/Bolete_Mushrooms/Bolete_Mushrooms_qdzrT_Mid_2K_Roughness.Bolete_Mushrooms_qdzrT_Mid_2K_Roughness",
+          "AlbedoWinter": "/Game/EuropeanHornbeam/Textures/TwoSided/Summer/T_EuropeanHornbeam_TwoSided_Summer_Albedo.T_EuropeanHornbeam_TwoSided_Summer_Albedo",
+          "NormalWinter": "/Game/EuropeanHornbeam/Textures/TwoSided/Summer/T_EuropeanHornbeam_TwoSided_Summer_Normal.T_EuropeanHornbeam_TwoSided_Summer_Normal",
+          "MaskWinter": "/Game/EuropeanHornbeam/Textures/TwoSided/Summer/T_EuropeanHornbeam_TwoSided_Summer_Mask.T_EuropeanHornbeam_TwoSided_Summer_Mask",
+          "PackedNormal": "/Engine/EngineResources/WhiteSquareTexture.WhiteSquareTexture"
+        },
+        "scalars": {
+          "Layout": "3.0",
+          "RoughnessConstant": "0.6000000238418579",
+          "HasWinter": "0.0",
+          "IsLeaves": "0.0",
+          "Evergreen": "0.0",
+          "HeightCm": "60.0",
+          "SwayCm": "0.0",
+          "FlutterCm": "0.0"
+        },
+        "vectors": {}
+      }
+    ]
+  },
+  {
+    "role": "Grass_1",
+    "asset": "/Game/MWLandscapeAutoMaterial/Meshes/Plants/SM_MWAM_GrassA",
+    "prepared_lod0_triangles": 780,
+    "visual_id": "terrain_grass",
+    "catalogue_verification": "/Users/antonslauta/Documents/UProjects/AncientSettlement/Saved/AssetBudget/meshes.json",
+    "nanite_triangles": 780,
+    "materials": [
+      {
+        "asset": "/Game/MWLandscapeAutoMaterial/Materials/Plants/MTL_MWAM_PlantsGrass.MTL_MWAM_PlantsGrass",
+        "class": "MaterialInstanceConstant",
+        "textures": {
+          "MW_TextureSubSurfaceColor": "/Game/MWLandscapeAutoMaterial/Textures/TEX_MW_Temp_col.TEX_MW_Temp_col",
+          "MW_TextureBaseColor": "/Game/MWLandscapeAutoMaterial/Textures/Plants/TEX_MWAM_Grass_col.TEX_MWAM_Grass_col",
+          "MW_TextureNormal": "/Game/MWLandscapeAutoMaterial/Textures/Plants/TEX_MWAM_Grass_nrm.TEX_MWAM_Grass_nrm",
+          "MW_TextureOpacity": "/Game/MWLandscapeAutoMaterial/Textures/TEX_MW_Temp_msk.TEX_MW_Temp_msk"
+        },
+        "scalars": {
+          "MW_Specular": "0.5",
+          "MW_RoughnessMultiplier": "1.0",
+          "MW_RoughnessPower": "4.0",
+          "MW_CameraFadeRange": "9500.0",
+          "MW_CameraFadeOffset": "500.0",
+          "MW_WindIntensity": "0.20000000298023224",
+          "MW_WindSpeed": "0.5",
+          "MW_NormalIntensity": "10.0",
+          "MW_BaseColorContrast": "0.5",
+          "MW_ColorVariationContrast": "0.5"
+        },
+        "vectors": {
+          "MW_SubSurfaceColor": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "MW_BaseColorCorrection": [
+            0.10999999940395355,
+            0.15000000596046448,
+            0.029999999329447746,
+            1.0
+          ]
+        },
+        "graph": {
+          "material": "/Game/MWLandscapeAutoMaterial/Materials/MASTER/MTL_MWAM_CoverFoliage_MASTER.MTL_MWAM_CoverFoliage_MASTER",
+          "roots": {
+            "colour": "MaterialExpressionLinearInterpolate_0",
+            "opacity": "MaterialExpressionMaterialFunctionCall_5"
+          },
+          "nodes": {
+            "MaterialExpressionMaterialFunctionCall_5": {
+              "class": "MaterialExpressionMaterialFunctionCall",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionStaticSwitchParameter_2",
+                  "output": ""
+                }
+              ],
+              "input_names": [
+                "Opacity"
+              ],
+              "material_function": "/Game/MWLandscapeAutoMaterial/Materials/MASTER/Func/MF_MWAM_Opacity.MF_MWAM_Opacity"
+            },
+            "MaterialExpressionStaticSwitchParameter_2": {
+              "class": "MaterialExpressionStaticSwitchParameter",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionTextureSampleParameter2D_2",
+                  "output": "R"
+                },
+                {
+                  "node": "MaterialExpressionTextureSampleParameter2D_0",
+                  "output": "A"
+                }
+              ],
+              "input_names": [
+                "True",
+                "False"
+              ],
+              "parameter_name": "MW_[x]_UseSeparateOpacityTexture",
+              "default_value": "False"
+            },
+            "MaterialExpressionTextureSampleParameter2D_0": {
+              "class": "MaterialExpressionTextureSampleParameter2D",
+              "inputs": [],
+              "input_names": [
+                "UVs",
+                "Apply View MipBias"
+              ],
+              "parameter_name": "MW_TextureBaseColor",
+              "texture": "/Game/MWLandscapeAutoMaterial/Textures/TEX_MW_Temp_col.TEX_MW_Temp_col"
+            },
+            "MaterialExpressionTextureSampleParameter2D_2": {
+              "class": "MaterialExpressionTextureSampleParameter2D",
+              "inputs": [],
+              "input_names": [
+                "UVs",
+                "Apply View MipBias"
+              ],
+              "parameter_name": "MW_TextureOpacity",
+              "texture": "/Game/MWLandscapeAutoMaterial/Textures/TEX_MW_Temp_msk.TEX_MW_Temp_msk"
+            },
+            "MaterialExpressionLinearInterpolate_0": {
+              "class": "MaterialExpressionLinearInterpolate",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionMultiply_2",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionStaticSwitchParameter_3",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionMaterialFunctionCall_5",
+                  "output": "Opacity"
+                }
+              ],
+              "input_names": [
+                "A",
+                "B",
+                "Alpha"
+              ],
+              "const_a": "0.0",
+              "const_b": "1.0",
+              "const_alpha": "0.5"
+            },
+            "MaterialExpressionStaticSwitchParameter_3": {
+              "class": "MaterialExpressionStaticSwitchParameter",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionMultiply_1",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionMultiply_3",
+                  "output": ""
+                }
+              ],
+              "input_names": [
+                "True",
+                "False"
+              ],
+              "parameter_name": "MW_[x]_UseRandomizeBaseIntensity",
+              "default_value": "True"
+            },
+            "MaterialExpressionMultiply_3": {
+              "class": "MaterialExpressionMultiply",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionPower_0",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionVectorParameter_0",
+                  "output": "RGB"
+                }
+              ],
+              "input_names": [
+                "A",
+                "B"
+              ],
+              "const_a": "0.0",
+              "const_b": "1.0"
+            },
+            "MaterialExpressionVectorParameter_0": {
+              "class": "MaterialExpressionVectorParameter",
+              "inputs": [],
+              "input_names": [],
+              "parameter_name": "MW_BaseColorCorrection",
+              "default_value": "<Struct 'LinearColor' (0x994cb02a0ec) {r: 1.000000, g: 1.000000, b: 1.000000, a: 1.000000}>"
+            },
+            "MaterialExpressionPower_0": {
+              "class": "MaterialExpressionPower",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionTextureSampleParameter2D_0",
+                  "output": "RGB"
+                },
+                {
+                  "node": "MaterialExpressionScalarParameter_3",
+                  "output": ""
+                }
+              ],
+              "input_names": [
+                "Base",
+                "Exp"
+              ]
+            },
+            "MaterialExpressionScalarParameter_3": {
+              "class": "MaterialExpressionScalarParameter",
+              "inputs": [],
+              "input_names": [],
+              "parameter_name": "MW_BaseColorContrast",
+              "default_value": "1.0"
+            },
+            "MaterialExpressionMultiply_1": {
+              "class": "MaterialExpressionMultiply",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionPower_1",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionMultiply_3",
+                  "output": ""
+                }
+              ],
+              "input_names": [
+                "A",
+                "B"
+              ],
+              "const_a": "0.0",
+              "const_b": "1.0"
+            },
+            "MaterialExpressionPower_1": {
+              "class": "MaterialExpressionPower",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionPerInstanceRandom_1",
+                  "output": ""
+                },
+                {
+                  "node": "MaterialExpressionScalarParameter_5",
+                  "output": ""
+                }
+              ],
+              "input_names": [
+                "Base",
+                "Exp"
+              ]
+            },
+            "MaterialExpressionScalarParameter_5": {
+              "class": "MaterialExpressionScalarParameter",
+              "inputs": [],
+              "input_names": [],
+              "parameter_name": "MW_ColorVariationContrast",
+              "default_value": "0.25"
+            },
+            "MaterialExpressionPerInstanceRandom_1": {
+              "class": "MaterialExpressionPerInstanceRandom",
+              "inputs": [],
+              "input_names": []
+            },
+            "MaterialExpressionMultiply_2": {
+              "class": "MaterialExpressionMultiply",
+              "inputs": [
+                {
+                  "node": "MaterialExpressionStaticSwitchParameter_3",
+                  "output": ""
+                }
+              ],
+              "input_names": [
+                "A",
+                "B"
+              ],
+              "const_a": "0.0",
+              "const_b": "2.0"
+            }
+          }
+        },
+        "switches": {
+          "MW_UseInvertedRoughness": true,
+          "MW_[x]_UseWorldNormal": false,
+          "MW_UseDepthFade": true,
+          "MW_UseSolidOpacity": false,
+          "MW_[x]_UseWind": true,
+          "MW_UseSubSurfaceColor": true,
+          "MW_UseSeparateSubSurfaceTexture": false,
+          "MW_[x]_UseSeparateOpacityTexture": false,
+          "MW_[x]_UseRandomizeBaseIntensity": true
+        }
+      }
+    ]
+  }
+]

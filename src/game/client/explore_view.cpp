@@ -1,4 +1,5 @@
 #include "game/client/explore_view.hpp"
+#include "game/client/explore_bench.hpp"
 
 #include <algorithm>
 #include <array>
@@ -9,6 +10,7 @@
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <nlohmann/json.hpp>
 
 #include "game/client/controls.hpp"
@@ -33,6 +35,8 @@ std::filesystem::path groundFile() {
     for (int up = 0; up < 5 && !std::filesystem::exists(content); ++up) content = ".." / content;
     return content / "config" / "ground.json";
 }
+// Per-machine graphics choices, beside editor.json rather than in content/.
+std::filesystem::path graphicsFile() { return groundFile().parent_path().parent_path().parent_path() / "graphics.json"; }
 
 
 // The file the editor writes, watched.
@@ -94,12 +98,12 @@ private:
 } // namespace
 
 bool ExploreView::open(SDL_Window* window, const std::filesystem::path& assets, world::WorldSystem& world,
-                       const Camera& camera, ExploreMenu& menu) {
+                       const Camera& camera, ExploreMenu& menu, int headlessWidth, int headlessHeight) {
     menu_ = &menu;
     source_ = &world;
     return renderer_.open(window, assets, world, [&menu](const game::GpuTerrain& terrain) {
         return std::make_unique<game::MenuPass>(menu, &terrain);
-    });
+    }, headlessWidth, headlessHeight);
 }
 
 bool ExploreView::draw(const Camera& camera) {
@@ -124,6 +128,9 @@ bool ExploreView::draw(const Camera& camera) {
     settings_.stage = menu_->terrainStage();
     settings_.iceVisible = menu_->iceVisible();
     settings_.potentialOnly = menu_->potentialOnly();
+    settings_.drawDistance = menu_->drawDistance();
+    settings_.graphics = menu_->graphics();
+    settings_.useGraphics = true;
     return renderer_.draw(camera, settings_);
 }
 
@@ -214,7 +221,12 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
     camera.pixelsPerTile = startZoom > 0 ? startZoom : 0.6;
     double worldMetres = static_cast<double>(params.width) * generation::kMetresPerCell;
     camera.setBounds(0, 0, worldMetres, worldMetres);
-    SDL_GetWindowSizeInPixels(window, &camera.viewportWidth, &camera.viewportHeight);
+    // Headless, the viewport is the offscreen target and nothing else.
+    const auto viewportOf = [&](Camera& into) {
+        if (window) SDL_GetWindowSizeInPixels(window, &into.viewportWidth, &into.viewportHeight);
+        else { into.viewportWidth = options.headlessWidth; into.viewportHeight = options.headlessHeight; }
+    };
+    viewportOf(camera);
     camera.setMode(options.cameraMode);
     camera.orbit(options.yaw - camera.yaw, options.pitch - camera.pitch);
 
@@ -225,7 +237,7 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
     ExploreView view(renderer);
     // A run that exists to take one picture has no business showing the wind.
     if (!shotPath.empty()) renderer.holdTime(shotTime);
-    if (!view.open(window, assets, builder, camera, menu)) {
+    if (!view.open(window, assets, builder, camera, menu, options.headlessWidth, options.headlessHeight)) {
         std::cerr << "the explorer would not start: " << renderer.error() << "\n";
         return 1;
     }
@@ -235,12 +247,27 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
                  "Shift: fly faster; wheel: orbit distance / flight speed; Shift+G: sample / mesh grid / off;\n"
                  "Shift+M: object mesh on / off\n";
     menu.open(params, &renderer.ground(), groundFile());
+    // Saved graphics first, then the command line on top: a shot asked for
+    // with --draw-distance or --no-fog must get exactly that.
+    menu.graphics() = game::loadGraphicsSettings(graphicsFile());
+    if (!shotPath.empty() || options.benchFrames > 0) menu.graphics() = game::GraphicsSettings{}; // reproducible runs
+    if (options.drawDistance > 0) menu.drawDistance(options.drawDistance);
+    if (!options.fog) menu.graphics().fog = false;
+    view.fog(options.fog);
     menu.configureWeather(calendar,seasons,weatherDay,weatherPreset);
     GroundWatch groundWatch(groundFile());
     Uint64 groundLookedAt = SDL_GetTicks();
     if (showMenu) menu.toggle();
     if (showMenu && startAt == "ground") menu.showGround();
 
+    std::unique_ptr<ExploreBench> bench;
+    // Scene view: the frozen camera every decision is made from while the
+    // live camera flies. Empty when not inspecting.
+    std::optional<Camera> frozen;
+    bool leftWasDown = false;
+    if (options.benchFrames > 0)
+        bench = std::make_unique<ExploreBench>(options.benchFrames, options.benchJson, options.benchLoadFrames);
+    const bool scripted = bench != nullptr;
     CameraControl controls;
     // The explorer is looked at, not played: the view moves when somebody drags
     // it or presses a key, and never on its own. A shot has to be of a still
@@ -258,12 +285,26 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
 #if ASR_ENABLE_PROFILING
     ExploreDiagnostics diagnostics;
 #endif
+    if (options.graphicsTab >= 0) { menu.togglePanel(); menu.panel().showTab(options.graphicsTab); }
+    if (options.sceneViewBack > 0) {
+        // Scripted scene view: freeze at the requested camera, then draw from
+        // behind and above it, so a shot shows the frozen frustum and what the
+        // frozen decisions put around it.
+        frozen = camera;
+        const auto view = camera.viewState();
+        const auto eye = camera.eyePosition();
+        camera.setMode(Camera::Mode::Free);
+        camera.centreX = eye[0] - view.forward[0] * options.sceneViewBack;
+        camera.centreY = eye[1] - view.forward[1] * options.sceneViewBack;
+        camera.focusHeight = eye[2] - view.forward[2] * options.sceneViewBack + options.sceneViewBack * 0.45;
+        menu.panel().sceneView = true;
+    }
 
     while (running) {
 #if ASR_ENABLE_PROFILING
         diagnostics.mark(ExploreDiagnostics::Begin);
 #endif
-        SDL_GetWindowSizeInPixels(window, &camera.viewportWidth, &camera.viewportHeight);
+        viewportOf(camera);
         camera.minZoom = std::min(camera.viewportWidth / worldMetres,
                                   camera.viewportHeight * 2.0 / worldMetres) *
                          0.9;
@@ -271,7 +312,7 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_EVENT_QUIT) running = false;
-            else if (!shotPath.empty() || measuring || tracing) continue;
+            else if (!shotPath.empty() || measuring || tracing || scripted) continue;
             else if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat &&
                      event.key.key == SDLK_G && (event.key.mod & SDL_KMOD_SHIFT)) {
                 renderer.cycleTerrainGrid();
@@ -308,7 +349,7 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
                 running = false;
             else if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat &&
                      (event.key.key == SDLK_1 || event.key.key == SDLK_KP_1) &&
-                     !menu.visible() && shotPath.empty() && !measuring && !tracing) {
+                     !menu.visible() && shotPath.empty() && !measuring && !tracing && !scripted) {
                 const auto& landmarks = snapshot->landmarks();
                 const auto desert = std::find_if(landmarks.begin(), landmarks.end(),
                         [](const auto& landmark) { return landmark.name == "desert"; });
@@ -329,28 +370,70 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
         }
         float mx = 0, my = 0;
         const SDL_MouseButtonFlags buttons = SDL_GetMouseState(&mx, &my);
-        int windowWidth = 1, windowHeight = 1;
-        SDL_GetWindowSize(window, &windowWidth, &windowHeight);
+        int windowWidth = camera.viewportWidth, windowHeight = camera.viewportHeight;
+        if (window) SDL_GetWindowSize(window, &windowWidth, &windowHeight);
         mx *= static_cast<float>(camera.viewportWidth) / std::max(1, windowWidth);
         my *= static_cast<float>(camera.viewportHeight) / std::max(1, windowHeight);
         pointer.mouseX = mx;
         pointer.mouseY = my;
         pointer.middleDown = (buttons & SDL_BUTTON_MMASK) != 0;
         pointer.rightDown = (buttons & SDL_BUTTON_RMASK) != 0;
+        // The graphics window, in its own pixels (top right of the view).
+        const bool leftDown = (buttons & SDL_BUTTON_LMASK) != 0;
+        bool overGraphics = false;
+        {
+            auto& input = menu.panelInput();
+            const float px = float(camera.viewportWidth) - GraphicsPanel::kWide - 16, py = 16;
+            input.mouseX = mx - px; input.mouseY = my - py;
+            input.pressed = leftDown && !leftWasDown; input.released = !leftDown && leftWasDown;
+            input.down = leftDown; input.wheel = 0;
+            overGraphics = menu.panelVisible() && input.mouseX >= 0 && input.mouseY >= 0 &&
+                           input.mouseX < GraphicsPanel::kWide && input.mouseY < GraphicsPanel::kHigh;
+            leftWasDown = leftDown;
+            auto& panel = menu.panel();
+            if (panel.saveRequested) {
+                panel.saveRequested = false;
+                panel.status = game::saveGraphicsSettings(graphicsFile(), menu.graphics()) ? "saved graphics.json" : "could not save";
+                menu.panelChanged();
+            }
+            if (panel.resetRequested) {
+                panel.resetRequested = false;
+                menu.graphics() = game::GraphicsSettings{};
+                panel.status = "defaults";
+                menu.panelChanged();
+            }
+            if (panel.sceneViewToggled) {
+                panel.sceneViewToggled = false;
+                if (frozen) {
+                    // Back to the camera the frame was frozen at.
+                    camera = *frozen; frozen.reset();
+                    std::cout << "Scene view OFF: culling follows the camera again\n";
+                } else {
+                    frozen = camera;
+                    camera.setMode(Camera::Mode::Free);
+                    std::cout << "Scene view ON: decisions frozen; fly with RMB + WASD, F to return\n";
+                }
+                panel.sceneView = frozen.has_value();
+                controls.dragging = controls.orbiting = false;
+                controls.velocityX = controls.velocityY = 0;
+                menu.panelChanged();
+            }
+        }
+        view.cull(frozen ? &*frozen : nullptr);
 
         const Uint64 now = SDL_GetTicks();
         const double step = std::clamp((now - last) / 1000.0, 0.0, 0.1);
         last = now;
-        if (shotPath.empty() && !measuring && !tracing) menu.advanceWeather(step);
+        if (shotPath.empty() && !measuring && !tracing && !scripted) menu.advanceWeather(step);
         // A run that exists to take one picture takes no orders. The window is
         // up while it waits for the streaming to settle, and a stray scroll from
         // whatever else is on the desktop lands in it: twice now a shot has come
         // back from the far side of the world at minimum zoom, which is not a
         // picture of the place that was asked for.
         // While the menu is up the arrows belong to it, not to the camera.
-        const bool active = (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) != 0;
+        const bool active = window && (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) != 0;
         const bool capture = active && camera.mode == Camera::Mode::Free && pointer.rightDown &&
-                             !menu.visible() && shotPath.empty() && !measuring && !tracing;
+                             !menu.visible() && shotPath.empty() && !measuring && !tracing && !scripted;
         if (capture != relativeMouse) {
             if (SDL_SetWindowRelativeMouseMode(window, capture)) relativeMouse = capture;
             controls.orbiting = false;
@@ -362,11 +445,16 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
             pointer.mouseX = controls.orbiting ? controls.dragFromX + dx : 0;
             pointer.mouseY = controls.orbiting ? controls.dragFromY + dy : 0;
         }
-        if (shotPath.empty() && !measuring && !tracing && !menu.visible() && active) {
-            const bool overPanel = !relativeMouse && mx >= 16 && my >= 16 &&
-                                  mx < 16 + ExploreMenu::kWide && my < 16 + ExploreMenu::kStatusHigh;
+        if (shotPath.empty() && !measuring && !tracing && !scripted && !menu.visible() && active) {
+            // The draw distance slider keeps the pointer while it is dragged,
+            // even off the panel; the camera must not pan under it meanwhile.
+            const bool slider = !relativeMouse && menu.pointer(mx - 16, my - 16, (buttons & SDL_BUTTON_LMASK) != 0);
+            const bool overPanel = slider || overGraphics || (!relativeMouse && mx >= 16 && my >= 16 &&
+                                  mx < 16 + ExploreMenu::kWide && my < 16 + ExploreMenu::kStatusHigh);
             controls.update(camera, pointer, SDL_GetKeyboardState(nullptr), step, overPanel);
         } else {
+            if (active && !relativeMouse && shotPath.empty() && !scripted)
+                menu.pointer(mx - 16, my - 16, (buttons & SDL_BUTTON_LMASK) != 0);
             controls.dragging = controls.orbiting = false;
             controls.velocityX = controls.velocityY = 0;
         }
@@ -405,6 +493,17 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
         // The camera only needs a height, not normals/materials/soil/path costs.
         if (camera.mode != Camera::Mode::Free)
             camera.focusHeight = field.heightAt(focus).toDouble() + camera.heightOffset;
+        if (bench) {
+            bench->aim(camera, [&](double x, double y) {
+                return field.heightAt({core::Fixed::fromDoubleForContent(x),
+                                       core::Fixed::fromDoubleForContent(y)}).toDouble();
+            }, renderer.settled());
+            if (camera.mode != Camera::Mode::Free) {
+                const core::WorldPos aimed{core::Fixed::fromDoubleForContent(camera.centreX),
+                                           core::Fixed::fromDoubleForContent(camera.centreY)};
+                camera.focusHeight = field.heightAt(aimed).toDouble() + camera.heightOffset;
+            }
+        }
 #if ASR_ENABLE_PROFILING
         diagnostics.mark(ExploreDiagnostics::Inspection);
 #endif
@@ -445,6 +544,20 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
             return 1;
         }
         ++frame;
+        {
+        const auto& cutWork = renderer.runner().work();
+        // ASR_TRACE_CUT: one line per frame of what the ground and water
+        // cut drew, to catch a cut that flips between two states while
+        // the camera is still (the shoreline flicker).
+        if (std::getenv("ASR_TRACE_CUT")) {
+            std::printf("cut frame %llu tris %llu draws %u terrain %u water %u levels",
+                    (unsigned long long)frame, (unsigned long long)cutWork.triangles, cutWork.draws,
+                    cutWork.drawsByAuthor[1], cutWork.drawsByAuthor[3]);
+            for (const auto count : cutWork.groundByLevel) std::printf(" %u", count);
+            std::printf("\n");
+        }
+        }
+        if (bench && bench->record(renderer.runner(), renderer.settled())) return 0;
 #if ASR_ENABLE_PROFILING
         diagnostics.observe(renderer, frame, measuring);
         if (diagnostics.advance(camera, renderer, frame, measuring, closeUp, tracing)) return 0;
@@ -488,7 +601,8 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
                           timing.cpu(), timing.fixed,
                           timing.acquire, timing.setup, timing.pipelines, timing.submit,
                           ASR_ENABLE_PROFILING ? " [profiling]" : "");
-            SDL_SetWindowTitle(window, title);
+            if (window) SDL_SetWindowTitle(window, title);
+            else if (!bench) std::printf("%s\n", title);
         }
 #endif
 
@@ -511,6 +625,10 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
                       << shotWork.unknownIndirectDraws << " indirect counts unknown; "
                       << shotWork.instances << " models drawn, " << shotWork.culledFrustum
                       << " off screen, " << shotWork.culledHorizon << " behind the ground\n";
+            std::cout << "  draws by author:";
+            for (std::size_t author = 0; author < shotWork.drawsByAuthor.size(); ++author)
+                std::cout << ' ' << author << '=' << shotWork.drawsByAuthor[author];
+            std::cout << '\n';
             std::cout << "  ground squares by level (4 m first):";
             for (std::size_t level = 0; level < shotWork.groundByLevel.size(); ++level)
                 if (shotWork.groundByLevel[level] > 0)

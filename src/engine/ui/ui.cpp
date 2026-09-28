@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numbers>
 
 namespace ui {
 namespace {
@@ -10,6 +11,7 @@ namespace {
 // triangle fan rather than as a rect with corner pieces laid over it: laid over,
 // the seams show wherever the panel is translucent, and every panel here is.
 constexpr int kCornerSteps = 4;
+constexpr float kHalfPi = std::numbers::pi_v<float> / 2.0f;
 
 } // namespace
 
@@ -68,6 +70,7 @@ void Ui::buildGlyphs() {
 }
 
 void Ui::begin(Input& input, int viewportWidth, int viewportHeight) {
+    painting_ = true;
     input_ = &input;
     width_ = viewportWidth;
     height_ = viewportHeight;
@@ -87,12 +90,14 @@ void Ui::setColour(const Colour& c) {
 }
 
 void Ui::rect(const Rect& r, const Colour& c) {
+    if (!painting_) return;
     setColour(c);
     const SDL_FRect box = r.sdl();
     SDL_RenderFillRect(sdl_, &box);
 }
 
 void Ui::roundRect(const Rect& r, const Colour& c, float radius) {
+    if (!painting_) return;
     const float rad = std::min({radius < 0 ? theme_.radius : radius, r.w * 0.5f, r.h * 0.5f});
     if (rad <= 0.5f) { rect(r, c); return; }
 
@@ -107,9 +112,9 @@ void Ui::roundRect(const Rect& r, const Colour& c, float radius) {
                                    {r.x + rad, r.y + r.h - rad},
                                    {r.x + rad, r.y + rad}};
     for (int corner = 0; corner < 4; ++corner) {
-        const float from = static_cast<float>(-M_PI_2 + corner * M_PI_2);
+        const float from = -kHalfPi + static_cast<float>(corner) * kHalfPi;
         for (int step = 0; step <= kCornerSteps; ++step) {
-            const float angle = from + static_cast<float>(M_PI_2) * step / kCornerSteps;
+            const float angle = from + kHalfPi * step / kCornerSteps;
             vertices.push_back({{corners[corner].x + std::cos(angle) * rad,
                                  corners[corner].y + std::sin(angle) * rad},
                                 colour,
@@ -127,6 +132,7 @@ void Ui::roundRect(const Rect& r, const Colour& c, float radius) {
 }
 
 void Ui::border(const Rect& r, const Colour& c, float thickness, float radius) {
+    if (!painting_) return;
     (void)radius;
     setColour(c);
     for (float i = 0; i < thickness; ++i) {
@@ -136,6 +142,7 @@ void Ui::border(const Rect& r, const Colour& c, float thickness, float radius) {
 }
 
 void Ui::line(float x0, float y0, float x1, float y1, const Colour& c) {
+    if (!painting_) return;
     setColour(c);
     SDL_RenderLine(sdl_, x0, y0, x1, y1);
 }
@@ -157,7 +164,7 @@ std::string Ui::fit(const std::string& s, float width, float scale) const {
 }
 
 void Ui::text(float x, float y, const std::string& s, const Colour& c, float scale) {
-    if (!glyphs_.texture) return;
+    if (!painting_ || !glyphs_.texture) return;
     const float size = scale * theme_.textScale;
     const float w = glyphs_.cellWidth * size, h = glyphs_.cellHeight * size;
     SDL_SetTextureColorModFloat(glyphs_.texture, c.r, c.g, c.b);
@@ -187,7 +194,7 @@ void Ui::textCentred(const Rect& in, const std::string& s, const Colour& c, floa
 }
 
 void Ui::image(const Rect& r, SDL_Texture* texture, const Colour& tint) {
-    if (!texture) return;
+    if (!painting_ || !texture) return;
     float tw = 0, th = 0;
     SDL_GetTextureSize(texture, &tw, &th);
     if (tw <= 0 || th <= 0) return;

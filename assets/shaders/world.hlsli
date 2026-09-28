@@ -33,6 +33,17 @@ cbuffer SceneVertex : register(b0, space1)
     float4 table[8];    // four numbers a material of the ground keeps
     float4 parameters[21];
     float4 vegetationDensity[8]; // x/y/radius/weight, selected far instance regions
+    float4 shadowSun;
+    float4 shadowClip[4];
+    float4 fog;         // opaque distance, start distance, enabled, spare
+    float4 look;        // sun, ambient, exposure, provided
+    float4 skyHorizon;  // rgb, skybox enabled
+    float4 skyZenith;   // rgb, panorama rotation
+    float4 clouds;      // coverage, density, base altitude, steps
+    float4 quality;     // terrain blend metres, shadow softness, spare, spare
+    row_major float4x4 cullViewProjection;
+    float4 cullCamera;
+    float4 cullState;
 };
 
 cbuffer ScenePixel : register(b0, space3)
@@ -45,6 +56,17 @@ cbuffer ScenePixel : register(b0, space3)
     float4 tablePS[8];
     float4 parametersPS[21];
     float4 vegetationDensityPS[8];
+    float4 shadowSunPS;
+    float4 shadowClipPS[4];
+    float4 fogPS;
+    float4 lookPS;
+    float4 skyHorizonPS;
+    float4 skyZenithPS;
+    float4 cloudsPS;
+    float4 qualityPS;
+    row_major float4x4 cullViewProjectionPS;
+    float4 cullCameraPS;
+    float4 cullStatePS;
 };
 
 // Where a point of the world lands on the screen.

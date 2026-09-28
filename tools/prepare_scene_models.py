@@ -33,12 +33,23 @@ SIZE = 256
 LOD_RATIOS = [0.25, 0.10, 0.04]
 
 
-def rasterize(vertices, indices, textures, width, height, angle, *, coverage=None):
-    """Orthographic side view with depth, alpha testing and object-space normals."""
+def rasterize(vertices, indices, textures, width, height, angle, *, coverage=None,
+              return_depth=False, eye_sign=1, view_basis=None, origin=(0,0,0)):
+    """Orthographic view with depth, alpha testing and object-space normals."""
     c, s = math.cos(angle), math.sin(angle)
     p = vertices[:, :3]
-    screen = np.column_stack(((p[:, 0]*c+p[:, 1]*s)/width+.5, 1-p[:, 2]/height))*(SIZE-1)
-    depth = p[:, 0]*s-p[:, 1]*c
+    if view_basis is None:
+        screen = np.column_stack(((p[:, 0]*c+p[:, 1]*s)/width+.5, 1-p[:, 2]/height))*(SIZE-1)
+        if eye_sign not in (-1, 1):
+            raise ValueError('eye_sign must be -1 or 1')
+        depth = (p[:, 0]*s-p[:, 1]*c)*eye_sign
+    else:
+        basis = np.asarray(view_basis, dtype=float)
+        if basis.shape != (3,3) or not np.isfinite(basis).all():
+            raise ValueError('invalid view basis')
+        local = (p-np.asarray(origin)) @ basis.T
+        screen = np.column_stack((local[:,0]/width+.5, .5-local[:,1]/height))*(SIZE-1)
+        depth = local[:,2]
     zbuf = np.full((SIZE, SIZE), -np.inf)
     colour = np.zeros((SIZE, SIZE, 4), dtype=np.uint8)
     normals = np.full_like(colour, 128)
@@ -78,7 +89,8 @@ def rasterize(vertices, indices, textures, width, height, angle, *, coverage=Non
             neighbour = np.roll(colour, offset, axis=axis)
             mask = ~filled & (neighbour[:, :, 3] > 0)
             colour[mask, :3] = neighbour[mask, :3]
-    return Image.fromarray(colour), Image.fromarray(normals)
+    result = Image.fromarray(colour), Image.fromarray(normals)
+    return (*result, zbuf) if return_depth else result
 
 
 def prepare(archive, output):

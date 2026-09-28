@@ -329,7 +329,8 @@ SDL_Texture* materialPreview(Ui& ui, const std::filesystem::path& file) {
     const auto found = cache.find(key);
     if (found != cache.end()) return found->second;
     if (!std::filesystem::exists(file)) return nullptr;
-    SDL_Texture* texture = IMG_LoadTexture(ui.renderer(), file.c_str());
+    const std::string path = file.string();
+    SDL_Texture* texture = IMG_LoadTexture(ui.renderer(), path.c_str());
     if (texture != nullptr) cache.emplace(key, texture);
     return texture;
 }

@@ -26,7 +26,8 @@ class FoliagePass : public engine::DrawPass {
 public:
     // `cards` are sprite names under the assets directory: one picture per layer
     // of the array the shader picks between.
-    FoliagePass(const engine::MeshCache& cache, std::vector<std::string> cards, GpuTerrain* pages = nullptr);
+    FoliagePass(const engine::MeshCache& cache, std::vector<std::string> cards,
+                SDL_GPUTextureSamplerBinding shadow, GpuTerrain* pages = nullptr);
     void focus(double x,double y) { x_=x;y_=y; }
     void reset() { roots_.clear();candidates_=0;ASR_DIAGNOSTIC(draws_=uploadBytes_=0); }
 #if ASR_ENABLE_DIAGNOSTICS
@@ -44,6 +45,7 @@ public:
     void collect(const engine::Frame& frame, engine::DrawQueue& queue) override;
 
 private:
+    SDL_GPUTextureSamplerBinding shadow_{};
     GpuTerrain* pages_ = nullptr;
     engine::RenderPipeline* renderer_ = nullptr;
     engine::BindingSet vertexBindings_ = engine::kNoBindings;

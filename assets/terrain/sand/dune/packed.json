@@ -1,0 +1,71 @@
+{
+  "id": "sand_dune",
+  "runtime_size": 2048,
+  "runtime_files": {
+    "albedo": "sand_dune_albedo.png",
+    "normal": "sand_dune_normal.png",
+    "properties": "sand_dune_properties.png"
+  },
+  "properties_channels": {
+    "r": "ao",
+    "g": "roughness",
+    "b": "height",
+    "a": "mask"
+  },
+  "mip_steps": [
+    2,
+    4,
+    8,
+    16
+  ],
+  "height_range_before_stretch": [
+    0.5,
+    0.5
+  ],
+  "had": {
+    "ao": true,
+    "rough": true,
+    "displacement": false,
+    "mask": false
+  },
+  "source": {
+    "site": "ue-export",
+    "project": "AncientSettlement",
+    "license": "Original asset-pack licence (not CC0)",
+    "assets": {
+      "diffuse": "/Game/DesertSandPack/Textures/T_Sands_4K_Albedo",
+      "normal": "/Game/DesertSandPack/Textures/T_Sands_4K_Normal",
+      "ao": "/Game/DesertSandPack/Textures/T_Sands_4K_AO",
+      "rough": "/Game/DesertSandPack/Textures/T_Sands_4K_Roughness",
+      "displacement": "/Game/DesertSandPack/Textures/T_Sands_4K_Displacement"
+    },
+    "original_sizes": {
+      "diffuse": [
+        4096,
+        4096
+      ],
+      "normal": [
+        4096,
+        4096
+      ],
+      "ao": [
+        4096,
+        4096
+      ],
+      "rough": [
+        4096,
+        4096
+      ],
+      "displacement": null
+    },
+    "runtime_world_scale": 3.2,
+    "resolution": "2048px",
+    "files": {
+      "diffuse": "sand_dune_diffuse.png",
+      "normal": "sand_dune_normal.png",
+      "ao": "sand_dune_ao.png",
+      "rough": "sand_dune_rough.png"
+    }
+  },
+  "world_scale": 3.2
+}

@@ -62,6 +62,16 @@ Mesh sphere(int subdivisions, double radius = 1.0) {
     return mesh;
 }
 
+Mesh faceted(const Mesh& mesh) {
+    Mesh result;
+    for (const auto v : mesh.indices) {
+        result.indices.push_back(std::uint32_t(result.positions.size() / 3));
+        result.positions.insert(result.positions.end(), mesh.positions.begin() + v * 3,
+                                mesh.positions.begin() + v * 3 + 3);
+    }
+    return result;
+}
+
 TEST(cluster_morph_expands_families_with_local_parent_targets) {
     const std::vector<float> positions{
         0,0,0, 1,0,0, 0,1,0,
@@ -237,6 +247,95 @@ TEST(cluster_dag_cuts_the_finest_level_into_clusters_that_tile_the_mesh_exactly)
         CHECK(dag.clusters[index].indices.count / 3 <= 128u);
         CHECK(dag.clusters[index].error == 0.0f);   // the finest level is the model
     }
+}
+
+TEST(cluster_dag_exact_finest_keeps_source_corners_after_skipping_degenerates) {
+    const auto mesh = faceted(sphere(2));
+    auto indices = mesh.indices;
+    indices.insert(indices.begin() + 6, {0, 0, 1});
+    std::vector<std::uint64_t> attributes(mesh.positions.size() / 3);
+    for (std::size_t v = 0; v < attributes.size(); ++v) attributes[v] = v;
+    for (const bool preserve : {false, true}) {
+        auto options = naniteProfile();
+        options.preserveSourceVertices = preserve;
+        options.attributeKeys = attributes;
+        const auto dag = buildClusterDag(mesh.positions, indices, options);
+        CHECK_EQ(dag.degenerate, 1u);
+        auto finest = trianglesOf(dag, cutAt(dag, 0));
+        CHECK_EQ(finest.size(), mesh.indices.size());
+        std::set<std::array<std::uint32_t, 3>> faces;
+        for (std::size_t i = 0; i < finest.size(); i += 3) {
+            std::array<std::uint32_t, 3> face;
+            for (int c = 0; c < 3; ++c) {
+                const auto v = finest[i + c];
+                face[c] = dag.sourceVertex[v];
+                for (int axis = 0; axis < 3; ++axis)
+                    CHECK_EQ(dag.positions[v * 3 + axis], mesh.positions[face[c] * 3 + axis]);
+            }
+            CHECK(faces.insert(face).second);
+        }
+        for (std::size_t i = 0; i < mesh.indices.size(); i += 3)
+            CHECK(faces.count({mesh.indices[i], mesh.indices[i + 1], mesh.indices[i + 2]}) == 1);
+        CHECK(dag.trianglesAt(dag.levels - 1) < dag.trianglesAt(0));
+    }
+}
+
+TEST(cluster_dag_exact_finest_has_no_holes_at_mixed_cut_crossovers) {
+    const auto mesh = faceted(sphere(3));
+    auto options = naniteProfile();
+    options.clusterTriangles = 16;
+    options.groupClusters = 2;
+    const auto dag = buildClusterDag(mesh.positions, mesh.indices, options);
+    CHECK(dag.levels > 2);
+    const auto welded = weldPositions(dag.positions);
+    std::set<double> allowances{0.0, 100.0};
+    for (const auto& cluster : dag.clusters) {
+        CHECK(cluster.parentError > cluster.error);
+        allowances.insert(cluster.error);
+        if (cluster.error > 0) allowances.insert(std::nextafter(double(cluster.error), 0.0));
+    }
+    bool mixed = false, coarsened = false;
+    for (const auto allowance : allowances) {
+        const auto cut = cutAt(dag, allowance);
+        CHECK(!cut.empty());
+        std::vector<std::uint32_t> hierarchy;
+        CHECK(cutAtHierarchy(dag.clusters, allowance, hierarchy));
+        auto sorted = cut;
+        std::sort(sorted.begin(), sorted.end());
+        std::sort(hierarchy.begin(), hierarchy.end());
+        CHECK(sorted == hierarchy);
+        auto triangles = trianglesOf(dag, cut);
+        coarsened = coarsened || triangles.size() < mesh.indices.size();
+        for (const auto id : cut) mixed = mixed || dag.clusters[id].level != dag.clusters[cut[0]].level;
+        for (auto& v : triangles) v = welded[v];
+        for (const auto& [edge, uses] : edgeUse(triangles)) CHECK_EQ(uses, 2);
+    }
+    CHECK(mixed);
+    CHECK(coarsened);
+}
+
+TEST(cluster_dag_exact_finest_preserves_hard_material_seams) {
+    const auto mesh = faceted(sphere(2));
+    std::vector<std::uint64_t> materials(mesh.positions.size() / 3);
+    for (std::size_t i = 0; i < mesh.indices.size(); i += 3) {
+        const float z = mesh.positions[i * 3 + 2] + mesh.positions[(i + 1) * 3 + 2] +
+                        mesh.positions[(i + 2) * 3 + 2];
+        for (int c = 0; c < 3; ++c) materials[i + c] = z > 0 ? 1 : 2;
+    }
+    auto options = naniteProfile();
+    options.hardBoundaryKeys = materials;
+    const auto dag = buildClusterDag(mesh.positions, mesh.indices, options);
+    CHECK(dag.levels > 1);
+    bool coarse = false;
+    for (const auto& cluster : dag.clusters) {
+        coarse = coarse || cluster.level > 0;
+        for (std::size_t i = cluster.indices.first; i < cluster.indices.first + cluster.indices.count; i += 3) {
+            const auto material = materials[dag.sourceVertex[dag.indices[i]]];
+            CHECK_EQ(materials[dag.sourceVertex[dag.indices[i + 1]]], material);
+            CHECK_EQ(materials[dag.sourceVertex[dag.indices[i + 2]]], material);
+        }
+    }
+    CHECK(coarse);
 }
 
 TEST(cluster_dag_has_no_seam_at_any_cut_it_can_produce) {
@@ -768,6 +867,34 @@ TEST(cluster_asset_reads_back_exactly_what_it_wrote) {
     // Encoding the decoded thing gives the same bytes: no field is read into a
     // place the writer does not write from.
     CHECK(encodeClusters(read) == bytes);
+}
+
+TEST(cluster_asset_exact_finest_roundtrips_source_and_coarse_geometry) {
+    const auto mesh = faceted(sphere(2));
+    const auto options = naniteProfile();
+    for (const auto& built : {buildClusterAsset(mesh.positions, mesh.indices, whole(mesh), options),
+                              buildSourceClusterAsset(mesh.positions, mesh.indices, options)}) {
+        CHECK(!built.empty());
+        CHECK(built.levels > 1);
+        std::string why;
+        const auto bytes = encodeClusters(built);
+        const auto read = decodeClusters(bytes, why);
+        CHECK(why.empty());
+        CHECK(encodeClusters(read) == bytes);
+        CHECK_EQ(read.clusterPositions.size(), read.indices.size() * 3);
+        std::vector<std::uint32_t> finest;
+        for (const auto& cluster : read.clusters) {
+            if (cluster.level != 0) continue;
+            CHECK_EQ(cluster.error, 0.0f);
+            for (std::size_t i = cluster.indices.first; i < cluster.indices.first + cluster.indices.count; ++i) {
+                finest.push_back(read.indices[i]);
+                for (int axis = 0; axis < 3; ++axis)
+                    CHECK_EQ(read.clusterPositions[i * 3 + axis], mesh.positions[read.indices[i] * 3 + axis]);
+            }
+        }
+        std::sort(finest.begin(), finest.end());
+        CHECK(finest == mesh.indices);
+    }
 }
 
 TEST(cluster_dag_carries_optimal_qem_positions_into_replacement_vertices) {

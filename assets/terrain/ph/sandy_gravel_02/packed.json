@@ -1,0 +1,55 @@
+{
+  "id": "ph_sandy_gravel_02",
+  "runtime_size": 2048,
+  "runtime_files": {
+    "albedo": "ph_sandy_gravel_02_albedo.png",
+    "normal": "ph_sandy_gravel_02_normal.png",
+    "properties": "ph_sandy_gravel_02_properties.png"
+  },
+  "properties_channels": {
+    "r": "ao",
+    "g": "roughness",
+    "b": "height",
+    "a": "mask"
+  },
+  "mip_steps": [
+    2,
+    4,
+    8,
+    16
+  ],
+  "height_range_before_stretch": [
+    0.2739,
+    0.8623
+  ],
+  "had": {
+    "ao": true,
+    "rough": true,
+    "displacement": true,
+    "mask": false
+  },
+  "source": {
+    "site": "polyhaven",
+    "asset_id": "sandy_gravel_02",
+    "asset_url": "https://polyhaven.com/a/sandy_gravel_02",
+    "license": "CC0",
+    "authors": [
+      "Dario Barresi"
+    ],
+    "attribution_required": false,
+    "original_physical_metres": [
+      2.53,
+      2.53
+    ],
+    "runtime_world_scale": 2.53,
+    "resolution": "2k",
+    "files": {
+      "diffuse": "ph_sandy_gravel_02_diffuse.png",
+      "normal": "ph_sandy_gravel_02_normal.png",
+      "displacement": "ph_sandy_gravel_02_displacement.png",
+      "rough": "ph_sandy_gravel_02_rough.png",
+      "ao": "ph_sandy_gravel_02_ao.png"
+    }
+  },
+  "world_scale": 2.53
+}

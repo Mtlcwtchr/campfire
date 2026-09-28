@@ -1,0 +1,55 @@
+{
+  "id": "ph_withered_grass",
+  "runtime_size": 2048,
+  "runtime_files": {
+    "albedo": "ph_withered_grass_albedo.png",
+    "normal": "ph_withered_grass_normal.png",
+    "properties": "ph_withered_grass_properties.png"
+  },
+  "properties_channels": {
+    "r": "ao",
+    "g": "roughness",
+    "b": "height",
+    "a": "mask"
+  },
+  "mip_steps": [
+    2,
+    4,
+    8,
+    16
+  ],
+  "height_range_before_stretch": [
+    0.0751,
+    0.8231
+  ],
+  "had": {
+    "ao": true,
+    "rough": true,
+    "displacement": true,
+    "mask": false
+  },
+  "source": {
+    "site": "polyhaven",
+    "asset_id": "withered_grass",
+    "asset_url": "https://polyhaven.com/a/withered_grass",
+    "license": "CC0",
+    "authors": [
+      "Charlotte Baglioni"
+    ],
+    "attribution_required": false,
+    "original_physical_metres": [
+      2.0,
+      2.0
+    ],
+    "runtime_world_scale": 2.0,
+    "resolution": "2k",
+    "files": {
+      "diffuse": "ph_withered_grass_diffuse.png",
+      "normal": "ph_withered_grass_normal.png",
+      "displacement": "ph_withered_grass_displacement.png",
+      "rough": "ph_withered_grass_rough.png",
+      "ao": "ph_withered_grass_ao.png"
+    }
+  },
+  "world_scale": 2.0
+}

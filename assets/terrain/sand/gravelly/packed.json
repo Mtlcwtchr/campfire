@@ -1,0 +1,65 @@
+{
+  "id": "sand_gravelly",
+  "runtime_size": 2048,
+  "runtime_files": {
+    "albedo": "sand_gravelly_albedo.png",
+    "normal": "sand_gravelly_normal.png",
+    "properties": "sand_gravelly_properties.png"
+  },
+  "properties_channels": {
+    "r": "ao",
+    "g": "roughness",
+    "b": "height",
+    "a": "mask"
+  },
+  "mip_steps": [
+    2,
+    4,
+    8,
+    16
+  ],
+  "height_range_before_stretch": [
+    0.1137,
+    0.5373
+  ],
+  "had": {
+    "ao": true,
+    "rough": true,
+    "displacement": true,
+    "mask": false
+  },
+  "source": {
+    "site": "ue-export",
+    "project": "AncientSettlement",
+    "license": "Original asset-pack licence (not CC0)",
+    "assets": {
+      "diffuse": "/Game/Namaqualand/Textures/T_gravelly_sand_diff_4k",
+      "normal": "/Game/Namaqualand/Textures/T_gravelly_sand_nor_dx_4k",
+      "ard": "/Game/Namaqualand/Textures/T_gravelly_sand_ard_4k"
+    },
+    "original_sizes": {
+      "diffuse": [
+        4096,
+        4096
+      ],
+      "normal": [
+        4096,
+        4096
+      ],
+      "ard": [
+        4096,
+        4096
+      ]
+    },
+    "runtime_world_scale": 2.6,
+    "resolution": "2048px",
+    "files": {
+      "diffuse": "sand_gravelly_diffuse.png",
+      "normal": "sand_gravelly_normal.png",
+      "ao": "sand_gravelly_ao.png",
+      "rough": "sand_gravelly_rough.png",
+      "displacement": "sand_gravelly_displacement.png"
+    }
+  },
+  "world_scale": 2.6
+}

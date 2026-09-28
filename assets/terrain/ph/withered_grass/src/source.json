@@ -1,0 +1,23 @@
+{
+  "site": "polyhaven",
+  "asset_id": "withered_grass",
+  "asset_url": "https://polyhaven.com/a/withered_grass",
+  "license": "CC0",
+  "authors": [
+    "Charlotte Baglioni"
+  ],
+  "attribution_required": false,
+  "original_physical_metres": [
+    2.0,
+    2.0
+  ],
+  "runtime_world_scale": 2.0,
+  "resolution": "2k",
+  "files": {
+    "diffuse": "ph_withered_grass_diffuse.png",
+    "normal": "ph_withered_grass_normal.png",
+    "displacement": "ph_withered_grass_displacement.png",
+    "rough": "ph_withered_grass_rough.png",
+    "ao": "ph_withered_grass_ao.png"
+  }
+}

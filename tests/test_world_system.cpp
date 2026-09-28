@@ -337,6 +337,7 @@ TEST(scene_placement_camera_motion_retains_completed_regions_and_immutable_lease
     }));
     CHECK_EQ(retained->regions,oldRegions);
     const auto complete=placement.read();
+    CHECK_EQ(complete->objectsVersion,retained->objectsVersion); // ocean-only coverage changed
     placement.updateRegions(regions,false);
     CHECK(!placement.busy());
     CHECK(placement.read()==complete);
@@ -399,6 +400,156 @@ TEST(scene_placement_parallel_jobs_match_a_monolithic_scatter_while_priority_cha
     std::size_t population=0;
     for (const auto count:snapshot->scatter.populations) population+=count;
     CHECK_EQ(population,expected.size());
+}
+
+TEST(scene_placement_ecology_edit_invalidates_one_region_and_skips_removed_ids) {
+    auto map=ocean(91);
+    for (auto& cell:map.cells) { cell.sea=false;cell.elevation=40; }
+    world::WorldSystem system(config());system.publish(std::move(map));
+    const auto world=system.read();
+    auto channel=system.prepare(world);
+    auto& placement=channel->placement;
+    const std::vector<world::decor::ScatterBounds> regions{{512,512,640,640},{640,512,768,640}};
+    const auto complete=[&] {
+        placement.updateRegions(regions,true);
+        return placement.read() && placement.read()->complete && !placement.busy();
+    };
+    CHECK(await(complete));
+    const auto before=placement.read();
+    CHECK(!before->scatter.objects.empty());
+    const auto removed=before->scatter.objects.front();
+    world->ecology().remove(removed.id,removed.x,removed.y);
+    CHECK(await(complete));
+    const auto after=placement.read();
+    CHECK(after!=before);
+    CHECK(after->objectsVersion>before->objectsVersion);
+    CHECK_EQ(after->scatter.objects.size()+1,before->scatter.objects.size());
+    CHECK(std::none_of(after->scatter.objects.begin(),after->scatter.objects.end(),
+        [&](const auto& object){return object.id==removed.id;}));
+    for (const auto& region:regions) {
+        const bool edited=removed.x>=region.minX && removed.x<region.maxX;
+        CHECK_EQ(after->regionRevisions.at(region),edited?1u:0u);
+        CHECK_EQ(before->regionRevisions.at(region),0u);
+    }
+    // A second edit while a batch is running must not revive the old canopy.
+    world::ecology::Cell bare;
+    bare.fertility=1;
+    world->ecology().set(520,520,bare);
+    placement.updateRegions(regions,true);
+    world->ecology().set(520,520,bare);
+    CHECK(await(complete));
+    CHECK_EQ(placement.read()->regionRevisions.at(regions[0]),3u);
+}
+
+TEST(scene_scatter_batch_field_reuse_preserves_results) {
+    auto map=ocean(17);
+    for (auto& cell:map.cells) { cell.sea=false;cell.elevation=40; }
+    world::WorldSystem system(config());system.publish(std::move(map));
+    const auto world=system.read();
+    const auto delta=world->ecology().read();
+    auto field=world->field();
+    for (int x=512;x<1024;x+=128) {
+        const world::decor::ScatterBounds bounds{x,512,x+128,640};
+        CHECK_EQ(world->scatter(bounds,*delta,field).objects,world->scatter(bounds,*delta).objects);
+    }
+}
+
+TEST(scene_placement_huge_demand_bounds_requests_results_and_residency) {
+    world::WorldSystem system(config());system.publish(ocean(7));
+    const world::ScenePlacement::Limits limits{32,4,7,3,2,1};
+    world::ScenePlacement placement(system.read(),limits);
+    std::vector<world::decor::ScatterBounds> regions;
+    for (std::int64_t i=0;i<172507;++i) regions.push_back({i*128,0,(i+1)*128,128});
+    const auto checkBudgets=[&] {
+        const auto& s=placement.stats();
+        CHECK(s.admitted<=limits.regions);CHECK(s.resident<=limits.regions);
+        CHECK(s.cached<=limits.regions+limits.warmRegions);
+        CHECK(s.started<=limits.startsPerUpdate);CHECK(s.collected<=limits.collectsPerUpdate);
+        CHECK(s.published<=limits.publishesPerUpdate);
+        CHECK(s.inFlight<=world::ScenePlacement::workerLimit()*limits.regionsPerJob);
+        CHECK_EQ(s.requested,regions.size());CHECK(s.limited);CHECK(placement.error().empty());
+    };
+    std::size_t previous=0;
+    CHECK(await([&] {
+        placement.updateRegions(regions,true);checkBudgets();
+        const auto snapshot=placement.read();
+        if (!snapshot) return false;
+        CHECK(snapshot->regions.size()<=previous+limits.publishesPerUpdate);
+        previous=snapshot->regions.size();
+        return snapshot->complete && !placement.busy();
+    }));
+    const auto retained=placement.read();
+    CHECK(retained!=nullptr);
+    if (!retained) return;
+    CHECK(retained->capacityLimited);CHECK_EQ(retained->regions.size(),limits.regions);
+    CHECK_EQ(retained->regions,(std::vector<world::decor::ScatterBounds>(regions.begin(),regions.begin()+limits.regions)));
+    // A completely different far prefix replaces, rather than appends to, the
+    // admitted set. Repeating it must settle instead of streaming the tail.
+    std::reverse(regions.begin(),regions.end());
+    CHECK(await([&] {
+        placement.updateRegions(regions,true);checkBudgets();
+        const auto snapshot=placement.read();
+        return snapshot && snapshot!=retained && snapshot->complete && !placement.busy();
+    }));
+    auto expected=std::vector<world::decor::ScatterBounds>(regions.begin(),regions.begin()+limits.regions);
+    std::sort(expected.begin(),expected.end());
+    CHECK_EQ(placement.read()->regions,expected);
+    CHECK_EQ(retained->regions.front(),(world::decor::ScatterBounds{0,0,128,128}));
+    const auto settled=placement.read();
+    placement.updateRegions(regions,true);checkBudgets();
+    CHECK(placement.read()==settled);CHECK_EQ(placement.stats().started,std::size_t(0));
+}
+
+TEST(scene_placement_warm_cache_still_obeys_incremental_publication_budget) {
+    world::WorldSystem system(config());system.publish(ocean(7));
+    const world::ScenePlacement::Limits limits{8,8,8,8,8,2};
+    world::ScenePlacement placement(system.read(),limits);
+    std::vector<world::decor::ScatterBounds> regions;
+    for (int i=0;i<8;++i) regions.push_back({i*128,0,(i+1)*128,128});
+    CHECK(await([&] {
+        placement.updateRegions(regions,true);
+        return placement.read() && placement.read()->complete && !placement.busy();
+    }));
+    const auto retained=placement.read();
+    CHECK(retained!=nullptr);
+    if (!retained) return;
+    placement.updateRegions({},true);
+    CHECK(placement.read()->regions.empty());CHECK(placement.read()->complete);
+    CHECK_EQ(placement.stats().cached,regions.size());
+    for (std::size_t count=2;count<=regions.size();count+=2) {
+        placement.updateRegions(regions,true);
+        CHECK_EQ(placement.stats().started,std::size_t(0));
+        CHECK_EQ(placement.stats().collected,std::size_t(0));
+        CHECK_EQ(placement.stats().published,limits.publishesPerUpdate);
+        CHECK_EQ(placement.read()->regions.size(),count);
+        CHECK_EQ(placement.read()->complete,count==regions.size());
+        CHECK_EQ(placement.busy(),count<regions.size());
+    }
+    CHECK_EQ(retained->regions.size(),regions.size());
+    CHECK_EQ(retained->objectsVersion,placement.read()->objectsVersion);
+}
+
+TEST(scene_placement_abandoned_jobs_cannot_republish_cleared_coverage) {
+    world::WorldSystem system(config());system.publish(ocean(7));
+    const world::ScenePlacement::Limits limits{16,0,8,2,1,1};
+    world::ScenePlacement placement(system.read(),limits);
+    std::vector<world::decor::ScatterBounds> regions;
+    for (int i=0;i<16;++i) regions.push_back({i*128,0,(i+1)*128,128});
+    placement.updateRegions(regions,true);
+    CHECK(placement.busy());
+    CHECK(await([&] {
+        placement.updateRegions({},true);
+        CHECK(placement.read() && placement.read()->regions.empty());
+        CHECK_EQ(placement.stats().cached,std::size_t(0));
+        CHECK(placement.stats().collected<=limits.collectsPerUpdate);
+        return !placement.busy();
+    }));
+    CHECK(placement.read()->complete);CHECK(placement.error().empty());
+    CHECK(await([&] {
+        placement.updateRegions(regions,true);
+        return placement.read()->complete && !placement.busy();
+    }));
+    CHECK_EQ(placement.read()->regions.size(),regions.size());
 }
 
 TEST(diagnostics_off_does_not_evaluate_arguments) {

@@ -1,12 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Explore: tiny (32 km)" type="CMakeRunConfiguration" factoryName="Application"
-                 PROGRAM_PARAMS="--explore --world tiny"
-                 REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false"
-                 EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true"
-                 PROJECT_NAME="ancient_settlement" TARGET_NAME="asr_client"
-                 CONFIG_NAME="RelWithDebInfo"
-                 RUN_TARGET_PROJECT_NAME="ancient_settlement" RUN_TARGET_NAME="asr_client"
-                 WORKING_DIR="$PROJECT_DIR$">
+  <configuration default="false" name="Explore: tiny (32 km)" type="CMakeRunConfiguration" factoryName="Application" PROGRAM_PARAMS="--explore --world tiny" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" WORKING_DIR="$PROJECT_DIR$" PASS_PARENT_ENVS_2="true" PROJECT_NAME="campfire" TARGET_NAME="asr_client" CONFIG_NAME="RelWithDebInfo" RUN_TARGET_PROJECT_NAME="campfire" RUN_TARGET_NAME="asr_client">
     <method v="2">
       <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
     </method>

@@ -1,0 +1,57 @@
+{
+  "id": "sand_shore",
+  "runtime_size": 2048,
+  "runtime_files": {
+    "albedo": "sand_shore_albedo.png",
+    "normal": "sand_shore_normal.png",
+    "properties": "sand_shore_properties.png"
+  },
+  "properties_channels": {
+    "r": "ao",
+    "g": "roughness",
+    "b": "height",
+    "a": "mask"
+  },
+  "mip_steps": [
+    2,
+    4,
+    8,
+    16
+  ],
+  "height_range_before_stretch": [
+    0.5,
+    0.5
+  ],
+  "had": {
+    "ao": false,
+    "rough": false,
+    "displacement": false,
+    "mask": false
+  },
+  "source": {
+    "site": "ue-export",
+    "project": "AncientSettlement",
+    "license": "Original asset-pack licence (not CC0)",
+    "assets": {
+      "diffuse": "/Game/MWLandscapeAutoMaterial/Textures/Ground/TEX_MWAM_SandC_col",
+      "normal": "/Game/MWLandscapeAutoMaterial/Textures/Ground/TEX_MWAM_SandC_nrm"
+    },
+    "original_sizes": {
+      "diffuse": [
+        4096,
+        4096
+      ],
+      "normal": [
+        4096,
+        4096
+      ]
+    },
+    "runtime_world_scale": 2.0,
+    "resolution": "2048px",
+    "files": {
+      "diffuse": "sand_shore_diffuse.png",
+      "normal": "sand_shore_normal.png"
+    }
+  },
+  "world_scale": 2.0
+}

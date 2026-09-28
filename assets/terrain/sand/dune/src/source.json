@@ -1,0 +1,39 @@
+{
+  "site": "ue-export",
+  "project": "AncientSettlement",
+  "license": "Original asset-pack licence (not CC0)",
+  "assets": {
+    "diffuse": "/Game/DesertSandPack/Textures/T_Sands_4K_Albedo",
+    "normal": "/Game/DesertSandPack/Textures/T_Sands_4K_Normal",
+    "ao": "/Game/DesertSandPack/Textures/T_Sands_4K_AO",
+    "rough": "/Game/DesertSandPack/Textures/T_Sands_4K_Roughness",
+    "displacement": "/Game/DesertSandPack/Textures/T_Sands_4K_Displacement"
+  },
+  "original_sizes": {
+    "diffuse": [
+      4096,
+      4096
+    ],
+    "normal": [
+      4096,
+      4096
+    ],
+    "ao": [
+      4096,
+      4096
+    ],
+    "rough": [
+      4096,
+      4096
+    ],
+    "displacement": null
+  },
+  "runtime_world_scale": 3.2,
+  "resolution": "2048px",
+  "files": {
+    "diffuse": "sand_dune_diffuse.png",
+    "normal": "sand_dune_normal.png",
+    "ao": "sand_dune_ao.png",
+    "rough": "sand_dune_rough.png"
+  }
+}

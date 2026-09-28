@@ -1,0 +1,23 @@
+{
+  "site": "polyhaven",
+  "asset_id": "damp_beach_sand",
+  "asset_url": "https://polyhaven.com/a/damp_beach_sand",
+  "license": "CC0",
+  "authors": [
+    "Dimitrios Savva"
+  ],
+  "attribution_required": false,
+  "original_physical_metres": [
+    2.0,
+    2.0
+  ],
+  "runtime_world_scale": 2.0,
+  "resolution": "2k",
+  "files": {
+    "diffuse": "ph_damp_beach_sand_diffuse.png",
+    "normal": "ph_damp_beach_sand_normal.png",
+    "displacement": "ph_damp_beach_sand_displacement.png",
+    "rough": "ph_damp_beach_sand_rough.png",
+    "ao": "ph_damp_beach_sand_ao.png"
+  }
+}

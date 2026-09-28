@@ -38,6 +38,13 @@ engine::PassPlace WaterPass::setup(engine::Device& device, engine::RenderPipelin
     // depth everything else wrote and does not write its own, or two rivers
     // crossing would each hide the other.
     wanted.depthWrite = false;
+    // The shoreline is where water and bed cross, so along it their depths
+    // are equal to within the precision of the depth buffer and the depth
+    // test flipped between them frame to frame - a flickering waterline.
+    // A slope-scaled offset settles every tie in favour of the water; the
+    // waterline itself is still cut in the pixel stage from the true depth.
+    wanted.depthBiasConstant = -4.0f;
+    wanted.depthBiasSlope = -1.5f;
     engine::GraphicsPipeline graphics = device.makePipeline(wanted);
     if (!graphics) return {};
     if (pages_) {

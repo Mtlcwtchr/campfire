@@ -129,6 +129,7 @@ int main(int argc, char** argv) {
     bool exploreTrace = false;
     bool exploreMenu = false;
     client::ExploreViewOptions exploreOptions;
+    int exploreWeather = 0; // --weather auto|clear|rain|storm|drought
     double shotTime = 0.0;
     // How many cards to strew over the ground, for measuring the instanced path
     // with nobody at the keyboard. A crowd is the thing the batching exists for,
@@ -176,9 +177,39 @@ int main(int argc, char** argv) {
             else { std::cerr << "Expected --grid off|samples|mesh\n"; return 1; }
         }
         else if (a == "--object-mesh") exploreOptions.objectMesh = true;
+        else if (a == "--headless" && i + 1 < argc) {
+            // WIDTHxHEIGHT. No window: nothing appears on the screen or in the
+            // Dock, and frames are paced by the card instead of the display.
+            const std::string size = argv[++i];
+            const auto x = size.find('x');
+            exploreOptions.headlessWidth = std::max(64, std::atoi(size.substr(0, x).c_str()));
+            exploreOptions.headlessHeight =
+                    x == std::string::npos ? exploreOptions.headlessWidth * 10 / 16
+                                           : std::max(64, std::atoi(size.substr(x + 1).c_str()));
+        }
+        else if (a == "--bench" && i + 1 < argc) exploreOptions.benchFrames = std::max(1, std::atoi(argv[++i]));
+        else if (a == "--bench-load" && i + 1 < argc) {
+            char* end = nullptr;
+            const long frames = std::strtol(argv[++i], &end, 10);
+            if (!end || *end || frames < 1 || frames > 1000000) {
+                std::cerr << "Expected --bench-load FRAMES in 1..1000000\n";
+                return 1;
+            }
+            exploreOptions.benchLoadFrames = int(frames);
+        }
+        else if (a == "--bench-json" && i + 1 < argc) exploreOptions.benchJson = argv[++i];
         else if (a == "--yaw" && i + 1 < argc) exploreOptions.yaw = std::atof(argv[++i]);
         else if (a == "--pitch" && i + 1 < argc) exploreOptions.pitch = std::atof(argv[++i]);
         else if (a == "--height-offset" && i + 1 < argc) exploreOptions.heightOffset = std::atof(argv[++i]);
+        else if (a == "--draw-distance" && i + 1 < argc) exploreOptions.drawDistance = std::atof(argv[++i]);
+        else if (a == "--no-fog") exploreOptions.fog = false;
+        else if (a == "--weather" && i + 1 < argc) {
+            const std::string name = argv[++i];
+            for (std::size_t p = 0; p < world::weather::kPresets.size(); ++p)
+                if (name == world::weather::kPresets[p]) exploreWeather = int(p);
+        }
+        else if (a == "--scene-view-back" && i + 1 < argc) exploreOptions.sceneViewBack = std::atof(argv[++i]);
+        else if (a == "--graphics-panel" && i + 1 < argc) exploreOptions.graphicsTab = std::atoi(argv[++i]);
         else if (a == "--shot-time" && i + 1 < argc) shotTime = std::atof(argv[++i]);
         else if (a == "--crowd" && i + 1 < argc) exploreCrowd = std::atoi(argv[++i]);
         else if (a == "--shot-frame" && i + 1 < argc) shotFrame = std::atoi(argv[++i]);
@@ -199,6 +230,8 @@ int main(int argc, char** argv) {
                       << " [--shot FILE] [--camera map|orbit|free] [--grid off|samples|mesh]"
                       << " [--object-mesh]"
                       << " [--yaw RADIANS] [--pitch RADIANS] [--height-offset METRES]"
+                      << " [--draw-distance METRES] [--no-fog]"
+                      << " [--headless WxH] [--bench FRAMES] [--bench-load FRAMES] [--bench-json FILE]"
                       << "   the world, without the game in it\n";
             return 0;
         }
@@ -236,15 +269,19 @@ int main(int argc, char** argv) {
     sim::World* active = nullptr;
 
 
+    // Headless: never become a foreground application. Without this macOS
+    // gives the process a Dock icon and may hand it focus on start.
+    if (exploring && exploreOptions.headlessWidth > 0) SDL_SetHint(SDL_HINT_MAC_BACKGROUND_APP, "1");
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         std::cerr << "SDL_Init failed: " << SDL_GetError() << "\n";
         return 1;
     }
 
     if (exploring) {
-        SDL_Window* gpuWindow = SDL_CreateWindow("Campfire — World Explorer",
-                                                 1280, 800, SDL_WINDOW_RESIZABLE);
-        if (!gpuWindow) {
+        SDL_Window* gpuWindow = exploreOptions.headlessWidth > 0
+                ? nullptr
+                : SDL_CreateWindow("Campfire — World Explorer", 1280, 800, SDL_WINDOW_RESIZABLE);
+        if (!gpuWindow && exploreOptions.headlessWidth <= 0) {
             std::cerr << "GPU explorer window creation failed: " << SDL_GetError() << "\n";
             SDL_Quit();
             return 1;
@@ -254,9 +291,9 @@ int main(int argc, char** argv) {
                                                    resolveSprites(), shotPath, shotZoom,
                                                    exploreAt, exploreFlight, exploreClose,
                                                    exploreTrace, shotFrame, exploreMenu,
-                                                    exploreCrowd, shotTime, "none", 0.0, 0, {},
+                                                    exploreCrowd, shotTime, "none", 0.0, exploreWeather, {},
                                                     {18.0f, 32.0f, 21.0f, 9.0f}, exploreOptions);
-        SDL_DestroyWindow(gpuWindow);
+        if (gpuWindow) SDL_DestroyWindow(gpuWindow);
         SDL_Quit();
         return outcome;
     }

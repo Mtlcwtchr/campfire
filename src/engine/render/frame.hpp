@@ -65,7 +65,35 @@ struct Scene {
     // is still payload rather than engine policy; terrain is merely one
     // consumer of the game's explicit far representation.
     float vegetationDensity[8][4]{};
+    float shadowSun[4]{}; // towards the light, enabled
+    float shadowClip[4][4]{}; // world origin xyz, extent (zero = unavailable)
+    // Distance fog: opaque at x metres (the draw distance), starting at y
+    // metres, enabled when z > 0.5. Measured from the eye; perspective only.
+    float fog[4]{};
+    // Lighting: sun intensity, sky/ambient intensity, exposure, provided (1).
+    // Zero `w` means "not set" and shaders keep their built-in look.
+    float look[4]{};
+    // Sky: horizon rgb + skybox enabled, zenith rgb + panorama rotation (rad).
+    // Without a skybox the horizon/zenith colours are still the fog colour.
+    float skyHorizon[4]{};
+    float skyZenith[4]{};
+    // Volumetric clouds: coverage 0..1, density, base altitude (m), ray steps (0 = off).
+    float clouds[4]{};
+    // Quality knobs read by shaders: terrain material blend (m), shadow
+    // softness multiplier, spare, spare. Zero means the built-in default.
+    float quality[4]{};
+    // The camera every DECISION is made from: culling, LOD, streaming,
+    // placement. Normally the drawing camera; frozen by the scene view so the
+    // world can be inspected from elsewhere without being recomputed.
+    // cullState: x = these are set, y = frozen (drawing camera differs).
+    float cullViewProjection[16]{};
+    float cullCamera[4]{};
+    float cullState[4]{};
 };
+
+// What CPU culling/LOD code must read instead of the drawing camera.
+inline const float* cullMatrix(const Scene& s) { return s.cullState[0] > 0.5f ? s.cullViewProjection : s.viewProjection; }
+inline const float* cullEye(const Scene& s) { return s.cullState[0] > 0.5f ? s.cullCamera : s.camera; }
 
 struct Frame {
     Device* device = nullptr;
@@ -122,6 +150,7 @@ struct Frame {
         std::array<std::uint64_t, 12> groundTrianglesByLevel{};
         // Triangles by whoever queued the draw - see DrawItem::author.
         std::array<std::uint64_t, 8> trianglesByAuthor{};
+        std::array<std::uint32_t, 8> drawsByAuthor{};
     };
     Work* work = nullptr;
 };

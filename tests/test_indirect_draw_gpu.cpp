@@ -8,6 +8,9 @@
 #include <vector>
 
 #include "engine/render/device.hpp"
+#include "engine/render/impostor_depth.hpp"
+#include "engine/render/hemisphere_impostor.hpp"
+#include "engine/camera/camera.hpp"
 #include "engine/render/frame.hpp"
 #include "engine/render/geometry/cluster_cull.hpp"
 #include "engine/render/render_pipeline.hpp"
@@ -299,11 +302,157 @@ TEST(scene_model_shader_still_builds_with_the_streams_the_pass_declares) {
         return;
     }
     const auto layout = game::materials::sceneModelLayout();
-    const auto material = game::materials::sceneModels();
-    engine::PipelineWanted wanted = material->pipeline(layout);
-    auto pipeline = gpu.device.makePipeline(wanted);
-    if (!pipeline) std::cerr << gpu.device.error() << '\n';
-    CHECK(bool(pipeline));
+    for (bool depth:{false,true}) {
+        const auto material = game::materials::sceneModels(depth);
+        auto pipeline = gpu.device.makePipeline(material->pipeline(layout));
+        if (!pipeline) std::cerr << gpu.device.error() << '\n';
+        CHECK(bool(pipeline));
+    }
+}
+
+TEST(scene_impostor_depth_reprojection_matches_ray_intersection_on_gpu) {
+    Gpu gpu;CHECK(gpu.ready);if (!gpu.ready) return;
+    SDL_GPUTextureCreateInfo info{};
+    info.type=SDL_GPU_TEXTURETYPE_2D_ARRAY;info.format=engine::Device::kColourFormat;
+    info.usage=SDL_GPU_TEXTUREUSAGE_SAMPLER;info.width=info.height=4;
+    info.layer_count_or_depth=info.num_levels=1;
+    auto atlas=gpu.device.makeTexture(info);
+    info.type=SDL_GPU_TEXTURETYPE_2D;info.usage=SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
+    auto target=gpu.device.makeTexture(info);
+    SDL_GPUSamplerCreateInfo sample{};
+    sample.min_filter=sample.mag_filter=SDL_GPU_FILTER_NEAREST;
+    sample.address_mode_u=sample.address_mode_v=SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+    auto sampler=gpu.device.makeSampler(sample);
+    engine::PipelineWanted wanted;
+    wanted.shaderFile="impostor_depth_probe.hlsl";wanted.vertexEntry="DepthProbeVS";wanted.fragmentEntry="DepthProbePS";
+    wanted.depthTest=wanted.depthWrite=false;
+    auto pipeline=gpu.device.makePipeline(wanted);
+    if (!pipeline) std::cerr<<gpu.device.error()<<'\n';
+    CHECK(atlas && target && sampler && pipeline);if (!atlas || !target || !sampler || !pipeline) return;
+    const std::array<SDL_GPUTextureSamplerBinding,1> bindings{{{atlas.get(),sampler.get()}}};
+    const auto code=std::uint16_t(std::lround(0.625*65535)); // +0.5 m in a 4 m frame
+    for (bool hemisphere:{false,true}) for (int view=0;view<(hemisphere?21:8);++view)
+        for (bool perspective:{false,true}) for (bool covered:{false,true}) {
+        std::vector<std::array<Uint8,4>> packed(16,{Uint8(code>>8),Uint8(code&255),Uint8(view),Uint8(covered?255:0)});
+        engine::Device::Uploader upload(gpu.device);
+        CHECK(upload.refillRegion(atlas.get(),packed.data(),0,0,4,4,4));CHECK(upload.finish());
+        std::array<Uint8,64> uploaded{};
+        CHECK(gpu.device.readTexture(atlas.get(),uploaded.data(),4,4));
+        CHECK_EQ(uploaded[2],view);CHECK_EQ(uploaded[3],covered?255:0);
+        const double angle=view*std::numbers::pi/4,c=std::cos(angle),s=std::sin(angle);
+        engine::camera::Vec3 ray{0.3*c-s,0.3*s+c,0.2};
+        if (hemisphere) {
+            const auto basis=*engine::render::hemisphereBasis(unsigned(view));
+            for (int k=0;k<3;++k) ray[k]=basis.eye[k]+0.3*basis.right[k]+0.2*basis.up[k];
+        }
+        engine::Scene scene{};
+        for (int k=0;k<3;++k) scene.viewProjection[8+k]=float(-ray[k]);
+        if (hemisphere) {
+            const auto right=engine::camera::normalized({-ray[1],ray[0],0});
+            const engine::camera::Vec3 up{ray[1]*right[2]-ray[2]*right[1],
+                ray[2]*right[0]-ray[0]*right[2],ray[0]*right[1]-ray[1]*right[0]};
+            for (int k=0;k<3;++k) {scene.viewProjection[k]=float(right[k]);scene.viewProjection[4+k]=float(up[k]);}
+            scene.parameters[20][0]=1;scene.parameters[20][1]=float(view);
+        }
+        if (perspective) {
+            scene.viewProjection[12]=1;
+            for (int k=0;k<3;++k) scene.camera[k]=float(ray[k]*10+(k==2 && !hemisphere?3:0));
+        }
+        auto* commands=SDL_AcquireGPUCommandBuffer(gpu.device.handle());CHECK(commands);if (!commands) return;
+        SDL_PushGPUFragmentUniformData(commands,0,&scene,sizeof(scene));
+        SDL_GPUColorTargetInfo colour{};colour.texture=target.get();
+        colour.load_op=SDL_GPU_LOADOP_CLEAR;colour.store_op=SDL_GPU_STOREOP_STORE;
+        auto* pass=SDL_BeginGPURenderPass(commands,&colour,1,nullptr);
+        CHECK(pass);if (!pass) { SDL_CancelGPUCommandBuffer(commands);return; }
+        SDL_BindGPUGraphicsPipeline(pass,pipeline.get());
+        SDL_BindGPUFragmentSamplers(pass,0,bindings.data(),Uint32(bindings.size()));
+        SDL_DrawGPUPrimitives(pass,3,1,0,0);SDL_EndGPURenderPass(pass);
+        CHECK(gpu.device.submitFrame(commands));
+        std::array<Uint8,64> pixels{};CHECK(gpu.device.readTexture(target.get(),pixels.data(),4,4));
+        const auto depth=engine::render::impostorDepth(Uint8(code>>8),Uint8(code&255),4);
+        const auto hit=hemisphere?engine::render::intersectHemisphereDepth({0,0,0},ray,depth,4,view):
+            engine::render::intersectImpostorDepth({0,0,3},ray,depth,4,6,view);
+        CHECK(bool(hit));if (!hit) return;
+        if (pixels[3]!=(covered?255:0)) std::cerr<<"depth view="<<view<<" covered="<<covered
+            <<" rgba="<<int(pixels[0])<<','<<int(pixels[1])<<','<<int(pixels[2])<<','<<int(pixels[3])<<'\n';
+        CHECK(std::abs(int(pixels[0])-int(std::lround((covered?hit->uv[0]:0.5)*255)))<=1);
+        CHECK(std::abs(int(pixels[1])-int(std::lround((covered?hit->uv[1]:0.5)*255)))<=1);
+        CHECK_EQ(pixels[3],covered?255:0);
+        CHECK_EQ(pixels[2],covered?255:0);
+    }
+}
+
+TEST(scene_hemisphere_view_weights_match_cpu_across_rings_and_pole) {
+    Gpu gpu;CHECK(gpu.ready);if (!gpu.ready) return;
+    SDL_GPUTextureCreateInfo info{};
+    info.type=SDL_GPU_TEXTURETYPE_2D;info.format=engine::Device::kColourFormat;
+    info.usage=SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;info.width=info.height=4;
+    info.layer_count_or_depth=info.num_levels=1;
+    auto target=gpu.device.makeTexture(info);
+    engine::PipelineWanted wanted;
+    wanted.shaderFile="impostor_depth_probe.hlsl";wanted.vertexEntry="DepthProbeVS";wanted.fragmentEntry="HemisphereWeightsPS";
+    wanted.depthTest=wanted.depthWrite=false;
+    auto pipeline=gpu.device.makePipeline(wanted);CHECK(target && pipeline);if (!target || !pipeline) return;
+    for (double elevation:{0.0,20.0,44.9,45.1,69.9,70.1,89.9,90.0}) for (double azimuth:{0.0,1.4,3.7,6.2}) {
+        const double e=elevation*std::numbers::pi/180;
+        const engine::camera::Vec3 direction{std::cos(azimuth)*std::cos(e),std::sin(azimuth)*std::cos(e),std::sin(e)};
+        const auto selected=engine::render::selectHemisphere(direction);CHECK(bool(selected));if (!selected) return;
+        engine::Scene scene{};
+        for (int k=0;k<3;++k) scene.parameters[19][k]=float(direction[k]);
+        auto* commands=SDL_AcquireGPUCommandBuffer(gpu.device.handle());CHECK(commands);if (!commands) return;
+        SDL_PushGPUFragmentUniformData(commands,0,&scene,sizeof(scene));
+        SDL_GPUColorTargetInfo colour{};colour.texture=target.get();colour.load_op=SDL_GPU_LOADOP_CLEAR;colour.store_op=SDL_GPU_STOREOP_STORE;
+        auto* pass=SDL_BeginGPURenderPass(commands,&colour,1,nullptr);CHECK(pass);if (!pass) {SDL_CancelGPUCommandBuffer(commands);return;}
+        SDL_BindGPUGraphicsPipeline(pass,pipeline.get());SDL_DrawGPUPrimitives(pass,3,1,0,0);SDL_EndGPURenderPass(pass);
+        CHECK(gpu.device.submitFrame(commands));
+        std::array<Uint8,64> pixels{};CHECK(gpu.device.readTexture(target.get(),pixels.data(),4,4));
+        std::array<double,21> expected{},actual{};
+        for (unsigned i=0;i<4;++i) {
+            expected[selected->views[i]]+=selected->weights[i];
+            const auto view=unsigned(std::lround(double(pixels[i*4])*20/255));CHECK(view<21);
+            if (view<21) actual[view]+=double(pixels[i*4+1])/255;
+        }
+        for (unsigned i=0;i<21;++i) CHECK(std::abs(expected[i]-actual[i])<0.009);
+    }
+}
+
+TEST(scene_hemisphere_billboard_has_area_in_top_down_and_perspective_views) {
+    Gpu gpu;CHECK(gpu.ready);if (!gpu.ready) return;
+    SDL_GPUTextureCreateInfo info{};info.type=SDL_GPU_TEXTURETYPE_2D;info.format=engine::Device::kColourFormat;
+    info.usage=SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;info.width=info.height=64;info.layer_count_or_depth=info.num_levels=1;
+    auto target=gpu.device.makeTexture(info);
+    const auto material=game::materials::sceneModels(true);
+    auto wanted=material->pipeline(game::materials::sceneModelLayout());
+    wanted.shaderFile="impostor_depth_probe.hlsl";wanted.fragmentEntry="HemispherePlanePS";
+    wanted.depthTest=wanted.depthWrite=false;
+    auto pipeline=gpu.device.makePipeline(wanted);
+    if (!pipeline) std::cerr<<gpu.device.error()<<'\n';
+    std::array<std::array<float,19>,4> vertices{};
+    for (unsigned i=0;i<4;++i) {vertices[i][0]=(i%2)?0.5f:-0.5f;vertices[i][2]=i/2;vertices[i][5]=1;}
+    const std::array<std::uint32_t,6> indices{0,1,2,2,1,3};
+    const std::array<float,16> instance{0,0,0,1, 0,0,1,0, 2,4,0,0, 3,1,0,0};
+    auto vb=gpu.device.uploadBuffer(SDL_GPU_BUFFERUSAGE_VERTEX,vertices.data(),sizeof(vertices));
+    auto ib=gpu.device.uploadBuffer(SDL_GPU_BUFFERUSAGE_INDEX,indices.data(),sizeof(indices));
+    auto instances=gpu.device.uploadBuffer(SDL_GPU_BUFFERUSAGE_VERTEX,instance.data(),sizeof(instance));
+    CHECK(target && pipeline && vb && ib && instances);if (!target || !pipeline || !vb || !ib || !instances) return;
+    engine::camera::Camera camera;camera.viewportWidth=camera.viewportHeight=64;camera.pixelsPerTile=12;camera.focusHeight=2;
+    using Mode=engine::camera::Camera::Mode;
+    for (auto mode:{Mode::Map,Mode::Orbit,Mode::Free}) {
+        camera.setMode(mode);
+        engine::Scene scene{};camera.viewProjection(scene.viewProjection,0,1.0/100);
+        const auto eye=camera.eyePosition();for (int i=0;i<3;++i) scene.camera[i]=float(eye[i]);
+        auto* commands=SDL_AcquireGPUCommandBuffer(gpu.device.handle());CHECK(commands);if (!commands) return;
+        SDL_PushGPUVertexUniformData(commands,0,&scene,sizeof(scene));
+        SDL_GPUColorTargetInfo colour{};colour.texture=target.get();colour.load_op=SDL_GPU_LOADOP_CLEAR;colour.store_op=SDL_GPU_STOREOP_STORE;
+        auto* pass=SDL_BeginGPURenderPass(commands,&colour,1,nullptr);CHECK(pass);if (!pass) {SDL_CancelGPUCommandBuffer(commands);return;}
+        SDL_BindGPUGraphicsPipeline(pass,pipeline.get());
+        const SDL_GPUBufferBinding bindings[]{{vb.get(),0},{instances.get(),0}},index{ib.get(),0};
+        SDL_BindGPUVertexBuffers(pass,0,bindings,2);SDL_BindGPUIndexBuffer(pass,&index,SDL_GPU_INDEXELEMENTSIZE_32BIT);
+        SDL_DrawGPUIndexedPrimitives(pass,6,1,0,0,0);SDL_EndGPURenderPass(pass);CHECK(gpu.device.submitFrame(commands));
+        std::array<Uint8,64*64*4> pixels{};CHECK(gpu.device.readTexture(target.get(),pixels.data(),64,64));
+        unsigned filled=0;for (unsigned i=0;i<64*64;++i) filled+=pixels[i*4+1]>200;
+        CHECK(filled>400);
+    }
 }
 
 TEST(scene_model_cluster_gather_shader_builds) {

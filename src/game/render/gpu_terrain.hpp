@@ -12,8 +12,8 @@
 #include "game/render/height_page_stream.hpp"
 #include "game/world/terrain_plan.hpp"
 #include "game/world/world_system.hpp"
+#include "game/client/camera.hpp"
 
-namespace client { struct Camera; }
 namespace game {
 
 class GpuTerrain {

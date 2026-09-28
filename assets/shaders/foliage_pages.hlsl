@@ -46,6 +46,10 @@ FoliageOut PageGrassVS(FoliageVertexIn vertex, PageGrassIn root)
     const float blockMorph = run.morph;
     const float cellMetres = run.cell;
     const int level = run.level;
+    const bool coarse = cellMetres>2.5;
+    const float nearby = (1.0-smoothstep(144.0,192.0,length(p-morphReplacement.zw)))*morphReplacement.y;
+    const float range = coarse?1.0-nearby:nearby;
+    if (range <= 0.0) return FoliageVS(vertex, instance);
     const float4 address = pageAddress(p,level);
     float4 w0 = 0.0;
     float2 w1 = 0.0;
@@ -80,16 +84,13 @@ FoliageOut PageGrassVS(FoliageVertexIn vertex, PageGrassIn root)
     const float shape = foliageHash(cell.x,cell.y^0x5791u);
     instance.position = float3(p,z-0.025);
     instance.scale = (0.45+0.40*shape)*community.height;
-    const bool coarse = cellMetres>2.5;
     if (coarse) instance.scale *= min(cellMetres,64.0)*0.32; // wider groups, height remains capped
     instance.phase = shape*6.2831853;
     instance.variant = foliageCommunityVariant(climate.foliage.x,climate.foliage.y,
         climate.foliage.z,climate.foliage.w,uint(shape*16777215.0));
-    // morphReplacement.zw is the requested focus (not the perspective eye).
-    const float nearby = (1.0-smoothstep(144.0,192.0,length(p-morphReplacement.zw)))*morphReplacement.y;
-    const float range = coarse?1.0-nearby:nearby;
+    // More occupied sites, not more candidates or larger overlapping cards.
     instance.tint = float4(cover.red,cover.green,cover.blue,
-        (random<cover.grass && address.z!=0.0 && head<=z+0.02?0.92:0.0)*range);
+        (random<saturate(cover.grass*1.5) && address.z!=0.0 && head<=z+0.02?0.92:0.0)*range);
     instance.climate = float4(climate.environment.x,climate.environment.z,climate.geography.w,z);
     return FoliageVS(vertex,instance);
 }

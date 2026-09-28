@@ -68,6 +68,21 @@ bool sizeOf(const std::filesystem::path& path, int& width, int& height) {
 
 Device::~Device() { close(); }
 
+bool Device::openHeadless(std::uint32_t width, std::uint32_t height, const std::filesystem::path& assets) {
+    if (!open(nullptr, assets)) return false;
+    headlessWidth_ = std::max<std::uint32_t>(1, width);
+    headlessHeight_ = std::max<std::uint32_t>(1, height);
+    return true;
+}
+
+void Device::waitInFlight(std::size_t frames) {
+    while (submissions_.size() > frames) {
+        SDL_GPUFence* fence = submissions_.front().fence;
+        SDL_WaitForGPUFences(device_, true, &fence, 1);
+        completedSubmission();
+    }
+}
+
 bool Device::open(SDL_Window* window, const std::filesystem::path& assets) {
     close();
     window_ = window;
@@ -88,6 +103,10 @@ bool Device::open(SDL_Window* window, const std::filesystem::path& assets) {
         error_ = std::string("no graphics device: ") + SDL_GetError();
         close();
         return false;
+    }
+    if (!window) {
+        SDL_Log("GPU driver=%s headless", SDL_GetGPUDeviceDriver(device_));
+        return true;
     }
     if (!SDL_ClaimWindowForGPUDevice(device_, window)) {
         error_ = std::string("the window would not take the device: ") + SDL_GetError();
@@ -308,7 +327,12 @@ GraphicsPipeline Device::makePipeline(const PipelineWanted& wanted) {
     info.rasterizer_state.front_face = SDL_GPU_FRONTFACE_CLOCKWISE;
     // Clamp interpolated fragment depth, not individual vertex depths in HLSL.
     // Long terrain skirts may leave the slab without becoming foreground walls.
-    info.rasterizer_state.enable_depth_clip = false;
+    info.rasterizer_state.enable_depth_clip = wanted.depthClip;
+    info.rasterizer_state.enable_depth_bias =
+            wanted.depthBiasConstant != 0.0f || wanted.depthBiasSlope != 0.0f;
+    info.rasterizer_state.depth_bias_constant_factor = wanted.depthBiasConstant;
+    info.rasterizer_state.depth_bias_slope_factor = wanted.depthBiasSlope;
+    info.rasterizer_state.depth_bias_clamp = wanted.depthBiasClamp;
     info.depth_stencil_state.enable_depth_test = wanted.depthTest;
     info.depth_stencil_state.enable_depth_write = wanted.depthWrite;
     info.depth_stencil_state.compare_op = SDL_GPU_COMPAREOP_LESS_OR_EQUAL;
@@ -632,6 +656,36 @@ Texture Device::loadArrayMipped(const std::vector<std::vector<std::filesystem::p
             return {};
         }
     }
+    return texture;
+}
+
+SDL_Surface* Device::loadDataPng(const std::filesystem::path& path) {
+    auto* io=SDL_IOFromFile(path.string().c_str(),"rb");if (!io) return nullptr;
+    auto* image=IMG_LoadPNG_IO(io);SDL_CloseIO(io);if (!image) return nullptr;
+    if (image->format==SDL_PIXELFORMAT_RGBA32) return image;
+    auto* rgba=SDL_ConvertSurface(image,SDL_PIXELFORMAT_RGBA32);SDL_DestroySurface(image);return rgba;
+}
+
+Texture Device::loadDataArray(const std::vector<std::filesystem::path>& layers) {
+    if (layers.empty()) return {};
+    Texture texture;Uint32 width=0,height=0;
+    Uploader upload(*this);
+    for (std::size_t layer=0;layer<layers.size();++layer) {
+        auto* image=loadDataPng(layers[layer]);
+        if (!image) {fail("data PNG missing: "+layers[layer].string());return {};}
+        if (!texture) {
+            width=image->w;height=image->h;
+            SDL_GPUTextureCreateInfo info{};info.type=SDL_GPU_TEXTURETYPE_2D_ARRAY;
+            info.format=kColourFormat;info.usage=SDL_GPU_TEXTUREUSAGE_SAMPLER;
+            info.width=width;info.height=height;info.layer_count_or_depth=Uint32(layers.size());info.num_levels=1;
+            texture=makeTexture(info);
+        }
+        const bool ok=texture && image->w==int(width) && image->h==int(height) && image->pitch==int(width*4) &&
+            upload.refillRegion(texture.get(),image->pixels,0,0,width,height,4,Uint32(layer));
+        SDL_DestroySurface(image);
+        if (!ok) {fail("data PNG upload/size mismatch: "+layers[layer].string());return {};}
+    }
+    if (!upload.finish()) return {};
     return texture;
 }
 

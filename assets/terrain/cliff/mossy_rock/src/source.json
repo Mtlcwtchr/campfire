@@ -1,0 +1,43 @@
+{
+  "site": "ue-export",
+  "project": "AncientSettlement",
+  "license": "Original asset-pack licence (not CC0)",
+  "assets": {
+    "diffuse": "/Game/Realistic_MossyRock/Texture/Mossy_Rock_Base_Color",
+    "normal": "/Game/Realistic_MossyRock/Texture/Mossy_Rock_Normal",
+    "ao": "/Game/Realistic_MossyRock/Texture/Mossy_Rock_AO",
+    "rough": "/Game/Realistic_MossyRock/Texture/Mossy_Rock_Roughness",
+    "displacement": "/Game/Realistic_MossyRock/Texture/Mossy_Rock_Height"
+  },
+  "original_sizes": {
+    "diffuse": [
+      4096,
+      4096
+    ],
+    "normal": [
+      4096,
+      4096
+    ],
+    "ao": [
+      4096,
+      4096
+    ],
+    "rough": [
+      4096,
+      4096
+    ],
+    "displacement": [
+      4096,
+      4096
+    ]
+  },
+  "runtime_world_scale": 4.0,
+  "resolution": "2048px",
+  "files": {
+    "diffuse": "cliff_mossy_rock_diffuse.png",
+    "normal": "cliff_mossy_rock_normal.png",
+    "ao": "cliff_mossy_rock_ao.png",
+    "rough": "cliff_mossy_rock_rough.png",
+    "displacement": "cliff_mossy_rock_displacement.png"
+  }
+}

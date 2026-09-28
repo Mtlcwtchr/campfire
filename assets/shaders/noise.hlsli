@@ -30,6 +30,28 @@ float noiseAt(float2 at)
     return lerp(lerp(a, b, part.x), lerp(c, d, part.x), part.y);
 }
 
+// Single-octave 2D gradient Perlin, not value noise or a directional smear.
+// Eight unit gradients and a quintic fade keep lattice boundaries smooth.
+float2 perlinGradient(float2 cell)
+{
+    const uint h = uint(hashAt(cell) * 65535.0 + 0.5) & 7u;
+    const float x = (h & 1u) != 0u ? -1.0 : 1.0;
+    const float y = (h & 2u) != 0u ? -1.0 : 1.0;
+    if (h < 4u) return float2(x, y) * 0.70710678118;
+    return h < 6u ? float2(x, 0.0) : float2(0.0, x);
+}
+
+float perlinAt(float2 at)
+{
+    const float2 cell = floor(at), f = at - cell;
+    const float2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+    const float a = dot(perlinGradient(cell), f);
+    const float b = dot(perlinGradient(cell + float2(1, 0)), f - float2(1, 0));
+    const float c = dot(perlinGradient(cell + float2(0, 1)), f - float2(0, 1));
+    const float d = dot(perlinGradient(cell + float2(1, 1)), f - float2(1, 1));
+    return saturate(0.5 + 0.70710678118 * lerp(lerp(a, b, u.x), lerp(c, d, u.x), u.y));
+}
+
 // Value noise that gives up rather than alias.
 //
 // `footprint` is how much of the noise's OWN cell one pixel covers - the same
@@ -51,6 +73,21 @@ float filteredNoiseAt(float2 at, float footprint)
 {
     const float resolved = 1.0 - smoothstep(0.25, 0.9, footprint);
     return lerp(0.5, noiseAt(at), resolved);
+}
+
+// The same value noise with its analytic gradient (per unit of `at`):
+// x = value, yz = d value / d at. Filtered exactly as filteredNoiseAt.
+float3 filteredNoiseGradAt(float2 at, float footprint)
+{
+    const float2 whole = floor(at), f = at - whole;
+    const float2 u = f * f * (3.0 - 2.0 * f), du = 6.0 * f * (1.0 - f);
+    const float a = hashAt(whole), b = hashAt(whole + float2(1, 0));
+    const float c = hashAt(whole + float2(0, 1)), d = hashAt(whole + float2(1, 1));
+    const float k = a - b - c + d;
+    const float value = lerp(lerp(a, b, u.x), lerp(c, d, u.x), u.y);
+    const float2 gradient = du * float2(b - a + k * u.y, c - a + k * u.x);
+    const float resolved = 1.0 - smoothstep(0.25, 0.9, footprint);
+    return float3(lerp(0.5, value, resolved), gradient * resolved);
 }
 
 // Cheap, stationary fractal noise for material-scale variation. The weights

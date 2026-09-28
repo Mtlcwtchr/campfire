@@ -4,20 +4,28 @@
     "name": "grass",
     "set": "Grass",
     "variant": "1",
-    "tint": [1.0, 1.0, 1.0],
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
     "keep_colour": 1.0,
-    "metres_per_turn": 2.4,
+    "metres_per_turn": 2.0,
     "blend_width": 0.34,
-    "tear": 0.30,
+    "tear": 0.3,
     "tear_metres": 3.4
   },
   {
     "name": "dirt",
     "set": "Mud",
     "variant": "1",
-    "tint": [1.0, 1.0, 1.0],
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
     "keep_colour": 1.0,
-    "metres_per_turn": 2.0,
+    "metres_per_turn": 2.07,
     "blend_width": 0.34,
     "tear": 0.34,
     "tear_metres": 3.0
@@ -26,9 +34,13 @@
     "name": "sand",
     "set": "Sand",
     "variant": "1",
-    "tint": [1.0, 1.0, 1.0],
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
     "keep_colour": 1.0,
-    "metres_per_turn": 1.6,
+    "metres_per_turn": 3.0,
     "blend_width": 0.11,
     "tear": 0.16,
     "tear_metres": 1.8
@@ -37,9 +49,13 @@
     "name": "rock",
     "set": "Ground",
     "variant": "5",
-    "tint": [0.94, 0.95, 0.98],
-    "keep_colour": 0.90,
-    "metres_per_turn": 2.6,
+    "tint": [
+      0.94,
+      0.95,
+      0.98
+    ],
+    "keep_colour": 0.9,
+    "metres_per_turn": 3.0,
     "blend_width": 0.08,
     "tear": 0.22,
     "tear_metres": 1.4
@@ -48,9 +64,13 @@
     "name": "marsh",
     "set": "Swamp",
     "variant": "1",
-    "tint": [1.0, 1.0, 1.0],
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
     "keep_colour": 1.0,
-    "metres_per_turn": 2.0,
+    "metres_per_turn": 1.3,
     "blend_width": 0.44,
     "tear": 0.55,
     "tear_metres": 1.2
@@ -59,9 +79,13 @@
     "name": "snow",
     "set": "Snow",
     "variant": "1",
-    "tint": [1.0, 1.0, 1.0],
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
     "keep_colour": 1.0,
-    "metres_per_turn": 3.0,
+    "metres_per_turn": 2.0,
     "blend_width": 0.28,
     "tear": 0.24,
     "tear_metres": 2.6
@@ -71,18 +95,26 @@
     "name": "grass_wild",
     "set": "Grass",
     "variant": "5",
-    "tint": [1.0, 1.0, 1.0],
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
     "keep_colour": 1.0,
     "metres_per_turn": 24.0,
     "blend_width": 0.34,
-    "tear": 0.30,
+    "tear": 0.3,
     "tear_metres": 3.4
   },
   {
     "name": "rock_smooth",
     "set": "Ground",
     "variant": "6",
-    "tint": [0.96, 0.97, 1.0],
+    "tint": [
+      0.96,
+      0.97,
+      1.0
+    ],
     "keep_colour": 0.92,
     "metres_per_turn": 18.0,
     "blend_width": 0.08,

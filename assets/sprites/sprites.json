@@ -3,45 +3,45 @@
   "_comment": "Written by tools/extract_sprites.py. Keys are content definition names; the renderer falls back to the category when a definition has no sprite of its own.",
   "sprites": {
     "foliage/grass_0": {
-      "file": "kenney_foliageSprites/PNG/Shaded/sprite_0052.png",
+      "file": "../generated/scene_models/grass-view-0.png",
       "size": [
-        1024,
-        1024
+        256,
+        256
       ]
     },
     "foliage/grass_1": {
-      "file": "kenney_foliageSprites/PNG/Shaded/sprite_0053.png",
+      "file": "../generated/scene_models/grass-view-1.png",
       "size": [
-        1024,
-        1024
+        256,
+        256
       ]
     },
     "foliage/grass_2": {
-      "file": "kenney_foliageSprites/PNG/Shaded/sprite_0054.png",
+      "file": "../generated/scene_models/grass-view-2.png",
       "size": [
-        1024,
-        1024
+        256,
+        256
       ]
     },
     "foliage/grass_3": {
-      "file": "kenney_foliageSprites/PNG/Shaded/sprite_0055.png",
+      "file": "../generated/scene_models/grass-view-3.png",
       "size": [
-        1024,
-        1024
+        256,
+        256
       ]
     },
     "foliage/grass_4": {
-      "file": "kenney_foliageSprites/PNG/Shaded/sprite_0056.png",
+      "file": "../generated/scene_models/grass-view-4.png",
       "size": [
-        1024,
-        1024
+        256,
+        256
       ]
     },
     "foliage/grass_5": {
-      "file": "kenney_foliageSprites/PNG/Shaded/sprite_0057.png",
+      "file": "../generated/scene_models/grass-view-5.png",
       "size": [
-        1024,
-        1024
+        256,
+        256
       ]
     },
     "terrain/grass": {

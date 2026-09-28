@@ -11,6 +11,9 @@
 #include "ring_reveal.hlsli"
 #include "landscape_look.hlsli"
 #include "weather.hlsli"
+#define SHADOW_TEXTURE_SLOT t1
+#define SHADOW_SAMPLER_SLOT s1
+#include "shadow_field.hlsli"
 
 Texture2DArray cardsTex : register(t0, space2);
 SamplerState cardsSampler : register(s0, space2);
@@ -43,6 +46,11 @@ struct FoliageOut {
 
 FoliageOut FoliageVS(FoliageVertexIn vertex, FoliageInstanceIn instance)
 {
+    if (instance.tint.a <= 0.0) {
+        FoliageOut hidden = (FoliageOut)0;
+        hidden.position = float4(0, 0, 0, 1);
+        return hidden; // all corners coincide: no pixel work for rejected roots
+    }
     // Across the screen rather than across the world, so a blade always faces
     // the camera edge-on and never turns into a line. This is the card's width
     // only - which way it *leans* is a question about the world, below.
@@ -125,8 +133,13 @@ FoliageOut FoliageVS(FoliageVertexIn vertex, FoliageInstanceIn instance)
     output.tint = instance.tint;
     output.tint.rgb *= lerp(float3(0.95, 0.98, 0.91), float3(1.05, 1.01, 0.96), frac(own * 0.91));
     const bool perspective = dot(abs(viewProjection[3].xyz), float3(1.0, 1.0, 1.0)) > 0.0;
+    // The screen-size fade is a decision: in the scene view it belongs to the
+    // frozen cull camera, so flying away does not thin or fill the meadow.
+    const bool frozen = cullState.y > 0.5;
+    const float4x4 decider = frozen ? cullViewProjection : viewProjection;
+    const float depthW = frozen ? mul(cullViewProjection, float4(p, 1.0)).w : output.position.w;
     const float pixelsPerMetre = perspective ?
-        length(viewProjection[0].xyz) * viewport.x * 0.5 / max(0.5, output.position.w) : camera.w;
+        length(decider[0].xyz) * viewport.x * 0.5 / max(0.5, depthW) : camera.w;
     output.tint.a *= smoothstep(0.7, 3.0, instance.scale * pixelsPerMetre);
     output.lean = float2(bend, gust);
     output.worldXY = instance.position.xy;
@@ -165,10 +178,11 @@ float4 FoliagePS(FoliageOut input) : SV_Target0
     pigment=weatherVegetation(pigment,parametersPS[0].z,input.weather.y,input.weather.w);
     pigment=lerp(pigment,float3(0.76,0.80,0.82),
                  wxSmooth(0.01,0.25,input.weather.x)*wxSmooth(0.45,1.0,up)*0.8);
-    float3 lit = pigment * landscapeDaylight(normal, root) * light;
+    const float shadow = proceduralShadow(input.worldPosition,normal);
+    float3 lit = pigment * landscapeDaylight(normal, root, shadow) * light;
     // Broad transmission, not a shiny rim: thin leaf tips let warm light through.
     const float backlight = pow(saturate(dot(-landscapeSun(), landscapeEye(input.worldPosition)) * 0.5 + 0.5), 3.0);
-    lit += pigment * float3(1.06, 1.0, 0.70) * (backlight * up * 0.16);
+    lit += pigment * float3(1.06, 1.0, 0.70) * (backlight * up * 0.16) * shadow;
     lit *= lerp(0.80, 1.0, smoothstep(0.0, 0.65, up));
     return float4(landscapeFinish(lit, input.worldPosition), 1.0);
 }

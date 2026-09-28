@@ -1,6 +1,9 @@
 #include "game/render/passes/terrain_pass.hpp"
 
 #include <cstddef>
+#include <fstream>
+
+#include <SDL3/SDL_log.h>
 
 #include "engine/render/draw_queue.hpp"
 #include "engine/render/frame.hpp"
@@ -57,8 +60,9 @@ const std::vector<SDL_GPUVertexAttribute>& pageGridAttributes() {
 
 TerrainPass::TerrainPass(const engine::MeshCache& cache, std::vector<std::string> materials,
                          std::vector<std::string> materialMaps,
-                         ClimateTextures& climate, const world::ClimateField& field, GpuTerrain* pages)
-    : pages_(pages), cache_(cache), materialNames_(std::move(materials)),
+                         ClimateTextures& climate, const world::ClimateField& field,
+                         SDL_GPUTextureSamplerBinding shadow, GpuTerrain* pages)
+    : shadow_(shadow), pages_(pages), cache_(cache), materialNames_(std::move(materials)),
       materialMaps_(std::move(materialMaps)), climate_(climate),
       climateField_(field) {}
 
@@ -116,29 +120,46 @@ engine::PassPlace TerrainPass::setup(engine::Device& device, engine::RenderPipel
     // indexed by a shader, so a pixel had to sample all six and throw four
     // away; as layers of one array the layer is a number, and a pixel samples
     // the two materials it is actually made of. One binding instead of six.
-    auto mipLayers = [&](const std::string& suffix) {
+    // Each chain is name.png, name@2.png ... @16. Layers of one array must
+    // share a size, and the chains do not all start at the same size (the UE
+    // properties are 1024 at the top, the scans 2048), so each layer takes
+    // the level of its own chain that has the size the array wants.
+    //
+    // Albedo carries the detail the eye reads close up and stays at 2048
+    // (1024 with half textures). Normals and properties go to 1024: sixteen
+    // layers of three 2048 maps would be ~1 GB; this is about half of that.
+    const auto pngWidth = [](const std::filesystem::path& path) {
+        std::ifstream file(path, std::ios::binary);
+        unsigned char header[24]{};
+        if (!file.read(reinterpret_cast<char*>(header), sizeof header)) return 0;
+        return int(header[16]) << 24 | int(header[17]) << 16 | int(header[18]) << 8 | int(header[19]);
+    };
+    bool complete = true;
+    auto mipLayers = [&](const std::string& suffix, int wanted) {
         std::vector<std::vector<std::filesystem::path>> result;
         result.reserve(materialMaps_.size());
         for (const std::string& material : materialMaps_) {
-            std::vector<std::filesystem::path> levels{device.assets() / (material + suffix + ".png")};
-            result.push_back(std::move(levels));
+            std::filesystem::path chosen;
+            for (const char* level : {"", "@2", "@4", "@8"}) {
+                const auto path = device.assets() / (material + suffix + level + ".png");
+                if (std::filesystem::exists(path) && pngWidth(path) == wanted) { chosen = path; break; }
+            }
+            if (chosen.empty()) {
+                SDL_Log("terrain layer %s%s has no %d px level", material.c_str(), suffix.c_str(), wanted);
+                complete = false;
+            }
+            result.push_back({chosen});
         }
         return result;
     };
-    auto layers = mipLayers("_albedo");
-    if (materialMaps_.size() != materialNames_.size()) return {};
-    for (std::size_t i = 0; i < materialMaps_.size(); ++i) {
-        if (!std::filesystem::exists(layers[i].front())) return {};
-    }
+    auto layers = mipLayers("_albedo", halfTextures_ ? 1024 : 2048);
+    if (materialMaps_.size() < materialNames_.size() || !complete) return {};
     materials_ = device.loadArrayMipped(layers, true);
     if (!materials_) return {};
 
-    auto normalLayers = mipLayers("_normal");
-    auto propertyLayers = mipLayers("_properties");
-    for (std::size_t i = 0; i < materialMaps_.size(); ++i) {
-        if (!std::filesystem::exists(normalLayers[i].front()) ||
-            !std::filesystem::exists(propertyLayers[i].front())) return {};
-    }
+    auto normalLayers = mipLayers("_normal", 1024);
+    auto propertyLayers = mipLayers("_properties", 1024);
+    if (!complete) return {};
     materialNormals_ = device.loadArrayMipped(normalLayers, true);
     materialProperties_ = device.loadArrayMipped(propertyLayers, true);
     if (!materialNormals_ || !materialProperties_) return {};
@@ -150,12 +171,12 @@ engine::PassPlace TerrainPass::setup(engine::Device& device, engine::RenderPipel
     }
     bindings.push_back({materialNormals_.get(), sampler_.get()});
     bindings.push_back({materialProperties_.get(), sampler_.get()});
+    bindings.push_back(shadow_);
 
     // The weather of the whole world, uploaded once and shared with the water.
     if (!pages_ && !climate_.ensure(device, climateField_)) return {};
     const auto climateBindings = pages_ ? pages_->bindings() : climate_.bindings();
     if (climateBindings.size() < 3) return {};
-    bindings.insert(bindings.end(),climateBindings.begin(),climateBindings.begin()+3);
 
     if (!pages_) backdropRenderer_.material.textures(bindings, climateBindings);
     terrainRenderer_.material.textures(std::move(bindings), climateBindings);
@@ -177,7 +198,7 @@ void TerrainPass::collect(const engine::Frame& frame, engine::DrawQueue& queue) 
         bindings.insert(bindings.end(), fields.begin() + 3, fields.end());
         bindings.push_back({materialNormals_.get(), sampler_.get()});
         bindings.push_back({materialProperties_.get(), sampler_.get()});
-        bindings.insert(bindings.end(),fields.begin(),fields.begin()+3);
+        bindings.push_back(shadow_);
         terrainRenderer_.material.textures(std::move(bindings), fields);
         // The cut, already walked once by the terrain gather: ordered, and with
         // each square's buffers and parameters resolved. This pass used to

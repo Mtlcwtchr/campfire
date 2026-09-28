@@ -4,10 +4,12 @@
     "id": "grass_lush",
     "group": "grass/lush",
     "source": {
-      "site": "polyhaven",
-      "asset_id": "leafy_grass",
-      "license": "CC0",
-      "attribution_required": false
+      "site": "unreal",
+      "asset_id": "TEX_MWAM_Grass",
+      "license": "Original asset-pack licence (not CC0)",
+      "pack": "MW Landscape Auto Material",
+      "project": "AncientSettlement",
+      "package": "/Game/MWLandscapeAutoMaterial/Textures/Ground/TEX_MWAM_Grass"
     },
     "world_scale": 2.4,
     "tint": [
@@ -79,10 +81,12 @@
     "group": "soil/base",
     "_comment": "The neutral bare earth: paths, settlements, the floor under everything else, and what a worn-out pasture becomes.",
     "source": {
-      "site": "polyhaven",
-      "asset_id": "dirt",
-      "license": "CC0",
-      "attribution_required": false
+      "site": "unreal",
+      "asset_id": "TEX_MWAM_Dirt",
+      "license": "Original asset-pack licence (not CC0)",
+      "pack": "MW Landscape Auto Material",
+      "project": "AncientSettlement",
+      "package": "/Game/MWLandscapeAutoMaterial/Textures/Ground/TEX_MWAM_Dirt"
     },
     "world_scale": 2.0,
     "tint": [
@@ -179,10 +183,12 @@
     "group": "soil/mud_wet",
     "_comment": "Marsh, the wet bank, the floodplain while the water is on it and for a while after. The material a flooded surface walks towards and walks back from (see the state machine in biomes.json).",
     "source": {
-      "site": "polyhaven",
-      "asset_id": "mud_forest",
-      "license": "CC0",
-      "attribution_required": false
+      "site": "unreal",
+      "asset_id": "TEX_MWAM_Dirt",
+      "license": "Original asset-pack licence (not CC0)",
+      "pack": "MW Landscape Auto Material",
+      "project": "AncientSettlement",
+      "package": "/Game/MWLandscapeAutoMaterial/Textures/Ground/TEX_MWAM_Dirt"
     },
     "world_scale": 2.0,
     "tint": [
@@ -229,10 +235,12 @@
     "group": "sand/dry",
     "_comment": "Desert, sandy semi-desert, dunes, dry river wash.",
     "source": {
-      "site": "polyhaven",
-      "asset_id": "sand_01",
-      "license": "CC0",
-      "attribution_required": false
+      "site": "unreal",
+      "asset_id": "TEX_MWAM_SandA",
+      "license": "Original asset-pack licence (not CC0)",
+      "pack": "MW Landscape Auto Material",
+      "project": "AncientSettlement",
+      "package": "/Game/MWLandscapeAutoMaterial/Textures/Ground/TEX_MWAM_SandA"
     },
     "world_scale": 1.6,
     "tint": [
@@ -379,10 +387,12 @@
     "group": "stone/rock",
     "_comment": "Mountains, high ground, rock plateaus, stony waste, and the last of the ground before a real cliff face starts.",
     "source": {
-      "site": "polyhaven",
-      "asset_id": "rock_ground",
-      "license": "CC0",
-      "attribution_required": false
+      "site": "unreal",
+      "asset_id": "TEX_MWAM_Rock",
+      "license": "Original asset-pack licence (not CC0)",
+      "pack": "MW Landscape Auto Material",
+      "project": "AncientSettlement",
+      "package": "/Game/MWLandscapeAutoMaterial/Textures/Ground/TEX_MWAM_Rock"
     },
     "world_scale": 2.6,
     "tint": [
@@ -505,10 +515,12 @@
     "group": "snow/clean",
     "_comment": "Lying snow: the polar band, high mountains, tundra in winter.",
     "source": {
-      "site": "polyhaven",
-      "asset_id": "snow_01",
-      "license": "CC0",
-      "attribution_required": false
+      "site": "unreal",
+      "asset_id": "TEX_MWAM_Snow",
+      "license": "Original asset-pack licence (not CC0)",
+      "pack": "MW Landscape Auto Material",
+      "project": "AncientSettlement",
+      "package": "/Game/MWLandscapeAutoMaterial/Textures/Ground/TEX_MWAM_Snow"
     },
     "world_scale": 3.0,
     "tint": [
@@ -648,5 +660,555 @@
     "slope_preference": 1.0,
     "moisture_response": 0.6,
     "snow_compatibility": 0.35
+  },
+  {
+    "id": "sand_dune",
+    "group": "sand/dune",
+    "_comment": "Wind-rippled dune sand: open desert, dune fields.",
+    "source": {
+      "site": "ue-export",
+      "project": "AncientSettlement",
+      "license": "Original asset-pack licence (not CC0)",
+      "package": "/Game/DesertSandPack/Textures/T_Sands_4K_Albedo"
+    },
+    "world_scale": 3.2,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 0.9,
+    "normal_strength": 0.45,
+    "ao_strength": 0.4,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.5,
+    "slope_preference": 0.0,
+    "moisture_response": 0.6,
+    "snow_compatibility": 0.6
+  },
+  {
+    "id": "sand_shore",
+    "group": "sand/shore",
+    "_comment": "Coarse beach sand above the waterline.",
+    "source": {
+      "site": "ue-export",
+      "project": "AncientSettlement",
+      "license": "Original asset-pack licence (not CC0)",
+      "package": "/Game/MWLandscapeAutoMaterial/Textures/Ground/TEX_MWAM_SandC_col"
+    },
+    "world_scale": 2.0,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 0.9,
+    "normal_strength": 0.4,
+    "ao_strength": 0.4,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.5,
+    "slope_preference": 0.0,
+    "moisture_response": 1.0,
+    "snow_compatibility": 0.6
+  },
+  {
+    "id": "sand_gravelly",
+    "group": "sand/gravelly",
+    "_comment": "Gravelly semi-desert sand, dry washes.",
+    "source": {
+      "site": "ue-export",
+      "project": "AncientSettlement",
+      "license": "Original asset-pack licence (not CC0)",
+      "package": "/Game/Namaqualand/Textures/T_gravelly_sand_diff_4k"
+    },
+    "world_scale": 2.6,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 0.9,
+    "normal_strength": 0.5,
+    "ao_strength": 0.4,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.5,
+    "slope_preference": 0.2,
+    "moisture_response": 0.5,
+    "snow_compatibility": 0.6
+  },
+  {
+    "id": "cliff_dolomite",
+    "group": "cliff/dolomite",
+    "_comment": "Pale limestone cliff face.",
+    "source": {
+      "site": "ue-export",
+      "project": "AncientSettlement",
+      "license": "Original asset-pack licence (not CC0)",
+      "package": "/Game/ApexNature/Dolomites/Surfaces/Cliff/T_APXN_DOL_Surface_Cliff_1x1_01_COL"
+    },
+    "world_scale": 6.0,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 0.9,
+    "normal_strength": 0.7,
+    "ao_strength": 0.4,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.5,
+    "slope_preference": 1.0,
+    "moisture_response": 0.4,
+    "snow_compatibility": 0.6
+  },
+  {
+    "id": "cliff_mossy_rock",
+    "group": "cliff/mossy_rock",
+    "_comment": "Moss-covered rock on wet, shaded slopes.",
+    "source": {
+      "site": "ue-export",
+      "project": "AncientSettlement",
+      "license": "Original asset-pack licence (not CC0)",
+      "package": "/Game/Realistic_MossyRock/Texture/Mossy_Rock_Base_Color"
+    },
+    "world_scale": 4.0,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 0.9,
+    "normal_strength": 0.65,
+    "ao_strength": 0.4,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.5,
+    "slope_preference": 1.0,
+    "moisture_response": 0.8,
+    "snow_compatibility": 0.6
+  },
+  {
+    "id": "cliff_desert",
+    "group": "cliff/desert",
+    "_comment": "Warm weathered cliff side of arid country.",
+    "source": {
+      "site": "ue-export",
+      "project": "AncientSettlement",
+      "license": "Original asset-pack licence (not CC0)",
+      "package": "/Game/Namaqualand/Textures/T_cliff_side_diff_4k"
+    },
+    "world_scale": 4.5,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 0.9,
+    "normal_strength": 0.7,
+    "ao_strength": 0.4,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.5,
+    "slope_preference": 1.0,
+    "moisture_response": 0.3,
+    "snow_compatibility": 0.6
+  },
+  {
+    "id": "ph_leafy_grass",
+    "group": "ph/leafy_grass",
+    "_comment": "layer 0 - grass: meadow ground under the grass cards",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "leafy_grass",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 2.0,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 1.0,
+    "normal_strength": 0.6,
+    "ao_strength": 0.5,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.6,
+    "slope_preference": 0.0,
+    "moisture_response": 0.8,
+    "snow_compatibility": 0.7
+  },
+  {
+    "id": "ph_dirt_floor",
+    "group": "ph/dirt_floor",
+    "_comment": "layer 1 - dirt: bare earth",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "dirt_floor",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 2.07,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 1.0,
+    "normal_strength": 0.6,
+    "ao_strength": 0.5,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.6,
+    "slope_preference": 0.0,
+    "moisture_response": 0.8,
+    "snow_compatibility": 0.7
+  },
+  {
+    "id": "ph_red_sand",
+    "group": "ph/red_sand",
+    "_comment": "layer 2 - sand: dunes (orange), desert only",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "red_sand",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 3.0,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 1.0,
+    "normal_strength": 0.6,
+    "ao_strength": 0.5,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.6,
+    "slope_preference": 0.0,
+    "moisture_response": 0.8,
+    "snow_compatibility": 0.7
+  },
+  {
+    "id": "ph_rocks_ground_05",
+    "group": "ph/rocks_ground_05",
+    "_comment": "layer 3 - rock: stony ground",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "rocks_ground_05",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 3.0,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 1.0,
+    "normal_strength": 0.6,
+    "ao_strength": 0.5,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.6,
+    "slope_preference": 0.0,
+    "moisture_response": 0.8,
+    "snow_compatibility": 0.7
+  },
+  {
+    "id": "ph_brown_mud_02",
+    "group": "ph/brown_mud_02",
+    "_comment": "layer 4 - marsh: wet mud",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "brown_mud_02",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 1.3,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 1.0,
+    "normal_strength": 0.6,
+    "ao_strength": 0.5,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.6,
+    "slope_preference": 0.0,
+    "moisture_response": 0.8,
+    "snow_compatibility": 0.7
+  },
+  {
+    "id": "ph_snow_02",
+    "group": "ph/snow_02",
+    "_comment": "layer 5 - snow",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "snow_02",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 2.0,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 1.0,
+    "normal_strength": 0.6,
+    "ao_strength": 0.5,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.6,
+    "slope_preference": 0.0,
+    "moisture_response": 0.8,
+    "snow_compatibility": 0.7
+  },
+  {
+    "id": "ph_withered_grass",
+    "group": "ph/withered_grass",
+    "_comment": "layer 6 - grass: dry",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "withered_grass",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 2.0,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 1.0,
+    "normal_strength": 0.6,
+    "ao_strength": 0.5,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.6,
+    "slope_preference": 0.0,
+    "moisture_response": 0.8,
+    "snow_compatibility": 0.7
+  },
+  {
+    "id": "ph_forest_leaves_02",
+    "group": "ph/forest_leaves_02",
+    "_comment": "layer 7 - forest floor",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "forest_leaves_02",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 3.001,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 1.0,
+    "normal_strength": 0.6,
+    "ao_strength": 0.5,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.6,
+    "slope_preference": 0.0,
+    "moisture_response": 0.8,
+    "snow_compatibility": 0.7
+  },
+  {
+    "id": "ph_coast_sand_04",
+    "group": "ph/coast_sand_04",
+    "_comment": "layer 8 - sand: beach",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "coast_sand_04",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 3.94,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 1.0,
+    "normal_strength": 0.6,
+    "ao_strength": 0.5,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.6,
+    "slope_preference": 0.0,
+    "moisture_response": 0.8,
+    "snow_compatibility": 0.7
+  },
+  {
+    "id": "ph_damp_beach_sand",
+    "group": "ph/damp_beach_sand",
+    "_comment": "layer 9 - sand: waterline",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "damp_beach_sand",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 2.0,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 1.0,
+    "normal_strength": 0.6,
+    "ao_strength": 0.5,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.6,
+    "slope_preference": 0.0,
+    "moisture_response": 0.8,
+    "snow_compatibility": 0.7
+  },
+  {
+    "id": "ph_sand_01",
+    "group": "ph/sand_01",
+    "_comment": "layer 10 - sand: plain dry",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "sand_01",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 1.5,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 1.0,
+    "normal_strength": 0.6,
+    "ao_strength": 0.5,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.6,
+    "slope_preference": 0.0,
+    "moisture_response": 0.8,
+    "snow_compatibility": 0.7
+  },
+  {
+    "id": "ph_sandy_gravel_02",
+    "group": "ph/sandy_gravel_02",
+    "_comment": "layer 11 - sand: stony",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "sandy_gravel_02",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 2.53,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 1.0,
+    "normal_strength": 0.6,
+    "ao_strength": 0.5,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.6,
+    "slope_preference": 0.0,
+    "moisture_response": 0.8,
+    "snow_compatibility": 0.7
+  },
+  {
+    "id": "ph_rock_face_03",
+    "group": "ph/rock_face_03",
+    "_comment": "layer 12 - cliff: grey rock face",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "rock_face_03",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 2.7,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 1.0,
+    "normal_strength": 0.6,
+    "ao_strength": 0.5,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.6,
+    "slope_preference": 1.0,
+    "moisture_response": 0.8,
+    "snow_compatibility": 0.7
+  },
+  {
+    "id": "ph_mossy_rock",
+    "group": "ph/mossy_rock",
+    "_comment": "layer 13 - cliff: mossy, wet climates",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "mossy_rock",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 3.0,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 1.0,
+    "normal_strength": 0.6,
+    "ao_strength": 0.5,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.6,
+    "slope_preference": 1.0,
+    "moisture_response": 0.8,
+    "snow_compatibility": 0.7
+  },
+  {
+    "id": "ph_cliff_side",
+    "group": "ph/cliff_side",
+    "_comment": "layer 14 - cliff: warm, arid",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "cliff_side",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 1.83,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 1.0,
+    "normal_strength": 0.6,
+    "ao_strength": 0.5,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.6,
+    "slope_preference": 1.0,
+    "moisture_response": 0.8,
+    "snow_compatibility": 0.7
+  },
+  {
+    "id": "ph_mud_cracked_dry_riverbed_002",
+    "group": "ph/mud_cracked_dry_riverbed_002",
+    "_comment": "layer 15 - marsh: dried and cracked",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "mud_cracked_dry_riverbed_002",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 2.0,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 1.0,
+    "normal_strength": 0.6,
+    "ao_strength": 0.5,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.6,
+    "slope_preference": 0.0,
+    "moisture_response": 0.8,
+    "snow_compatibility": 0.7
   }
 ]

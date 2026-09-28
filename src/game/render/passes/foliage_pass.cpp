@@ -19,8 +19,9 @@
 
 namespace game {
 
-FoliagePass::FoliagePass(const engine::MeshCache& cache, std::vector<std::string> cards, GpuTerrain* pages)
-    : pages_(pages), enabled_(std::getenv("ASR_GRASS_DISABLED")==nullptr),
+FoliagePass::FoliagePass(const engine::MeshCache& cache, std::vector<std::string> cards,
+                       SDL_GPUTextureSamplerBinding shadow, GpuTerrain* pages)
+    : shadow_(shadow), pages_(pages), enabled_(std::getenv("ASR_GRASS_DISABLED")==nullptr),
       gpuCulling_(pages && std::getenv("ASR_GRASS_CULL_DISABLED")==nullptr),
       cache_(cache), cardNames_(std::move(cards)) {}
 
@@ -119,7 +120,7 @@ engine::PassPlace FoliagePass::setup(engine::Device& device, engine::RenderPipel
     if (gpuCulling_ && !culler_.setup(device,into)) return {};
 
     pipeline_ = into.take(std::move(graphics));
-    bindings_ = into.take({{cards_.get(), sampler_.get()}});
+    bindings_ = into.take({{cards_.get(), sampler_.get()},shadow_});
     if (pages_) vertexBindings_=into.takeVertex(pages_->bindings());
     return {engine::passOf(Pass::Foliage), engine::stageOf(Stage::World),
             static_cast<engine::PassOrder>(Order::Opaque)};

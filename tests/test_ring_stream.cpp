@@ -604,7 +604,7 @@ TEST(foliage_field_preserves_meadows_at_every_footprint) {
     // The grass-rock ecotone carries less than the weights alone suggest.
     CHECK(foliageSuitability(0.5f, 0.5f, 0, 1, -1, 0.6f, 0) <
           foliageSuitability(0.5f, 0.0f, 0, 1, -1, 0.6f, 0) * 0.5f);
-    float low = 1, high = 0;
+    float low = 1, high = 0, thinnest = 1, thickest = 0;
     for (int i = -100; i <= 100; ++i) {
         const float x = static_cast<float>(i) * 7.3f;
         const float field = foliageField(x, -31.7f, 0);
@@ -612,13 +612,20 @@ TEST(foliage_field_preserves_meadows_at_every_footprint) {
         CHECK_EQ(field, foliageField(x, -31.7f, 0));
         CHECK(field >= 0 && field <= 1);
         CHECK(std::abs(field - foliageField(x + 0.001f, -31.7f, 0)) < 0.001f);
-        for (int lod = 0; lod <= 12; ++lod) {
+        thinnest = std::min(thinnest, foliageDensity(suitable, field));
+        thickest = std::max(thickest, foliageDensity(suitable, field));
+        // Once every octave is unresolved the meadow is its mean, and a
+        // suitable meadow's mean is still a meadow at any distance.
+        for (int lod = 10; lod <= 12; ++lod) {
             const float filtered = foliageField(x, -31.7f, static_cast<float>(1 << lod));
             CHECK(foliageDensity(suitable, filtered) > 0.5f);
         }
         CHECK_EQ(foliageField(x, -31.7f, 10000), 0.5f);
     }
     CHECK(high - low > 0.2f);
+    // Clumped, not a carpet: thick islands and thin gaps on the same ground.
+    CHECK(thickest > 0.9f);
+    CHECK(thinnest < 0.4f);
 }
 
 TEST(foliage_communities_follow_world_climate_and_blend_at_edges) {

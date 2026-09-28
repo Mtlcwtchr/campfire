@@ -1,0 +1,57 @@
+{
+  "id": "ph_cliff_side",
+  "runtime_size": 2048,
+  "runtime_files": {
+    "albedo": "ph_cliff_side_albedo.png",
+    "normal": "ph_cliff_side_normal.png",
+    "properties": "ph_cliff_side_properties.png"
+  },
+  "properties_channels": {
+    "r": "ao",
+    "g": "roughness",
+    "b": "height",
+    "a": "mask"
+  },
+  "mip_steps": [
+    2,
+    4,
+    8,
+    16
+  ],
+  "height_range_before_stretch": [
+    0.2237,
+    0.9999
+  ],
+  "had": {
+    "ao": true,
+    "rough": true,
+    "displacement": true,
+    "mask": false
+  },
+  "source": {
+    "site": "polyhaven",
+    "asset_id": "cliff_side",
+    "asset_url": "https://polyhaven.com/a/cliff_side",
+    "license": "CC0",
+    "authors": [
+      "Dario Barresi",
+      "James Ray Cock",
+      "Jenelle van Heerden"
+    ],
+    "attribution_required": false,
+    "original_physical_metres": [
+      1.83,
+      1.83
+    ],
+    "runtime_world_scale": 1.83,
+    "resolution": "2k",
+    "files": {
+      "diffuse": "ph_cliff_side_diffuse.png",
+      "normal": "ph_cliff_side_normal.png",
+      "displacement": "ph_cliff_side_displacement.png",
+      "rough": "ph_cliff_side_rough.png",
+      "ao": "ph_cliff_side_ao.png"
+    }
+  },
+  "world_scale": 1.83
+}

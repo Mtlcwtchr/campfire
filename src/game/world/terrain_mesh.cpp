@@ -1,5 +1,6 @@
 #include "game/world/terrain_mesh.hpp"
 
+#include <algorithm>
 #include <map>
 
 namespace world {

@@ -102,6 +102,17 @@ struct PipelineWanted {
     // way to see which level of which representation a thing is actually being
     // drawn at, as against what the counters claim.
     bool wireframe = false;
+    // Terrain skirts retain depth clamping; ordinary scene views need clipping
+    // so triangles wholly in front of near/behind far do not cover the viewport.
+    bool depthClip = false;
+    // Polygon offset, in the rasteriser. Negative pulls towards the eye (the
+    // depth compare is LESS_OR_EQUAL). For surfaces laid over others that
+    // meet them at a shallow angle - water over its own bed - where the two
+    // depths are equal to within the depth buffer's precision and which one
+    // wins changes from frame to frame.
+    float depthBiasConstant = 0.0f;
+    float depthBiasSlope = 0.0f;
+    float depthBiasClamp = 0.0f;
 };
 
 // What a compute shader is, which is much less than a graphics pipeline: no
@@ -124,6 +135,17 @@ public:
     // false and leaves a reason in error() rather than throwing, because the
     // caller's answer to "no GPU" is to say so and exit, not to unwind.
     bool open(SDL_Window* window, const std::filesystem::path& assets);
+    // No window at all: frames are drawn into the offscreen target and never
+    // presented. For measuring and for pictures taken without taking anybody's
+    // screen - a window, even a hidden one, is an application in the Dock.
+    bool openHeadless(std::uint32_t width, std::uint32_t height, const std::filesystem::path& assets);
+    bool headless() const { return device_ != nullptr && window_ == nullptr; }
+    std::uint32_t headlessWidth() const { return headlessWidth_; }
+    std::uint32_t headlessHeight() const { return headlessHeight_; }
+    // Waits until at most `frames` submissions are still on the card. A
+    // headless frame has no swapchain to pace it, so without this the CPU runs
+    // ahead and every timing is of the queue instead of the frame.
+    void waitInFlight(std::size_t frames);
     void close();
 
     // Serial of the frame currently being recorded. Only fence completion,
@@ -253,6 +275,10 @@ public:
     // The same, but each file is a layer of an array rather than a level of one
     // image. What the foliage cards are: six pictures the shader picks between.
     Texture loadArray(const std::vector<std::filesystem::path>& layers);
+    // Byte-exact PNG data, bypassing platform image import/premultiplication.
+    // The caller owns the returned surface (SDL_DestroySurface).
+    static SDL_Surface* loadDataPng(const std::filesystem::path& path);
+    Texture loadDataArray(const std::vector<std::filesystem::path>& layers);
 
 private:
     SDL_GPUShader* compile(const std::filesystem::path& file, const char* entry,
@@ -263,6 +289,8 @@ private:
                        SDL_ShaderCross_ShaderStage stage, std::size_t& size);
 
     SDL_Window* window_ = nullptr;
+
+    std::uint32_t headlessWidth_ = 0, headlessHeight_ = 0;
     SDL_GPUDevice* device_ = nullptr;
     std::filesystem::path assets_;
     std::string error_;

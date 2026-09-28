@@ -1,0 +1,99 @@
+[
+  {
+    "role": "CommonTree_1",
+    "asset": "/Game/Megaplant_Library/Tree_European_Beech/Tree_European_Beech_01/Tree_European_Beech_01_A",
+    "parts": [
+      {
+        "text": "(MeshObjectPath=\"/Game/Megaplant_Library/Tree_European_Beech/Instances/SKM_Branch_European_Beech_02.SKM_Branch_European_Beech_02\",MaterialRemap=(1,0))"
+      },
+      {
+        "text": "(MeshObjectPath=\"/Game/Megaplant_Library/Tree_European_Beech/Instances/SKM_Branch_European_Beech_01.SKM_Branch_European_Beech_01\",MaterialRemap=(1,0))"
+      }
+    ],
+    "assembly_text_bytes": 67044,
+    "bone_methods": {
+      "get_bone_children": "x.get_bone_children(bone_name) -> Array[Name]\nGet the direct children of a bone in a skeletal mesh.\n\nArgs:\n    bone_name (Name): The name of the bone to query.\n\nReturns:\n    Array[Name]: An array of bone names that are direct children of the given bone.",
+      "get_bone_parent": "x.get_bone_parent(bone_name) -> Name\nGet the parent bone name of a bone in a skeletal mesh.\n\nArgs:\n    bone_name (Name): The name of the bone to query.\n\nReturns:\n    Name: The name of the parent bone, or NAME_None if the bone is the root or does not exist."
+    }
+  },
+  {
+    "role": "Pine_1",
+    "asset": "/Game/Megaplant_Library/Tree_Norway_Spruce/Tree_Norway_Spruce_01/Tree_Norway_Spruce_01_A",
+    "parts": [
+      {
+        "text": "(MeshObjectPath=\"/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_Top_01.SKM_Branch_Norway_Spruce_Top_01\",MaterialRemap=(1,0))"
+      },
+      {
+        "text": "(MeshObjectPath=\"/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_01.SKM_Branch_Norway_Spruce_01\",MaterialRemap=(1,0))"
+      },
+      {
+        "text": "(MeshObjectPath=\"/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_02.SKM_Branch_Norway_Spruce_02\",MaterialRemap=(1,0))"
+      },
+      {
+        "text": "(MeshObjectPath=\"/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_03.SKM_Branch_Norway_Spruce_03\",MaterialRemap=(1,0))"
+      },
+      {
+        "text": "(MeshObjectPath=\"/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_04.SKM_Branch_Norway_Spruce_04\",MaterialRemap=(1,0))"
+      },
+      {
+        "text": "(MeshObjectPath=\"/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_05.SKM_Branch_Norway_Spruce_05\",MaterialRemap=(1,0))"
+      },
+      {
+        "text": "(MeshObjectPath=\"/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_06.SKM_Branch_Norway_Spruce_06\",MaterialRemap=(1,0))"
+      },
+      {
+        "text": "(MeshObjectPath=\"/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_10.SKM_Branch_Norway_Spruce_10\",MaterialRemap=(1,0))"
+      },
+      {
+        "text": "(MeshObjectPath=\"/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_11.SKM_Branch_Norway_Spruce_11\",MaterialRemap=(1,0))"
+      },
+      {
+        "text": "(MeshObjectPath=\"/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_13.SKM_Branch_Norway_Spruce_13\",MaterialRemap=(1,0))"
+      },
+      {
+        "text": "(MeshObjectPath=\"/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_Hanging_03.SKM_Branch_Norway_Spruce_Hanging_03\",MaterialRemap=(1,0))"
+      },
+      {
+        "text": "(MeshObjectPath=\"/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_Hanging_02.SKM_Branch_Norway_Spruce_Hanging_02\",MaterialRemap=(1,0))"
+      },
+      {
+        "text": "(MeshObjectPath=\"/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Branch_Norway_Spruce_Hanging_01.SKM_Branch_Norway_Spruce_Hanging_01\",MaterialRemap=(1,0))"
+      },
+      {
+        "text": "(MeshObjectPath=\"/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Decoration_Norway_Spruce_01.SKM_Decoration_Norway_Spruce_01\",MaterialRemap=(2))"
+      },
+      {
+        "text": "(MeshObjectPath=\"/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Decoration_Norway_Spruce_02.SKM_Decoration_Norway_Spruce_02\",MaterialRemap=(2))"
+      },
+      {
+        "text": "(MeshObjectPath=\"/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Decoration_Norway_Spruce_03.SKM_Decoration_Norway_Spruce_03\",MaterialRemap=(2))"
+      },
+      {
+        "text": "(MeshObjectPath=\"/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Decoration_Norway_Spruce_04.SKM_Decoration_Norway_Spruce_04\",MaterialRemap=(2))"
+      },
+      {
+        "text": "(MeshObjectPath=\"/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Decoration_Norway_Spruce_05.SKM_Decoration_Norway_Spruce_05\",MaterialRemap=(2))"
+      },
+      {
+        "text": "(MeshObjectPath=\"/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Decoration_Norway_Spruce_06.SKM_Decoration_Norway_Spruce_06\",MaterialRemap=(2))"
+      },
+      {
+        "text": "(MeshObjectPath=\"/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Decoration_Norway_Spruce_07.SKM_Decoration_Norway_Spruce_07\",MaterialRemap=(2))"
+      },
+      {
+        "text": "(MeshObjectPath=\"/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Decoration_Norway_Spruce_08.SKM_Decoration_Norway_Spruce_08\",MaterialRemap=(2))"
+      },
+      {
+        "text": "(MeshObjectPath=\"/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Decoration_Norway_Spruce_09.SKM_Decoration_Norway_Spruce_09\",MaterialRemap=(2))"
+      },
+      {
+        "text": "(MeshObjectPath=\"/Game/Megaplant_Library/Tree_Norway_Spruce/Instances/SKM_Decoration_Norway_Spruce_10.SKM_Decoration_Norway_Spruce_10\",MaterialRemap=(2))"
+      }
+    ],
+    "assembly_text_bytes": 429168,
+    "bone_methods": {
+      "get_bone_children": "x.get_bone_children(bone_name) -> Array[Name]\nGet the direct children of a bone in a skeletal mesh.\n\nArgs:\n    bone_name (Name): The name of the bone to query.\n\nReturns:\n    Array[Name]: An array of bone names that are direct children of the given bone.",
+      "get_bone_parent": "x.get_bone_parent(bone_name) -> Name\nGet the parent bone name of a bone in a skeletal mesh.\n\nArgs:\n    bone_name (Name): The name of the bone to query.\n\nReturns:\n    Name: The name of the parent bone, or NAME_None if the bone is the root or does not exist."
+    }
+  }
+]

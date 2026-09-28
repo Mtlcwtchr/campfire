@@ -37,15 +37,31 @@ struct ExploreViewOptions {
     double yaw = 0.7853981633974483;
     double pitch = 0.4636476090008061;
     double heightOffset = 0;
+    // Initial draw distance / fog in metres (--draw-distance); 0 keeps the menu's.
+    double drawDistance = 0;
+    bool fog = true;         // --no-fog
+    // --scene-view-back METRES: freeze culling at the start camera and draw
+    // from that far behind (and above) it.
+    double sceneViewBack = 0;
+    int graphicsTab = -1;    // --graphics-panel N: open the settings window on tab N
     bool iceVisible = true;
+    // No window: frames go to an offscreen target of this size (--headless).
+    int headlessWidth = 0, headlessHeight = 0;
+    // Fly the scripted route and print frame times (--bench N frames a segment).
+    int benchFrames = 0;
+    int benchLoadFrames = 900;
+    std::string benchJson;
 };
 
 class ExploreView {
 public:
     explicit ExploreView(game::WorldRenderer& renderer) : renderer_(renderer) {}
     bool open(SDL_Window* window, const std::filesystem::path& assets, world::WorldSystem& world,
-              const Camera& camera, ExploreMenu& menu);
+              const Camera& camera, ExploreMenu& menu, int headlessWidth = 0, int headlessHeight = 0);
     bool draw(const Camera& camera);
+    void fog(bool on) { settings_.fog = on; }
+    // Scene view: decisions from `frozen`, pixels from the camera draw() gets.
+    void cull(const Camera* frozen) { settings_.cull = frozen; }
 #if ASR_ENABLE_PROFILING
     bool compareGrassCulling(const Camera& camera, const std::string& path);
 #endif

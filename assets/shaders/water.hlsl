@@ -18,6 +18,7 @@
 #include "weather.hlsli"
 #include "water_body.hlsli"
 #include "ice_surface.hlsli"
+#include "water_optics.hlsli"
 
 // The surface, as four layers of one array (tools/bake_water.py and
 // tools/bake_foam_residue.py):
@@ -384,73 +385,29 @@ float4 WaterPS(WaterOut input) : SV_Target0
     lying *= (1.0-ice)*wbNormalScale(river,lake);
     const float3 surface = normalize(float3(lying, 1.0));
 
-    // --- and where the eye is -------------------------------------------
-    //
-    // Out of the projection rather than written down: the third row of it is
-    // the axis depth is measured along, which for a camera with no vanishing
-    // point is exactly the direction it looks from. Written down as a constant
-    // it would be wrong the day the view tips - and the glint on water is the
-    // one thing in the picture that says which way the view is from.
-    const float3 eye = landscapeEye(float3(input.worldXY, input.worldHeight));
-    const float3 sun = landscapeSun();
-    const float3 halfway = normalize(sun + eye);
-    const float facing = saturate(dot(surface, sun));
-    const float sparkle = pow(saturate(dot(surface, halfway)),
-                              lerp(88.0, 36.0, smoothstep(1.0, 8.0, metresPerPixel)));
-    // How much of the sky this bit of surface is showing the eye.
-    //
-    // This is what water is, seen from above: almost none of what reaches the
-    // eye off a lake is light that went into it and came back out - it is the
-    // sky, and how much of the sky depends on how far the surface has tilted
-    // away from the eye. Looking nearly straight down, that is nearly nothing
-    // for flat water and a lot for the side of every ripple, which is why open
-    // water reads as dark with bright streaks rather than as an evenly lit
-    // fabric. Lighting it with the sun instead - a diffuse term over the whole
-    // surface - is exactly what made it read as wool.
-    const float fresnel = pow(1.0 - saturate(dot(surface, eye)), 5.0);
-
     // --- how far down the bed is -----------------------------------------
     //
     // Keep the bed-visibility ramp several pixels wide. Swash/foam width uses
     // the horizontal apron below, not this depth scale.
     const float perPixel = length(float2(ddx(input.depth), ddy(input.depth)));
     const float soft = max(1.30, perPixel * 4.0);
+    const float deep = lookWaterDepth(input.depth);
 
     // --- the colour of it -------------------------------------------------
-    const float deep = lookWaterDepth(input.depth);
-    // Shallow water has to read as water.
     //
-    // This was (0.19, 0.30, 0.26) - a grey-green within a few per cent of the
-    // grass beside it. The depth ramp is exponential over three and a half
-    // metres, so a brook half a metre deep sits at nine per cent of the way to
-    // the deep colour and is drawn almost entirely in this one: the river was
-    // the right shape, fully covered, fully opaque, and the same colour as the
-    // bank. Along a reach the pools run a little deeper than the bars, and that
-    // small difference was the only thing separating river from field - which
-    // is what read as a dashed line at a strategic zoom.
-    //
-    // Turned towards the water it is standing in rather than the ground it is
-    // crossing. Still muted, still the same family as the deep colour, and no
-    // brighter - only unmistakably not grass.
-    const float3 shallowColour = float3(0.17, 0.33, 0.36);
-    const float3 deepColour = float3(0.055, 0.14, 0.18);
-    float3 colour = lerp(shallowColour, deepColour, deep);
-    // A restrained transmitted-light tint follows actual raised crests, not
-    // a second texture pretending to be geometry.
-    colour += float3(0.015, 0.055, 0.045) * saturate(input.lift) * deep;
-    // The sky the surface is reflecting, strongest where it faces away from the
-    // eye - which is the whole of why water is lighter at a glancing angle.
-    const float3 sky = landscapeSky(reflect(-eye, surface).z);
-    // Scaled by how deep it is, because that is the other half of the same
-    // fact: what comes back off deep water is the sky, and what comes back off
-    // a foot of water over sand is the sand. A river reflecting as hard as the
-    // open sea reads as poured concrete.
-    colour = lerp(colour, sky, saturate(0.04 + 0.70 * fresnel) * (0.32 + 0.68 * deep));
-    const float sunshine=1.0-parametersPS[0].x*parametersPS[2].z*0.85;
-    colour += float3(1.04, 1.0, 0.90) * (sparkle * blowing * 0.23 * sunshine);
-    // Barely at all: water has next to no diffuse of its own, and this is here
-    // only so the light in the picture agrees about which way the sun is.
-    colour *= 0.94 + 0.10 * facing;
+    // Water as a medium (water_optics.hlsli): sky and sun off a dielectric
+    // interface, light scattered back out of the column, and the bed seen
+    // through what the column has not absorbed - so a clear shallow shelf
+    // shows its sand, a deep bay goes blue-black, a silty river goes brown-
+    // green, and all of it becomes a mirror as the view flattens. The ripples
+    // wobble the path length a little, which is what refraction looks like
+    // from up here with no scene texture to bend.
+    const float wobble = (surface.x + surface.y) * 0.20;
+    const float sunshine = 1.0 - parametersPS[0].x * parametersPS[2].z * 0.85;
+    const WaterShade shade = shadeWater(float3(input.worldXY, input.worldHeight), surface,
+            max(input.depth + wobble, 0.0), input.lift, river, lake, ocean,
+            metresPerPixel, sunshine * (1.0 - ice), windPS.z);
+    float3 colour = shade.colour;
 
     // Inland shorelines are depth intersections, not a repeating ocean swash
     // mask. Reuse the authored foam texture only on actual rapid river reaches.
@@ -466,7 +423,12 @@ float4 WaterPS(WaterOut input) : SV_Target0
             const float3 iceColour=iceSurfaceColour(p,icePixelMetres);
             colour=lerp(colour,iceColour*landscapeDaylight(float3(0,0,1),1.0),ice);
         }
-        float alpha=wbInlandAlpha(input.depth,input.cover,perPixel);
+        // The waterline ramp from wbInlandAlpha, and the medium for how much
+        // bed shows - floored so a shallow brook stays visible at a strategic
+        // zoom, where a physically clear half metre would all but vanish.
+        const float edge=clamp(perPixel*1.2,0.08,0.75);
+        float alpha=wbSmooth(0.0,edge,input.depth)*wbSmooth(0.0,0.20,input.cover)*
+                    max(shade.alpha,0.42);
         alpha=lerp(alpha,wbIceAlpha(input.depth,input.cover,perPixel),ice);
         inlandResult=float4(landscapeFinish(colour,float3(p,input.worldHeight)),alpha);
         if (ocean<=0.0) return inlandResult;
@@ -599,9 +561,10 @@ float4 WaterPS(WaterOut input) : SV_Target0
     // refraction - there is no scene texture to bend - but it is what
     // refraction looks like from up here: the bed swims a little under moving
     // water instead of lying still under a flat pane of it.
-    const float wobble = (surface.x + surface.y) * 0.20;
+    // The edge ramp (antialiasing the waterline) times what the medium lets
+    // through: clear shallows show the sand, deep water hides it.
     float alpha = min(saturate((input.depth + wobble) / soft), saturate(input.cover * 1.3)) *
-                  (0.72 + 0.26 * deep);
+                  shade.alpha;
     alpha = max(alpha, runup * 0.22 * (1.0 - smoothstep(0.0, 0.5, shapedBank)));
     alpha *= shoreFade;
     // Foam is not a tint on whatever is underneath, it is stuff floating on the

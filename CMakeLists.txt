@@ -18,6 +18,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(ASR_BUILD_CLIENT "Build the SDL3 graphical client" ON)
+option(ASR_BUILD_ENGINE_EDITOR "Build the standalone engine module editor" ${ASR_BUILD_CLIENT})
+option(ASR_ENGINE_EDITOR_GPU "Use the engine GPU viewport (OFF keeps a DXC-free CPU editor)" ON)
 option(ASR_BUILD_TESTS "Build the test suite" ON)
 option(ASR_TEST_GPU "Register tests requiring a window system and GPU with CTest" OFF)
 option(ASR_ENABLE_PROFILING "Legacy default for ASR_ENABLE_DIAGNOSTICS" OFF)
@@ -80,6 +82,7 @@ add_library(asr_core STATIC
         src/engine/core/time.cpp)
 target_include_directories(asr_core PUBLIC src)
 target_link_libraries(asr_core PRIVATE asr_warnings)
+include(src/engine/modules.cmake)
 
 # The entity system itself, and nothing else: registry, spatial cells, the
 # snapshot boundary, deterministic batching, the worker command buffer. No game
@@ -101,18 +104,12 @@ add_library(asr_render_systems STATIC
         src/engine/render/systems/source_cluster_draws.cpp
         src/engine/render/systems/instance_hierarchy_select.cpp)
 target_include_directories(asr_render_systems PUBLIC src)
-target_link_libraries(asr_render_systems PUBLIC asr_ecs asr_geometry PRIVATE asr_warnings)
+target_link_libraries(asr_render_systems PUBLIC asr_ecs asr_geometry asr_representation PRIVATE asr_warnings)
 
 # Reusable CPU geometry/reconstruction: no game, window or GPU dependency.
-add_library(asr_geometry STATIC src/engine/geometry/smart_terrain_mesh.cpp
-        src/engine/geometry/cluster_dag.cpp
-        src/engine/geometry/cluster_asset.cpp
-        src/engine/geometry/cluster_morph.cpp
-        src/engine/geometry/instance_hierarchy.cpp
-        src/engine/geometry/region_mass.cpp
-        src/engine/geometry/quad_mass.cpp)
+add_library(asr_geometry STATIC src/engine/geometry/smart_terrain_mesh.cpp)
 target_include_directories(asr_geometry PUBLIC src)
-target_link_libraries(asr_geometry PRIVATE asr_warnings)
+target_link_libraries(asr_geometry PUBLIC asr_virtual_geometry PRIVATE asr_warnings)
 
 # ---------------------------------------------------------------------------
 # content - declarative definitions and their loader/validator.
@@ -128,12 +125,8 @@ target_link_libraries(asr_content PUBLIC asr_core PRIVATE nlohmann_json asr_warn
 # generation - terrain, resources, hearth placement.
 # ---------------------------------------------------------------------------
 add_library(asr_generation STATIC
-        src/game/generation/plate_field.cpp
-        src/game/generation/range_field.cpp
-        src/game/generation/erosion_field.cpp
         src/game/generation/hybrid_terrain.cpp
         src/game/generation/terrain_foundation.cpp
-        src/game/generation/mountain_shape.cpp
         src/game/generation/local_map_gen.cpp
         src/game/generation/world_domain.cpp
         src/game/generation/world_scale_policy.cpp
@@ -142,7 +135,7 @@ add_library(asr_generation STATIC
         src/game/generation/world_map_gen.cpp)
 target_include_directories(asr_generation PUBLIC src)
 target_compile_definitions(asr_generation PRIVATE ASR_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-target_link_libraries(asr_generation PUBLIC asr_core asr_content EnTT::EnTT
+target_link_libraries(asr_generation PUBLIC asr_core asr_content asr_terrain_generator EnTT::EnTT
         PRIVATE nlohmann_json asr_warnings)
 
 # ---------------------------------------------------------------------------
@@ -263,7 +256,7 @@ target_link_libraries(content_validator PRIVATE asr_content asr_simulation asr_w
 # ---------------------------------------------------------------------------
 # client - SDL3 top-down renderer. Optional; the simulation never links it.
 # ---------------------------------------------------------------------------
-if(ASR_BUILD_CLIENT)
+if(ASR_BUILD_CLIENT OR ASR_BUILD_ENGINE_EDITOR)
     include(FetchContent)
     set(SDL_SHARED OFF CACHE BOOL "" FORCE)
     set(SDL_STATIC ON CACHE BOOL "" FORCE)
@@ -278,6 +271,8 @@ if(ASR_BUILD_CLIENT)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
     set(SDLIMAGE_TESTS OFF CACHE BOOL "" FORCE)
     set(SDLIMAGE_SAMPLES OFF CACHE BOOL "" FORCE)
+    # Packed RG16 depth must bypass platform premultiplication/color management.
+    set(SDLIMAGE_BACKEND_STB ON CACHE BOOL "" FORCE)
     FetchContent_Declare(SDL3_image
             GIT_REPOSITORY https://github.com/libsdl-org/SDL_image.git
             GIT_TAG release-3.2.4
@@ -285,53 +280,33 @@ if(ASR_BUILD_CLIENT)
             EXCLUDE_FROM_ALL)
     FetchContent_MakeAvailable(SDL3_image)
 
-    # SDL_GPU consumes backend shaders (Metal, SPIR-V or DXIL). Shadercross lets
-    # the explore renderer keep one HLSL source and compile it for the active
-    # backend instead of checking three generated binary copies into the tree.
-    set(SDLSHADERCROSS_SHARED OFF CACHE BOOL "" FORCE)
-    set(SDLSHADERCROSS_STATIC ON CACHE BOOL "" FORCE)
-    set(SDLSHADERCROSS_CLI OFF CACHE BOOL "" FORCE)
-    set(SDLSHADERCROSS_VENDORED ON CACHE BOOL "" FORCE)
-    set(SDLSHADERCROSS_DXC ON CACHE BOOL "" FORCE)
-    FetchContent_Declare(SDL3_shadercross
-            GIT_REPOSITORY https://github.com/libsdl-org/SDL_shadercross.git
-            GIT_TAG 1ff05bec573988a98ef9e0260b4da44f512b8367
-            GIT_SHALLOW TRUE
-            EXCLUDE_FROM_ALL)
-    FetchContent_MakeAvailable(SDL3_shadercross)
+    add_library(asr_engine_gui STATIC src/engine/ui/ui.cpp src/engine/editor/module_panel.cpp)
+    target_include_directories(asr_engine_gui PUBLIC src)
+    target_link_libraries(asr_engine_gui PUBLIC asr_representation asr_terrain_generator
+            asr_virtual_geometry SDL3::SDL3-static PRIVATE asr_warnings)
+    add_library(Campfire::Gui ALIAS asr_engine_gui)
+    if(ASR_BUILD_CLIENT OR (ASR_BUILD_ENGINE_EDITOR AND ASR_ENGINE_EDITOR_GPU))
+        include(src/engine/gpu_modules.cmake)
+    endif()
+    if(ASR_BUILD_ENGINE_EDITOR)
+        add_executable(campfire_engine_editor src/engine/editor/main.cpp)
+        target_link_libraries(campfire_engine_editor PRIVATE asr_engine_gui
+                SDL3_image::SDL3_image-static nlohmann_json asr_warnings)
+        target_compile_definitions(campfire_engine_editor PRIVATE ASR_ENGINE_EDITOR_GPU=$<BOOL:${ASR_ENGINE_EDITOR_GPU}>)
+        if(ASR_ENGINE_EDITOR_GPU)
+            target_link_libraries(campfire_engine_editor PRIVATE asr_engine_viewport)
+        endif()
+    endif()
+endif()
 
+if(ASR_BUILD_CLIENT)
     # The editor is its own program: it opens no world and ticks nothing, so it
     # starts in a second rather than after a continent has been generated.
     add_executable(asr_editor
             src/game/editor/main.cpp
-            src/engine/ui/ui.cpp
             src/game/ui/editor.cpp)
-    target_link_libraries(asr_editor PRIVATE asr_simulation nlohmann_json SDL3::SDL3-static
+    target_link_libraries(asr_editor PRIVATE asr_simulation asr_engine_gui nlohmann_json SDL3::SDL3-static
             SDL3_image::SDL3_image-static asr_warnings)
-
-    # The engine's render layer: a device, a frame, a pipeline and the abstract
-    # pass every drawing thing implements. It knows nothing about this game - no
-    # terrain, no materials, no simulation - and must not: everything it draws
-    # arrives as flat arrays of vertices and instances.
-    add_library(asr_engine_render STATIC
-            src/engine/render/device.cpp
-            src/engine/render/targets.cpp
-            src/engine/render/draw_queue.cpp
-            src/engine/render/render_pipeline.cpp
-            src/engine/render/geometry/mesh_cache.cpp
-            src/engine/render/geometry/instances.cpp
-        src/engine/render/geometry/instanced.cpp
-        src/engine/render/geometry/cluster_cull.cpp
-        src/engine/render/geometry/mesh_root_cull.cpp
-        src/engine/render/geometry/instance_root_cull.cpp
-        src/engine/render/geometry/instance_hierarchy_cull.cpp
-        src/engine/render/geometry/hiz_pyramid.cpp
-        src/engine/render/geometry/page_residency.cpp
-            src/engine/pipeline/calc_pipeline.cpp
-            src/engine/pipeline/runner.cpp)
-    target_include_directories(asr_engine_render PUBLIC src)
-    target_link_libraries(asr_engine_render PUBLIC SDL3::SDL3-static SDL3_image::SDL3_image-static
-            SDL3_shadercross::SDL3_shadercross-static PRIVATE asr_warnings)
 
     # This game's passes. They know what ground is made of and what grass is; the
     # engine does not, which is the whole point of the split.
@@ -341,11 +316,13 @@ if(ASR_BUILD_CLIENT)
             src/game/render/grass_cull.cpp
             src/game/render/passes/terrain_pass.cpp
             src/game/render/passes/foliage_pass.cpp
+            src/game/render/passes/far_trees_pass.cpp
             src/game/render/passes/water_pass.cpp
             src/game/render/passes/weather_pass.cpp
+            src/game/render/passes/sky_pass.cpp src/game/render/passes/frustum_pass.cpp
             src/game/render/passes/menu_pass.cpp
             src/game/render/passes/sprite_pass.cpp
-            src/game/client/explore_menu.cpp
+            src/game/client/explore_menu.cpp src/game/client/graphics_panel.cpp
             src/game/render/calc/terrain_stream.cpp
             src/game/render/calc/terrain_collect.cpp
             src/game/render/climate_textures.cpp
@@ -354,34 +331,46 @@ if(ASR_BUILD_CLIENT)
             src/game/render/gpu_terrain.cpp
             src/game/render/calc/sprite_queue.cpp)
     target_include_directories(asr_game_render PUBLIC src)
-    target_sources(asr_game_render PRIVATE src/game/render/passes/scene_models_pass.cpp)
+    target_sources(asr_game_render PRIVATE src/game/render/passes/scene_models_pass.cpp
+            src/game/render/shadow_clipmap.cpp src/game/render/forest_proxy_cache.cpp
+            src/game/render/forest_hierarchy.cpp src/game/render/graphics_settings.cpp)
     if(ASR_ENABLE_PROFILING)
         target_sources(asr_game_render PRIVATE src/game/render/world_renderer_diagnostics.cpp)
     endif()
-    target_link_libraries(asr_game_render PUBLIC asr_engine_render asr_world
-            PRIVATE nlohmann_json asr_warnings)
+    target_link_libraries(asr_game_render PUBLIC asr_engine_render asr_world asr_camera asr_virtual_geometry_gpu
+            asr_impostors_gpu PRIVATE nlohmann_json asr_warnings)
 
     add_executable(asr_client
             src/game/client/main.cpp
             src/game/client/renderer.cpp
-            src/game/client/camera.cpp
             src/game/client/selection.cpp
             src/game/client/controls.cpp
             src/game/client/newgame_screen.cpp
             src/game/client/world_dials.cpp
             src/game/client/explorer.cpp
             src/game/client/explore_view.cpp
-            src/engine/ui/ui.cpp
+            src/game/client/explore_bench.cpp
             src/game/ui/hud.cpp
             src/game/ui/editor.cpp
             src/game/ui/overlay.cpp
             src/game/ui/info_panel.cpp)
-    target_link_libraries(asr_client PRIVATE asr_simulation asr_world asr_game_render nlohmann_json
+    target_link_libraries(asr_client PRIVATE asr_simulation asr_world asr_game_render asr_engine_gui nlohmann_json
             SDL3::SDL3-static SDL3_image::SDL3_image-static
             SDL3_shadercross::SDL3_shadercross-static nlohmann_json asr_warnings)
     if(ASR_ENABLE_PROFILING)
         target_sources(asr_client PRIVATE src/game/client/explore_diagnostics.cpp)
     endif()
+
+    # asr_mesh_lab - UE Nanite's bake against our cluster DAG on the same meshes,
+    # rendered on the CPU into PNGs and a table. No window, no GPU. Input comes
+    # from tools/ue_nanite_reference.py (headless Unreal).
+    add_executable(asr_mesh_lab tools/mesh_lab.cpp)
+    target_link_libraries(asr_mesh_lab PRIVATE asr_geometry nlohmann_json
+            SDL3::SDL3-static SDL3_image::SDL3_image-static asr_warnings)
+
+    add_executable(asr_shader_check tools/shader_check.cpp)
+    target_link_libraries(asr_shader_check PRIVATE SDL3::SDL3-static
+            SDL3_shadercross::SDL3_shadercross-static asr_warnings)
 
     # Public branding changes without breaking existing CLion targets/scripts.
     function(campfire_binary target output)
@@ -415,15 +404,23 @@ if(ASR_BUILD_CLIENT)
         endif()
         set(SCENE_MODEL_ARCHIVE "${CMAKE_SOURCE_DIR}/assets/models/Stylized Nature MegaKit[Standard].zip")
         set(SCENE_MODEL_OUTPUT "${CMAKE_SOURCE_DIR}/assets/generated/scene_models")
-        add_custom_command(OUTPUT "${SCENE_MODEL_OUTPUT}/manifest.json"
-                COMMAND "${ASR_SCENE_PYTHON}" "${CMAKE_SOURCE_DIR}/tools/prepare_scene_models.py"
-                        --archive "${SCENE_MODEL_ARCHIVE}" --output "${SCENE_MODEL_OUTPUT}"
-                DEPENDS "${SCENE_MODEL_ARCHIVE}" "${CMAKE_SOURCE_DIR}/tools/prepare_scene_models.py"
-                        "${CMAKE_SOURCE_DIR}/tools/mesh_lod.py"
-                        "${CMAKE_SOURCE_DIR}/tools/scene_models_requirements.txt"
-                COMMENT "Preparing shared nature meshes and eight-view impostors (numpy/Pillow required)"
-                VERBATIM)
-        add_custom_target(asr_scene_models DEPENDS "${SCENE_MODEL_OUTPUT}/manifest.json")
+        file(GLOB SCENE_UE_MARKER CONFIGURE_DEPENDS "${SCENE_MODEL_OUTPUT}/.ue-imported")
+        if(SCENE_UE_MARKER)
+            if(NOT EXISTS "${SCENE_MODEL_OUTPUT}/manifest.json")
+                message(FATAL_ERROR "Activated UE resources have no manifest; rerun install_ue_assets.py")
+            endif()
+            add_custom_target(asr_scene_models DEPENDS "${SCENE_MODEL_OUTPUT}/manifest.json")
+        else()
+            add_custom_command(OUTPUT "${SCENE_MODEL_OUTPUT}/manifest.json"
+                    COMMAND "${ASR_SCENE_PYTHON}" "${CMAKE_SOURCE_DIR}/tools/prepare_scene_models.py"
+                            --archive "${SCENE_MODEL_ARCHIVE}" --output "${SCENE_MODEL_OUTPUT}"
+                    DEPENDS "${SCENE_MODEL_ARCHIVE}" "${CMAKE_SOURCE_DIR}/tools/prepare_scene_models.py"
+                            "${CMAKE_SOURCE_DIR}/tools/mesh_lod.py"
+                            "${CMAKE_SOURCE_DIR}/tools/scene_models_requirements.txt"
+                    COMMENT "Preparing shared nature meshes and eight-view impostors (numpy/Pillow required)"
+                    VERBATIM)
+            add_custom_target(asr_scene_models DEPENDS "${SCENE_MODEL_OUTPUT}/manifest.json")
+        endif()
         # The renderer consumes the cluster sidecars as content, not as an
         # optional developer experiment. Keep the offline DAG build behind the
         # mesh preparation step and use a stamp because the tool writes one
@@ -432,7 +429,7 @@ if(ASR_BUILD_CLIENT)
         add_custom_command(OUTPUT "${SCENE_CLUSTER_STAMP}"
                 COMMAND "$<TARGET_FILE:scene_model_clusters>" "${SCENE_MODEL_OUTPUT}"
                 COMMAND "${CMAKE_COMMAND}" -E touch "${SCENE_CLUSTER_STAMP}"
-                DEPENDS asr_scene_models scene_model_clusters
+                DEPENDS asr_scene_models scene_model_clusters "${SCENE_MODEL_OUTPUT}/manifest.json"
                 COMMENT "Building per-model geometry DAGs and instance canopy sidecars"
                 VERBATIM)
         add_custom_target(asr_scene_geometry DEPENDS "${SCENE_CLUSTER_STAMP}")
@@ -445,11 +442,40 @@ endif()
 # ---------------------------------------------------------------------------
 if(ASR_BUILD_TESTS)
     enable_testing()
+    if(TARGET asr_engine_viewport)
+        add_executable(asr_engine_viewport_tests tests/main.cpp tests/test_dag_viewport_gpu.cpp)
+        target_link_libraries(asr_engine_viewport_tests PRIVATE asr_engine_viewport asr_engine_gui asr_warnings)
+        if(ASR_TEST_GPU)
+            add_test(NAME engine_viewport_gpu COMMAND asr_engine_viewport_tests)
+            set_tests_properties(engine_viewport_gpu PROPERTIES LABELS "gpu" TIMEOUT 60
+                    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+        endif()
+    endif()
+    add_executable(asr_engine_module_tests tests/main.cpp tests/test_engine_modules.cpp
+            tests/test_recursive_impostor.cpp tests/test_impostor_hierarchy.cpp
+            tests/test_camera.cpp tests/test_camera_matrix.cpp
+            tests/test_plate_field.cpp tests/test_range_field.cpp tests/test_erosion_field.cpp)
+    target_link_libraries(asr_engine_module_tests PRIVATE asr_representation asr_terrain_generator
+            asr_virtual_geometry asr_impostors asr_warnings)
+    add_test(NAME engine_modules COMMAND asr_engine_module_tests)
+    set_tests_properties(engine_modules PROPERTIES TIMEOUT 45)
     find_package(Python3 QUIET COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)
         add_test(NAME external_profiler COMMAND "${Python3_EXECUTABLE}"
                 "${CMAKE_SOURCE_DIR}/tests/test_external_profiler.py")
         set_tests_properties(external_profiler PROPERTIES TIMEOUT 30)
+        execute_process(COMMAND "${Python3_EXECUTABLE}" -c "import numpy; import PIL"
+                RESULT_VARIABLE ASR_DEPTH_TEST_DEPS OUTPUT_QUIET ERROR_QUIET)
+        if(ASR_DEPTH_TEST_DEPS EQUAL 0)
+            add_test(NAME impostor_depth_baker COMMAND "${Python3_EXECUTABLE}"
+                    "${CMAKE_SOURCE_DIR}/tests/test_impostor_depth.py")
+            set_tests_properties(impostor_depth_baker PROPERTIES TIMEOUT 30)
+        endif()
+    endif()
+    if(ASR_BUILD_CLIENT AND ASR_PREPARE_SCENE_MODELS)
+        add_test(NAME ue_asset_import COMMAND "${ASR_SCENE_PYTHON}"
+                "${CMAKE_SOURCE_DIR}/tests/test_prepare_ue_assets.py")
+        set_tests_properties(ue_asset_import PROPERTIES TIMEOUT 60)
     endif()
     add_executable(asr_smart_mesh_tests tests/main.cpp tests/test_smart_mesh.cpp)
     target_link_libraries(asr_smart_mesh_tests PRIVATE asr_geometry asr_warnings)
@@ -471,8 +497,8 @@ if(ASR_BUILD_TESTS)
     add_test(NAME world_system COMMAND asr_world_system_tests)
     set_tests_properties(world_system PROPERTIES TIMEOUT 30)
     add_executable(asr_scene_view_tests tests/main.cpp tests/test_scene_view.cpp
-            tests/test_camera_matrix.cpp tests/test_scene_scatter.cpp src/game/client/camera.cpp)
-    target_link_libraries(asr_scene_view_tests PRIVATE asr_world asr_warnings)
+            tests/test_camera_matrix.cpp tests/test_scene_scatter.cpp tests/test_ecology_shadow.cpp)
+    target_link_libraries(asr_scene_view_tests PRIVATE asr_world asr_camera asr_warnings)
     add_test(NAME scene_view COMMAND asr_scene_view_tests)
     set_tests_properties(scene_view PROPERTIES TIMEOUT 30)
     # The inspector lives in the client, so its tests only exist when the client
@@ -490,18 +516,17 @@ if(ASR_BUILD_TESTS)
                 tests/test_instance_arena.cpp
                 tests/test_ring_stream.cpp
                 tests/test_environment_menu.cpp
+                tests/test_draw_distance.cpp
                 tests/test_environment_workers.cpp
                 tests/test_weather.cpp
                 tests/test_water_bodies.cpp
-                src/game/client/camera.cpp
-                src/game/client/explore_menu.cpp
+                src/game/client/explore_menu.cpp src/game/client/graphics_panel.cpp
                 src/game/client/world_dials.cpp
                 src/game/client/explorer.cpp
                 src/game/client/renderer.cpp
                 src/game/client/controls.cpp
-                src/game/client/selection.cpp
-                src/engine/ui/ui.cpp)
-        target_link_libraries(asr_ring_tests PRIVATE asr_simulation asr_world asr_game_render
+                src/game/client/selection.cpp)
+        target_link_libraries(asr_ring_tests PRIVATE asr_simulation asr_world asr_game_render asr_engine_gui
                 nlohmann_json SDL3::SDL3-static SDL3_image::SDL3_image-static asr_warnings)
         add_test(NAME ring_stream COMMAND asr_ring_tests)
 
@@ -511,7 +536,7 @@ if(ASR_BUILD_TESTS)
                 tests/test_cluster_cull_gpu.cpp
                 tests/test_indirect_draw_gpu.cpp
                 tests/test_height_page_atlas_gpu.cpp
-                src/game/client/camera.cpp)
+                tests/test_slope_shadow_gpu.cpp tests/test_impostor_cache_gpu.cpp)
         if(ASR_ENABLE_DIAGNOSTICS)
             target_sources(asr_height_page_gpu_tests PRIVATE tests/test_grass_cull_gpu.cpp)
         endif()
@@ -550,9 +575,8 @@ if(ASR_BUILD_TESTS)
             tests/test_tile_mesh.cpp
             tests/test_engine_clock.cpp
             tests/test_ecs.cpp
-            src/game/client/camera.cpp
             ${ASR_INSPECTOR_TESTS})
-    target_link_libraries(asr_tests PRIVATE asr_simulation asr_world nlohmann_json asr_warnings
+    target_link_libraries(asr_tests PRIVATE asr_simulation asr_world asr_camera nlohmann_json asr_warnings
             ${ASR_INSPECTOR_LIBS})
     target_sources(asr_tests PRIVATE tests/test_terrain_config.cpp)
     target_sources(asr_tests PRIVATE tests/test_scene_scatter.cpp)

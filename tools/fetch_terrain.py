@@ -232,9 +232,23 @@ def credits(materials, water):
                       ""]
     lines += ["## Public domain (CC0, no attribution required)", "",
               "Terrain surfaces from Poly Haven (<https://polyhaven.com>):", ""]
-    for m in sorted(materials, key=lambda x: x["id"]):
+    for m in sorted((m for m in materials if m["source"].get("site") == "polyhaven"), key=lambda x: x["id"]):
         lines.append("- `%s` - %s" % (m["id"], m["source"]["asset_id"]))
     lines.append("")
+    imported = [m for m in materials if m["source"].get("site") == "unreal"]
+    if imported:
+        lines += ["## Imported AncientSettlement resources (not CC0)", "",
+                  "Original asset-pack licences apply. No redistribution rights are granted by this repository.",
+                  "Terrain: MW Landscape Auto Material. Nature: Megaplant, Light Foliage, Fab/Megascans and Namaqualand.",
+                  "Per-asset UE package paths and material conversions are recorded in",
+                  "`assets/generated/scene_models/provenance.json`.", ""]
+        for m in sorted(imported, key=lambda x: x["id"]):
+            lines.append("- `%s` - `%s`" % (m["id"], m["source"]["package"]))
+        scene = ROOT / "assets/generated/scene_models"
+        if (scene / ".ue-imported").exists():
+            for model in json.loads((scene / "provenance.json").read_text())["models"]:
+                lines.append("- `%s` - `%s`" % (model["role"], model["asset"]))
+        lines.append("")
     (ROOT / "CREDITS.md").write_text("\n".join(lines))
     print("wrote CREDITS.md")
 

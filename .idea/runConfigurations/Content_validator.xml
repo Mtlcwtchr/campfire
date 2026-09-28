@@ -1,12 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Content validator" type="CMakeRunConfiguration" factoryName="Application"
-                 PROGRAM_PARAMS=""
-                 REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false"
-                 EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true"
-                 PROJECT_NAME="ancient_settlement" TARGET_NAME="content_validator"
-                 CONFIG_NAME="RelWithDebInfo"
-                 RUN_TARGET_PROJECT_NAME="ancient_settlement" RUN_TARGET_NAME="content_validator"
-                 WORKING_DIR="$PROJECT_DIR$">
+  <configuration default="false" name="Content validator" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" WORKING_DIR="$PROJECT_DIR$" PASS_PARENT_ENVS_2="true" PROJECT_NAME="campfire" TARGET_NAME="content_validator" CONFIG_NAME="RelWithDebInfo" RUN_TARGET_PROJECT_NAME="campfire" RUN_TARGET_NAME="content_validator">
     <method v="2">
       <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
     </method>

@@ -9,7 +9,7 @@ namespace engine {
 bool Runner::build(Device& device) {
     // Before anything is built, because a pipeline has to be told how many
     // samples its targets take and cannot be changed afterwards.
-    const bool many = std::getenv("ASR_FORCE_SINGLE_SAMPLE") == nullptr &&
+    const bool many = samples_ > 1 && std::getenv("ASR_FORCE_SINGLE_SAMPLE") == nullptr &&
                       SDL_GPUTextureSupportsSampleCount(device.handle(), Device::kColourFormat,
                                                         SDL_GPU_SAMPLECOUNT_4) &&
                       SDL_GPUTextureSupportsSampleCount(device.handle(), Device::kDepthFormat,
@@ -74,15 +74,21 @@ bool Runner::frame(Device& device, Scene scene) {
     }
     SDL_GPUTexture* swapchain = nullptr;
     Uint32 width = 0, height = 0;
-    if (!SDL_WaitAndAcquireGPUSwapchainTexture(commands, device.window(), &swapchain, &width,
-                                               &height)) {
+    if (device.headless()) {
+        // Nothing to present to: the offscreen target is the picture. Two
+        // frames on the card at most, which is what a swapchain would allow.
+        device.waitInFlight(1);
+        width = device.headlessWidth();
+        height = device.headlessHeight();
+    } else if (!SDL_WaitAndAcquireGPUSwapchainTexture(commands, device.window(), &swapchain, &width,
+                                                      &height)) {
         device.fail(std::string("no image from the window: ") + SDL_GetError());
         SDL_CancelGPUCommandBuffer(commands);
         return false;
     }
     const auto acquiredAt = std::chrono::steady_clock::now();
     frameTiming_.acquire = ms(acquireAt, acquiredAt);
-    if (!swapchain) {
+    if (!swapchain && !device.headless()) {
         // Minimised, resizing, or the drawable temporarily unavailable. This
         // is not a rendered frame. Without the delay the main loop spins at
         // thousands of FPS while the last presented image stays frozen; that
@@ -173,7 +179,7 @@ bool Runner::frame(Device& device, Scene scene) {
     blit.destination.h = height;
     blit.load_op = SDL_GPU_LOADOP_DONT_CARE;
     blit.filter = SDL_GPU_FILTER_LINEAR;
-    SDL_BlitGPUTexture(commands, &blit);
+    if (swapchain) SDL_BlitGPUTexture(commands, &blit);
 
     if (!device.submitFrame(commands)) return false;
     frameTiming_.submit = ms(submitAt, std::chrono::steady_clock::now());

@@ -57,8 +57,21 @@ MaterialBand sampleMaterialBand(int layer, float2 uv, float2 dx, float2 dy, floa
     // and no derivative of a random offset polluting mip selection.
     const float2 a = uv + float2(0.17, 0.63);
     const float2 b = uv + float2(0.71, 0.29);
-    s.colour = lerp(groundTex.SampleGrad(groundSampler, float3(a, layer), dx, dy).rgb,
-                    groundTex.SampleGrad(groundSampler, float3(b, layer), dx, dy).rgb, blend);
+    // Variance-preserving mix of the two copies. A plain lerp at 50/50 is a
+    // double exposure of one scan over a shifted copy of itself: half the
+    // contrast, which is most of what read as a soapy, blurred ground close
+    // up. Rescaling the deviation from the mean by 1/sqrt(w^2+(1-w)^2)
+    // keeps the grain at full strength through the whole blend - where the
+    // grain is resolved. Minified, the samples are already averages and
+    // rescaling them would bring unresolved grain back, so it fades out.
+    uint bandWidth, bandHeight, bandLayers, bandLevels;
+    groundTex.GetDimensions(0, bandWidth, bandHeight, bandLayers, bandLevels);
+    const float resolved = 1.0 - smoothstep(0.75, 2.0, max(length(dx), length(dy)) * float(bandWidth));
+    const float k = lerp(1.0, rsqrt(blend * blend + (1.0 - blend) * (1.0 - blend)), resolved);
+    const float3 mean = groundTex.SampleLevel(groundSampler, float3(0.5, 0.5, layer), 16).rgb;
+    const float3 colour = lerp(groundTex.SampleGrad(groundSampler, float3(a, layer), dx, dy).rgb,
+                               groundTex.SampleGrad(groundSampler, float3(b, layer), dx, dy).rgb, blend);
+    s.colour = max(mean + (colour - mean) * k, 0.0);
     s.properties = lerp(groundPropertiesTex.SampleGrad(groundPropertiesSampler, float3(a, layer), dx, dy),
                         groundPropertiesTex.SampleGrad(groundPropertiesSampler, float3(b, layer), dx, dy), blend);
     s.normal = lerp(groundNormalTex.SampleGrad(groundNormalSampler, float3(a, layer), dx, dy).xyz,
@@ -66,19 +79,62 @@ MaterialBand sampleMaterialBand(int layer, float2 uv, float2 dx, float2 dy, floa
     return s;
 }
 
+struct MaterialMacro {
+    float3 colour;
+    float2 properties;
+};
+
+MaterialMacro sampleMaterialMacro(int layer, float2 uv, float2 dx, float2 dy, float blend)
+{
+    // An enlarged scan is NOT a macro texture: its pebbles/blades become
+    // metre-sized grain. Low-pass in SOURCE UV space before enlarging it.
+    // At most sixteen samples across a repeat, independent of source resolution
+    // and camera distance. The fine band's ordinary SampleGrad is unchanged.
+    const float footprint = max(1.0 / 16.0, max(length(dx), length(dy)));
+    uint width, height, layers, levels;
+    groundTex.GetDimensions(0, width, height, layers, levels);
+    const float colourLod = max(0.0, log2(float(max(width, height)) * footprint));
+    groundPropertiesTex.GetDimensions(0, width, height, layers, levels);
+    const float propertiesLod = max(0.0, log2(float(max(width, height)) * footprint));
+    const float2 a = uv + float2(0.17, 0.63), b = uv + float2(0.71, 0.29);
+    MaterialMacro s;
+    s.colour = lerp(groundTex.SampleLevel(groundSampler, float3(a, layer), colourLod).rgb,
+                    groundTex.SampleLevel(groundSampler, float3(b, layer), colourLod).rgb, blend);
+    s.properties = lerp(groundPropertiesTex.SampleLevel(groundPropertiesSampler, float3(a, layer), propertiesLod).rg,
+                        groundPropertiesTex.SampleLevel(groundPropertiesSampler, float3(b, layer), propertiesLod).rg, blend);
+    return s;
+}
+
 MaterialSample materialProjection(int layer, float2 uv, float2 dx, float2 dy,
                                   float blend, float normalStrength)
 {
-    // Three fixed world-space bands. Physical scans alone disappear at an RTS
-    // camera height. Do not stretch UVs with zoom or replace one band by another:
-    // each band's own gradients/mips remove only the frequencies it cannot show.
-    // A 2 m scan gives 4 m surface grain, 32 m terrain texture and 192 m broad detail.
+    // Fixed physical detail plus LOW-frequency macro colour, not three copies
+    // of the same microstructure. Camera zoom never changes texture scale.
     const float fineScale = 2.0, middleScale = 16.0, broadScale = 96.0;
-    const MaterialBand fine = sampleMaterialBand(layer,
+    MaterialBand fine = sampleMaterialBand(layer,
         uv / fineScale, dx / fineScale, dy / fineScale, blend);
-    const MaterialBand middle = sampleMaterialBand(layer,
+    // Texture scale follows distance, growing with it: close up the scan at
+    // its photographed size (every texel real detail); once the fine band is
+    // well minified (past ~10 texels a pixel, where its own grain is already
+    // averaged away) a copy at four times the size takes over, so a hillside
+    // is not the same two-metre photograph printed ten thousand times. The
+    // hand-over starts where both are unresolved grain, so neither brings
+    // grain back or swims with zoom.
+    uint texWidth, texHeight, texLayers, texLevels;
+    groundTex.GetDimensions(0, texWidth, texHeight, texLayers, texLevels);
+    const float texelsPerPixel = max(length(dx), length(dy)) / fineScale * float(texWidth);
+    const float far = smoothstep(10.0, 40.0, texelsPerPixel);
+    [branch] if (far > 0.01) {
+        const float wide = fineScale * 4.0;
+        const MaterialBand w = sampleMaterialBand(layer, uv / wide + float2(0.29, 0.83),
+            dx / wide, dy / wide, blend);
+        fine.colour = lerp(fine.colour, w.colour, far * 0.7);
+        fine.properties = lerp(fine.properties, w.properties, far * 0.7);
+        fine.normal = lerp(fine.normal, w.normal, far * 0.7);
+    }
+    const MaterialMacro middle = sampleMaterialMacro(layer,
         uv / middleScale + float2(0.31, 0.57), dx / middleScale, dy / middleScale, blend);
-    const MaterialBand broad = sampleMaterialBand(layer,
+    const MaterialMacro broad = sampleMaterialMacro(layer,
         uv / broadScale + float2(0.67, 0.11), dx / broadScale, dy / broadScale, blend);
 
     // The 1x1 mip is the material's mean, not a camera-dependent reference.
@@ -92,14 +148,13 @@ MaterialSample materialProjection(int layer, float2 uv, float2 dx, float2 dy,
     const float broadLight = dot(broad.colour - meanColour, luminance) / meanLight;
     // Snow keeps a clean high-key surface, not enlarged grey patches from the scan.
     const float contrastStrength = layer == 5 ? 0.30 : layer == 4 ? 0.70 : layer == 2 ? 0.75 : 1.0;
-    // Lush grass has much less broad contrast than exposed soil/stone scans.
-    const float broadContrast = layer == 0 ? 1.35 : 1.10;
+    const float broadContrast = layer == 0 ? 0.35 : 0.50;
     MaterialSample s;
     s.colour = fine.colour * (1.0 + contrastStrength *
-        clamp(middleLight * 0.85 + broadLight * broadContrast, -0.24, 0.24));
+        clamp(middleLight * 0.35 + broadLight * broadContrast, -0.12, 0.12));
     s.properties = fine.properties;
-    s.properties.rg = saturate(fine.properties.rg + (middle.properties.rg - meanProperties) * 0.45 +
-                              (broad.properties.rg - meanProperties) * 0.25);
+    s.properties.rg = saturate(fine.properties.rg + (middle.properties - meanProperties) * 0.20 +
+                              (broad.properties - meanProperties) * 0.10);
     // Fixed world-space height for material identity. A mip chosen by the
     // camera or a coarse shading band must NEVER decide grass versus rock.
     const float2 a = uv + float2(0.17, 0.63), b = uv + float2(0.71, 0.29);
@@ -107,18 +162,44 @@ MaterialSample materialProjection(int layer, float2 uv, float2 dx, float2 dy,
                           groundPropertiesTex.SampleLevel(groundPropertiesSampler, float3(b, layer), 6).b, blend);
     const float footprint = max(length(dx), length(dy));
     const float fineDetail = 1.0 - smoothstep(0.06, 0.24, footprint / fineScale);
-    const float middleDetail = 1.0 - smoothstep(0.06, 0.24, footprint / middleScale);
-    const float broadDetail = 1.0 - smoothstep(0.06, 0.24, footprint / broadScale);
-    s.normal = rnmBlend(quietNormal(broad.normal, normalStrength * 0.65 * broadDetail),
-                        quietNormal(middle.normal, normalStrength * 0.85 * middleDetail));
-    s.normal = rnmBlend(s.normal, quietNormal(fine.normal, normalStrength * 0.65 * fineDetail));
+    // Enlarging a normal map while keeping its slopes invents giant bumps.
+    // Terrain geometry owns large-scale relief; the scan owns close-up detail.
+    s.normal = quietNormal(fine.normal, normalStrength * 0.65 * fineDetail);
     return s;
 }
 
-MaterialSample sampleGroundMaterial(int layer, float3 p, float3 normal,
-                                     float3 dx, float3 dy)
+// Texture array layers. 0..5 are the six ground classes the world blends
+// (grass, dirt, sand, rock, marsh, snow); the rest are variants of those
+// classes, chosen per pixel by climate, water and slope (terrain.hlsl).
+// Metres one texture turn covers, from content/config/terrain_materials.json:
+// a variant keeps its own physical scale relative to its class.
+#define GROUND_LAYERS 16
+#define LAYER_SAND_DUNE_ORANGE 2   // the class's own scan: dunes only
+#define LAYER_GRASS_DRY 6
+#define LAYER_FOREST_FLOOR 7
+#define LAYER_SAND_COAST 8
+#define LAYER_SAND_WET 9
+#define LAYER_SAND_PLAIN 10
+#define LAYER_SAND_GRAVELLY 11
+#define LAYER_CLIFF_DOLOMITE 12
+#define LAYER_CLIFF_MOSSY 13
+#define LAYER_CLIFF_DESERT 14
+#define LAYER_MUD_CRACKED 15
+// Metres a texture turn covers: the photographed patch itself, so with the
+// fine band repeating every two turns (materialProjection's fineScale) one
+// repeat covers twice the scanned ground. At the scans' own size a 2 m repeat
+// was plainly visible as a grid close up; the scan's detail holds at 2x.
+// Classes 0..5 must equal content/config/ground.json metres_per_turn.
+static const float kLayerMetres[GROUND_LAYERS] = {
+    2.0, 2.07, 3.0, 3.0, 1.3, 2.0,
+    2.0, 3.0, 3.94, 2.0, 1.5, 2.53, 2.7, 3.0, 1.83, 2.0};
+
+// One layer of the array, laid at its class's (editable) scale adjusted by
+// the layer's own physical size, with the class's normal strength.
+MaterialSample sampleGroundLayer(int layer, int cls, float3 p, float3 normal,
+                                 float3 dx, float3 dy)
 {
-    const float frequency = tablePS[layer].x / 14.0;
+    const float frequency = tablePS[cls].x / 14.0 * kLayerMetres[cls] / kLayerMetres[layer];
     float3 weights = pow(abs(normal), 4.0);
     // Cull negligible projections smoothly, then renormalize; flat land costs
     // one projection, not three. Gradients are computed before this branch.
@@ -126,6 +207,7 @@ MaterialSample sampleGroundMaterial(int layer, float3 p, float3 normal,
     weights /= max(dot(weights, float3(1, 1, 1)), 1e-5);
     const float blend = smoothstep(0.15, 0.85, noiseAt(p.xy / 9.0 + float(layer) * 17.0));
     const float strengths[6] = {0.30, 0.34, 0.24, 0.46, 0.28, 0.20};
+    const float strength = layer >= LAYER_CLIFF_DOLOMITE && layer <= LAYER_CLIFF_DESERT ? 0.55 : strengths[cls];
     MaterialSample result = (MaterialSample)0;
     [unroll] for (int axis = 0; axis < 3; ++axis) {
         float2 uv, gx, gy;
@@ -141,7 +223,7 @@ MaterialSample sampleGroundMaterial(int layer, float3 p, float3 normal,
         }
         [branch] if (weights[axis] > 0.0) {
             const MaterialSample s = materialProjection(layer, uv * frequency,
-                gx * frequency, gy * frequency, blend, strengths[layer]);
+                gx * frequency, gy * frequency, blend, strength);
             result.colour += s.colour * weights[axis];
             result.properties += s.properties * weights[axis];
             result.borderHeight += s.borderHeight * weights[axis];
@@ -150,6 +232,12 @@ MaterialSample sampleGroundMaterial(int layer, float3 p, float3 normal,
     }
     result.normal = normalize(result.normal);
     return result;
+}
+
+MaterialSample sampleGroundMaterial(int layer, float3 p, float3 normal,
+                                     float3 dx, float3 dy)
+{
+    return sampleGroundLayer(layer, layer, p, normal, dx, dy);
 }
 
 // Height only breaks a shared border. It cannot expose the runner-up material

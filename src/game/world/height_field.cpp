@@ -1349,9 +1349,21 @@ MaterialWeights HeightField::materialsGiven(std::int64_t sx, std::int64_t sy, Fi
                                      (core::kOne - wetBank * Fixed::ratio(9, 10) -
                                       dryBank * Fixed::ratio(2, 5)));
     // Sand where it is dry, and low: a desert, or a shore.
+    //
+    // Not every bank is a beach. A river bank is sand in stretches - on the
+    // inside of a bend, below a steep reach - and grass, mud or bare earth
+    // between them; laying sand down the full length of every watercourse
+    // turned each river into one continuous sandy floodplain. A broad field
+    // (kilometre stretches) decides which banks are sandy, and a dry climate
+    // makes more of them so.
+    const Fixed beach = core::saturate(
+        (smoothNoise(seed_ ^ 0x5A0Dull, worldX, worldY, 520) - Fixed::ratio(2, 5)) * Fixed::fromInt(3) +
+        ramp(wet, 110, 40) * Fixed::ratio(1, 2));
     out.add(Material::Sand, ramp(wet, 95, 30) + rampFixed(height, Fixed::fromInt(4), core::kZero) +
-                                    wetBank * (ramp(wet, 175, 90) + Fixed::ratio(1, 2)) +
+                                    wetBank * (ramp(wet, 175, 90) + Fixed::ratio(1, 2)) * beach +
                                     dryBank * Fixed::ratio(6, 5));
+    // The banks that are not sand are earth under the grass.
+    out.add(Material::Dirt, wetBank * (core::kOne - beach) * Fixed::ratio(3, 5));
     // Marsh where it is wet and flat and near the water - mixed into the bank
     // rather than covering it. At twice weight it beat everything else within
     // twenty-four metres of every wet channel on the map, so each river ran

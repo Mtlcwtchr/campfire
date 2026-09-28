@@ -264,8 +264,9 @@ TEST(ground_texture_scales_match_the_large_pattern_defaults) {
     if (table.size() < content::kBlendedMaterials ||
         fallback.size() != content::kBlendedMaterials) return;
 
-    // Metres per repeat, not UV frequency: larger values mean fewer repeats.
-    const float metres[] = {48.0f, 40.0f, 52.0f, 36.0f, 44.0f, 56.0f};
+    // Metres per texture turn, not UV frequency: half the photographed patch
+    // of each Poly Haven scan (the fine band repeats every two turns).
+    const float metres[] = {2.0f, 2.07f, 3.0f, 3.0f, 1.3f, 2.0f};
     const char* names[] = {"grass", "dirt", "sand", "rock", "marsh", "snow"};
     for (std::size_t i = 0; i < content::kBlendedMaterials; ++i) {
         CHECK_EQ(table[i].name, std::string(names[i]));

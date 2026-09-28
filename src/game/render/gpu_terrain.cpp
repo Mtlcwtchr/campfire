@@ -400,16 +400,16 @@ void GpuTerrain::update(engine::Frame& frame, const client::Camera& camera) {
         next->revision = residency_->revision + 1;
         next->capacity = residency_->capacity;
         next->pages = known_;
-        for (auto key : known_)
-            if (!atlases_[dataset(key.level)]->mayHaveWater(key)) next->dryPages.insert(key);
-        for (auto key : known_)
-            if (auto surface = atlases_[dataset(key.level)]->surface(key)) next->surfaces.emplace(key,std::move(surface));
-        residency_ = std::move(next);
+        next->surfaces.reserve(known_.size());
         fineResident_ = h8Resident_ = 0;
         for (auto key : known_) {
+            const auto& atlas = *atlases_[dataset(key.level)];
+            if (!atlas.mayHaveWater(key)) next->dryPages.insert(key);
+            if (auto surface = atlas.surface(key)) next->surfaces.emplace(key, std::move(surface));
             fineResident_ += key.level == 0;
             h8Resident_ += key.level == 1;
         }
+        residency_ = std::move(next);
     }
 #if ASR_ENABLE_PROFILING
     const auto tableAt = Clock::now();
@@ -579,7 +579,7 @@ std::vector<SDL_GPUTextureSamplerBinding> GpuTerrain::bindings() const {
     return out;
 }
 double GpuTerrain::vegetationPixelsPerMetre(const engine::Frame& frame,double x,double y) const {
-    const auto* m=frame.scene.viewProjection;
+    const auto* m=engine::cullMatrix(frame.scene);
     if (m[12]==0 && m[13]==0 && m[14]==0) return frame.scene.camera[3];
     double nearest=std::numeric_limits<double>::infinity(),pixels=0;
     for (const auto& b:drawing()) {
@@ -627,7 +627,7 @@ void GpuTerrain::gather(const engine::Frame& frame) {
         cut.push_back(patch);
     }
     const auto& scene = frame.scene;
-    const auto* m = scene.viewProjection;
+    const auto* m = engine::cullMatrix(scene);
     engine::render::ScreenScale screen;
     for (int i = 0; i < 4; ++i) { screen.rowX[i] = m[i]; screen.rowY[i] = m[4 + i]; screen.rowW[i] = m[12 + i]; }
     const bool perspective = m[12] != 0 || m[13] != 0 || m[14] != 0;

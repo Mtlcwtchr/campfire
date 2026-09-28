@@ -1,0 +1,55 @@
+{
+  "id": "ph_damp_beach_sand",
+  "runtime_size": 2048,
+  "runtime_files": {
+    "albedo": "ph_damp_beach_sand_albedo.png",
+    "normal": "ph_damp_beach_sand_normal.png",
+    "properties": "ph_damp_beach_sand_properties.png"
+  },
+  "properties_channels": {
+    "r": "ao",
+    "g": "roughness",
+    "b": "height",
+    "a": "mask"
+  },
+  "mip_steps": [
+    2,
+    4,
+    8,
+    16
+  ],
+  "height_range_before_stretch": [
+    0.012,
+    0.6538
+  ],
+  "had": {
+    "ao": true,
+    "rough": true,
+    "displacement": true,
+    "mask": false
+  },
+  "source": {
+    "site": "polyhaven",
+    "asset_id": "damp_beach_sand",
+    "asset_url": "https://polyhaven.com/a/damp_beach_sand",
+    "license": "CC0",
+    "authors": [
+      "Dimitrios Savva"
+    ],
+    "attribution_required": false,
+    "original_physical_metres": [
+      2.0,
+      2.0
+    ],
+    "runtime_world_scale": 2.0,
+    "resolution": "2k",
+    "files": {
+      "diffuse": "ph_damp_beach_sand_diffuse.png",
+      "normal": "ph_damp_beach_sand_normal.png",
+      "displacement": "ph_damp_beach_sand_displacement.png",
+      "rough": "ph_damp_beach_sand_rough.png",
+      "ao": "ph_damp_beach_sand_ao.png"
+    }
+  },
+  "world_scale": 2.0
+}

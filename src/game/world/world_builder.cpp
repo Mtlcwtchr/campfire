@@ -68,16 +68,89 @@ decor::Scatter WorldSnapshot::scatter(int x, int y, int radiusMetres) const {
 }
 
 decor::Scatter WorldSnapshot::scatter(decor::ScatterBounds bounds) const {
+    return scatter(bounds, *ecology_.read());
+}
+
+ecology::Cell WorldSnapshot::ecologyAt(double x, double y, HeightField& query, const ecology::Delta& delta) const {
+    const auto key = ecology::key(x, y);
+    if (const auto found = delta.cells.find(key); found != delta.cells.end()) return found->second;
+    const double cx = (double(key.first) + 0.5) * ecology::kCellMetres;
+    const double cy = (double(key.second) + 0.5) * ecology::kCellMetres;
+    const core::WorldPos p{core::Fixed::fromDoubleForContent(cx), core::Fixed::fromDoubleForContent(cy)};
+    const auto climate = climate_.at(p);
+    const auto scalar = [](core::Fixed f) { return float(f.toDouble()); };
+    const auto physicalField = [&](const std::vector<std::int32_t>& values, float fallback) {
+        if (values.size()!=map_.cells.size()) return fallback;
+        const double gx=cx/generation::kMetresPerCell,gy=cy/generation::kMetresPerCell;
+        const int ix=int(std::floor(gx)),iy=int(std::floor(gy));
+        const auto at = [&](int x, int y) {
+            return double(values[std::size_t(std::clamp(y,0,map_.height-1))*map_.width+
+                std::size_t(std::clamp(x,0,map_.width-1))])/255.0;
+        };
+        return ecology::unit(float(std::lerp(std::lerp(at(ix,iy),at(ix+1,iy),gx-ix),
+            std::lerp(at(ix,iy+1),at(ix+1,iy+1),gx-ix),gy-iy)));
+    };
+    ecology::Physical physical;
+    physical.elevation = scalar(query.heightAt(p));
+    physical.slope = scalar(query.slopeAt(p));
+    physical.temperature = scalar(climate.environment[0]) * 80 - 30;
+    physical.moisture = physicalField(map_.humidityField,scalar(climate.environment[2]));
+    physical.naturalFertility = physicalField(map_.soilFertilityField,scalar(climate.environment[1]));
+    physical.drainage = physicalField(map_.soilDrainageField,scalar(climate.environment[5]));
+    physical.seasonality = physicalField(map_.seasonalityField,physical.seasonality);
+    physical.conifer = scalar(climate.foliage[1]);
+    // Soil depth and groundwater do not yet have independent simulation fields;
+    // these explicit terrain-derived proxies are not read back from biome IDs.
+    physical.soilDepth = ecology::unit(1 - physical.slope);
+    // Sand and rock as the ground actually is here (what the renderer draws),
+    // not only as climate: a dune field or a scree slope carries no forest.
+    const auto ground = query.materialsAt(p);
+    physical.rock = std::max(ecology::unit(physical.slope), float(ground.of(Material::Rock).toDouble()));
+    physical.sand = std::max(scalar(climate.desert), float(ground.of(Material::Sand).toDouble()));
+    const float aboveWater = physical.elevation - scalar(query.waterLevelAt(p));
+    physical.groundwater = ecology::unit(1 - std::max(aboveWater, 0.0f) / 8);
+    physical.flood = std::max(physicalField(map_.floodplainPotentialField,0),physical.groundwater) *
+        (1 - ecology::unit(physical.slope * 4));
+    physical.coast = physical.elevation < 4;
+    physical.salinity = physical.coast ? 0.5f : 0;
+    auto cell = ecology::initial(physical, float(decor::forestDensity(map_.seed, cx, cy)));
+    if (aboveWater < 0.4f) { cell.canopy = cell.grass = cell.shrubs = 0; ecology::classify(cell, physical); }
+    return cell;
+}
+
+decor::Scatter WorldSnapshot::scatter(decor::ScatterBounds bounds, const ecology::Delta& delta) const {
     auto query = field();
-    return decor::scatter(map_.seed, bounds,
+    return scatter(bounds, delta, query);
+}
+
+decor::Scatter WorldSnapshot::scatter(decor::ScatterBounds bounds, const ecology::Delta& delta, HeightField& query) const {
+    std::map<ecology::Key, ecology::Cell> cells;
+    auto result = decor::scatter(map_.seed, bounds,
         double(map_.width) * generation::kMetresPerCell, double(map_.height) * generation::kMetresPerCell,
         [&](int px, int py) { return pages_.containsLand({px, py, 4}); },
         [&](double wx, double wy) {
             const core::WorldPos p{core::Fixed::fromDoubleForContent(wx), core::Fixed::fromDoubleForContent(wy)};
-            const auto climate = query.surfaceClimateAt(p);
-            return decor::Site{query.heightAt(p).toDouble(), query.waterLevelAt(p).toDouble(),
-                query.slopeAt(p).toDouble(), climate.woodland.toDouble(), climate.foliage[1].toDouble()};
+            const auto climate = climate_.at(p);
+            auto [cell, fresh] = cells.try_emplace(ecology::key(wx, wy));
+            if (fresh) cell->second = ecologyAt(wx, wy, query, delta);
+            decor::Site site{query.heightAt(p).toDouble(), query.waterLevelAt(p).toDouble(),
+                query.slopeAt(p).toDouble(), climate.woodland.toDouble(), climate.foliage[1].toDouble(),
+                cell->second, true};
+            const auto ground = query.materialsAt(p);
+            site.sand = ground.of(Material::Sand).toDouble();
+            site.rock = ground.of(Material::Rock).toDouble();
+            site.marsh = ground.of(Material::Marsh).toDouble();
+            site.snow = ground.of(Material::Snow).toDouble();
+            site.hasMaterials = true;
+            return site;
         });
+    result.revision = delta.region(double(bounds.minX), double(bounds.minY));
+    std::erase_if(result.objects, [&](const auto& object) {
+        if (!delta.removed.contains(object.id)) return false;
+        --result.populations[object.model];
+        return true;
+    });
+    return result;
 }
 
 core::WorldPos WorldSnapshot::startingPoint() const {
