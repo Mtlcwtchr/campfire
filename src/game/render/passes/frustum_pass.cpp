@@ -21,7 +21,7 @@ engine::PassPlace FrustumPass::setup(engine::Device& device,engine::RenderPipeli
     auto pipeline=device.makePipeline(wanted);
     if (!pipeline) return {};
     pipeline_=into.take(std::move(pipeline));
-    return {engine::passOf(Pass::Frustum),engine::stageOf(Stage::World),
+    return {engine::passOf(Pass::Frustum),engine::stageOf(Stage::Surface),
             static_cast<engine::PassOrder>(Order::Cover)};
 }
 bool FrustumPass::anything(const engine::Frame& frame) const {

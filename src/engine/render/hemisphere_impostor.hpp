@@ -27,11 +27,18 @@ struct HemisphereSelection {
     std::array<double,4> weights{};
     double maxAngle = 0;
 };
+// How far below an object's middle the eye may be and still be served by the
+// horizontal ring. Standing on the ground every tree is seen slightly from
+// below its centre; refusing those views (as this used to) forced every tree
+// in sight back to a full mesh however small it was on screen.
+inline constexpr double kHemisphereBelow = 0.45;   // sin of ~27 degrees
 inline std::optional<HemisphereSelection> selectHemisphere(camera::Vec3 direction, double yaw=0) {
     for (double v:direction) if (!std::isfinite(v)) return {};
     const double lengthSquared=camera::dot(direction,direction);
-    if (!std::isfinite(yaw) || !std::isfinite(lengthSquared) || lengthSquared<1e-12 || direction[2]<0) return {};
+    if (!std::isfinite(yaw) || !std::isfinite(lengthSquared) || lengthSquared<1e-12) return {};
     direction=camera::normalized(direction);
+    if (direction[2]<-kHemisphereBelow) return {};
+    if (direction[2]<0) direction=camera::normalized(camera::Vec3{direction[0],direction[1],0.0});
     const double c=std::cos(yaw),s=std::sin(yaw);
     direction={c*direction[0]+s*direction[1],-s*direction[0]+c*direction[1],direction[2]};
     const double elevation=std::asin(std::clamp(direction[2],0.0,1.0))*180/std::numbers::pi;

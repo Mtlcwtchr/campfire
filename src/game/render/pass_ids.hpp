@@ -32,6 +32,10 @@ enum class Pass : engine::PassId {
 // with depth; the interface will go over it with the depth turned off.
 enum class Stage : engine::StageId {
     World = 0,
+    // Everything drawn OVER the finished opaque world: water first (it reads
+    // a copy of that world - its bed through it, its shores in it), then the
+    // blended cards, weather and interface on top. Same colour and depth.
+    Surface = 1,
 };
 
 // Where a pass sits inside its stage. Ground and grass may be interleaved by the

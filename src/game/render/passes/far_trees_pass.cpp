@@ -78,21 +78,32 @@ bool FarTreesPass::anything(const engine::Frame& frame) const {
 void FarTreesPass::collect(const engine::Frame& frame, engine::DrawQueue& queue) {
     renderer_->replaceVertex(vertexBindings_, pages_->bindings());
     const double start = std::max(200.0, start_);
-    const auto side = std::uint32_t(std::ceil(4.0 * start / kBaseSpacing));
+    // The cells are sized to the distance they start at, not to 40 m wherever
+    // that is: a cell's size on screen is spacing / distance, and that - not
+    // the metres - is what has to stay put. With the spacing pinned, pushing
+    // the placed objects out to 6 km made every ring 600 x 600 cells and the
+    // pass 1.8 million triangles, nearly all of them sea, sky and cull.
+    const double spacing = kBaseSpacing * std::max(1.0, start / kReferenceStart);
+    const auto side = std::uint32_t(std::ceil(4.0 * start / spacing));
+    // Only the rings the draw distance reaches: each doubles the last, and a
+    // ring that starts past the fog is all vertex work and no tree.
+    const double reach = frame.scene.fog[0] > 0 ? double(frame.scene.fog[0]) : start * 32.0;
+    std::uint32_t rings = 1;
+    while (rings < kRings && start * std::exp2(double(rings)) < reach) ++rings;
     engine::DrawItem item;
     item.author = 7;
     item.pipeline = pipeline_;
     item.bindings = bindings_;
     item.vertexBindings = vertexBindings_;
     item.vertexCount = 3;
-    item.instances = side * side * kRings;
+    item.instances = side * side * rings;
     item.hasOwnData = item.ownToVertex = true;
     // The page window and table size as every page draw carries them; the
     // vectors the page helpers do not read carry this pass's numbers.
     const auto parameters = pages_->parameters(pages_->drawing().front());
     std::copy(parameters.begin(), parameters.end(), item.own);
-    item.own[0] = float(start); item.own[1] = float(kBaseSpacing);
-    item.own[2] = float(side); item.own[3] = float(kRings);
+    item.own[0] = float(start); item.own[1] = float(spacing);
+    item.own[2] = float(side); item.own[3] = float(rings);
     item.own[8] = frame.scene.camera[0]; item.own[9] = frame.scene.camera[1];
     item.own[10] = frame.scene.camera[2]; item.own[11] = float(kBand);
     item.own[14] = 3.0f; // ground data level to read: H64, resident far out

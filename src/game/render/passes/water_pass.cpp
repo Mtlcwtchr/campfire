@@ -1,6 +1,9 @@
 #include "game/render/passes/water_pass.hpp"
 
 #include <algorithm>
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -38,16 +41,18 @@ engine::PassPlace WaterPass::setup(engine::Device& device, engine::RenderPipelin
     // depth everything else wrote and does not write its own, or two rivers
     // crossing would each hide the other.
     wanted.depthWrite = false;
-    // The shoreline is where water and bed cross, so along it their depths
-    // are equal to within the precision of the depth buffer and the depth
-    // test flipped between them frame to frame - a flickering waterline.
-    // A slope-scaled offset settles every tie in favour of the water; the
-    // waterline itself is still cut in the pixel stage from the true depth.
-    wanted.depthBiasConstant = -4.0f;
-    wanted.depthBiasSlope = -1.5f;
     engine::GraphicsPipeline graphics = device.makePipeline(wanted);
     if (!graphics) return {};
     if (pages_) {
+        // The open-sea sheet under the paged world: the same vertices as the
+        // old path, the page water's shading, and only where the picture
+        // behind it is sky (WaterSheetPS) - never a second sea over the first.
+        wanted.shaderFile = "water_pages.hlsl";
+        wanted.vertexEntry = "WaterSheetVS";
+        wanted.fragmentEntry = "WaterSheetPS";
+        auto sheetGraphics = device.makePipeline(wanted);
+        if (!sheetGraphics) return {};
+        sheetPipeline_ = into.take(std::move(sheetGraphics));
         wanted.shaderFile = "water_pages.hlsl";
         wanted.vertexEntry = "AdaptiveWaterVS";
         wanted.fragmentEntry = "WaterPagePS";
@@ -72,6 +77,15 @@ engine::PassPlace WaterPass::setup(engine::Device& device, engine::RenderPipelin
     sampler.max_lod = 4.0f;
     sampler_ = device.makeSampler(sampler);
     if (!sampler_) return {};
+    // The copy of the world behind the water (refraction) and around it
+    // (reflection): read pixel for pixel, never tiled, never mipped.
+    SDL_GPUSamplerCreateInfo scene{};
+    scene.min_filter = scene.mag_filter = SDL_GPU_FILTER_LINEAR;
+    scene.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
+    scene.address_mode_u = scene.address_mode_v = scene.address_mode_w =
+            SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+    sceneSampler_ = device.makeSampler(scene);
+    if (!sceneSampler_) return {};
 
     // Ripple, swell, moving foam, PHX residue - in shader layer order.
     // Residue is baked separately by tools/bake_foam_residue.py.
@@ -93,6 +107,8 @@ engine::PassPlace WaterPass::setup(engine::Device& device, engine::RenderPipelin
         auto detail = bindings;
         const auto fields = pages_->bindings();
         detail.insert(detail.end(), fields.begin() + 3, fields.end());
+        // Slot 10, sceneGrab: replaced every frame with the frame's copy.
+        detail.push_back({surface_.get(), sceneSampler_.get()});
         pageFragmentBindings_ = into.take(std::move(detail));
     }
 
@@ -104,7 +120,7 @@ engine::PassPlace WaterPass::setup(engine::Device& device, engine::RenderPipelin
     } else if (climate_.ensure(device, climateField_))
         vertexBindings_ = into.takeVertex(climate_.bindings());
     bindings_ = into.take(std::move(bindings));
-    return {engine::passOf(Pass::Water), engine::stageOf(Stage::World),
+    return {engine::passOf(Pass::Water), engine::stageOf(Stage::Surface),
             static_cast<engine::PassOrder>(Order::Blended)};
 }
 
@@ -117,14 +133,38 @@ bool WaterPass::anything(const engine::Frame& frame) const {
                        });
 }
 
+std::array<double, 2> WaterPass::sheetCentre(const engine::Frame& frame) {
+    const float* m = frame.scene.viewProjection;
+    const float* eye = frame.scene.camera;
+    double x = eye[0], y = eye[1];
+    // The w row of a perspective projection is the view axis: follow it down
+    // to sea level (at most a few hundred metres out, where the detail that
+    // needs the dense grid can still be seen).
+    const double fx = m[12], fy = m[13], fz = m[14];
+    const double length = std::sqrt(fx * fx + fy * fy + fz * fz);
+    if (length > 0) {
+        const double dx = fx / length, dy = fy / length, dz = fz / length;
+        double t = dz < -0.02 ? double(eye[2]) / -dz : 300.0;
+        t = std::clamp(t, 0.0, 300.0);
+        x += dx * t;
+        y += dy * t;
+    }
+    constexpr double kSnap = 0.5;
+    return {std::floor(x / kSnap) * kSnap, std::floor(y / kSnap) * kSnap};
+}
+
 void WaterPass::collect(const engine::Frame& frame, engine::DrawQueue& queue) {
     (void)frame;
     if (pages_) {
         auto current = pages_->bindings();
         if (current.empty()) return;
         renderer_->replaceVertex(pageBindings_, current);
+        // The world as it stood before the water: without it the water
+        // cannot see its bed or its shores, and is not drawn at all.
+        if (!frame.grab) return;
         std::vector<SDL_GPUTextureSamplerBinding> detail{{surface_.get(), sampler_.get()}};
         detail.insert(detail.end(), current.begin() + 3, current.end());
+        detail.push_back({frame.grab, sceneSampler_.get()});
         renderer_->replace(pageFragmentBindings_, std::move(detail));
         current.resize(3);
         renderer_->replaceVertex(vertexBindings_, std::move(current));
@@ -133,8 +173,28 @@ void WaterPass::collect(const engine::Frame& frame, engine::DrawQueue& queue) {
         // The squares that carry water, listed by the terrain gather rather
         // than found by re-testing every square in the cut.
         const auto& terrain = pages_->gathered();
+        if (std::getenv("ASR_WATER_DEBUG") && frame.index % 120 == 0) {
+            std::size_t under = 0, levels[16]{};
+            float lowest = 1e9f, highest = -1e9f;
+            for (const auto index : terrain.water) {
+                const auto& patch = terrain.patches[index];
+                under += patch.highZ < -0.5f;
+                lowest = std::min(lowest, patch.highZ); highest = std::max(highest, patch.highZ);
+                ++levels[std::min<std::uint32_t>(patch.level, 15)];
+            }
+            std::fprintf(stderr, "water-debug patches=%zu water=%zu submerged=%zu highZ=[%.1f, %.1f] by-level",
+                         terrain.patches.size(), terrain.water.size(), under, lowest, highest);
+            for (int l = 0; l < 16; ++l) if (levels[l]) std::fprintf(stderr, " %d:%zu", l, levels[l]);
+            std::fprintf(stderr, "\n");
+        }
         for (const auto index : terrain.water) {
+            // A square wholly under the sea has nothing left for page water
+            // to draw: the sea over it is the sheet's, and page water keeps
+            // only rivers, lakes and the swash above the waterline.
             const auto& drawn = pages_->drawn(terrain.patches[index].source);
+            if (drawn.highBed < -0.5f && !drawn.inland) continue;
+            // No triangle with water over it: an empty draw is still a draw.
+            if (drawn.waterIndices == 0) continue;
             engine::DrawItem item;
         item.author = 3;
             item.pipeline = pagePipeline_;
@@ -160,6 +220,31 @@ void WaterPass::collect(const engine::Frame& frame, engine::DrawQueue& queue) {
             (!sharedGrid && !mesh->indices)) continue;
         engine::DrawItem item;
         item.author = 3;
+        if (pages_) {
+            // The one sea (water_pages.hlsl: WaterSheetPS). Its vertex stage
+            // reads nothing of its own; its pixels read the page atlas.
+            item.pipeline = sheetPipeline_;
+            item.bindings = pageFragmentBindings_;
+            item.vertex[0] = mesh->vertices.get();
+            item.vertexStreams = 1;
+            item.index = sharedGrid ? gridIndices_.get() : mesh->indices.get();
+            item.indexSize = sharedGrid ? SDL_GPU_INDEXELEMENTSIZE_16BIT
+                                        : SDL_GPU_INDEXELEMENTSIZE_32BIT;
+            item.indexCount = sharedGrid ? gridIndexCount_ : mesh->indexCount;
+            item.vertexBindings = pageBindings_;
+            item.hasOwnData = true;
+            item.ownToVertex = true;
+            const auto sheet = pages_->sheetParameters();
+            std::copy(sheet.begin(), sheet.end(), item.own);
+            // Where the grid is dense: the point the view looks at on the sea,
+            // snapped to the finest vertex spacing so the waves do not swim
+            // under a grid that slides by fractions of a vertex.
+            const auto centre = sheetCentre(frame);
+            item.own[4] = float(centre[0]);
+            item.own[5] = float(centre[1]);
+            queue.push(item);
+            continue;
+        }
         item.pipeline = pipeline_;
         item.bindings = bindings_;
         item.vertexBindings = vertexBindings_;

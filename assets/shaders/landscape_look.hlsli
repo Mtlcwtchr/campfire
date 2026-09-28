@@ -180,6 +180,28 @@ float3 landscapeClouded(float3 colour, float3 worldPosition)
     return colour * cloud.a + cloud.rgb * (lookPS.w > 0.5 ? lookPS.z : 1.0);
 }
 
+// The view distance of an opaque surface, written into the colour target's
+// alpha (nothing blends the opaque world, so the channel is free). Water reads
+// it from the copy taken before it is drawn: it is the depth its screen-space
+// reflections march against and what keeps refraction from pulling in things
+// in front of the water. Log-encoded, 0.5 m to 60 km in 8 bits: every step is
+// about 4.7 % of the distance, which is the tolerance a reflection hit needs.
+// The sky writes 1: as far as anything can be. An orthographic view has no eye
+// distance to write, so its surfaces write 0 - "something opaque is here" is
+// still what the open-sea sheet needs to know.
+static const float kSceneDepthNear = 0.5;
+static const float kSceneDepthLog = 16.87;   // log2(60000 / 0.5)
+float sceneDepthAlpha(float3 worldPosition)
+{
+    if (!landscapePerspective()) return 0.0;
+    const float d = length(worldPosition - cameraPS.xyz);
+    return saturate(log2(max(d, kSceneDepthNear) / kSceneDepthNear) / kSceneDepthLog);
+}
+float sceneDepthFromAlpha(float a)
+{
+    return kSceneDepthNear * exp2(a * kSceneDepthLog);
+}
+
 float3 landscapeFinish(float3 colour, float3 worldPosition)
 {
     colour = max(colour, 0.0) * (lookPS.w > 0.5 ? lookPS.z : 1.0);

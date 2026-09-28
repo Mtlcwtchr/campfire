@@ -96,7 +96,7 @@ engine::PassPlace MenuPass::setup(engine::Device& device, engine::RenderPipeline
             {progressPicture_.get(), sampler_.get()}});
     }
 #endif
-    return {engine::passOf(Pass::Menu), engine::stageOf(Stage::World),
+    return {engine::passOf(Pass::Menu), engine::stageOf(Stage::Surface),
             static_cast<engine::PassOrder>(Order::Interface)};
 }
 

@@ -19,8 +19,12 @@ void hemisphereBand(float ring,float turn,out float2 views,out float2 weights) {
 }
 bool hemisphereSelection(float3 direction,out float4 views,out float4 weights) {
     views=0;weights=0;
-    if (dot(direction,direction)<1e-12 || direction.z<0) return false;
+    if (dot(direction,direction)<1e-12) return false;
     direction=normalize(direction);
+    // Slightly from below (an eye on the ground, the middle of a tree above
+    // it) is the horizontal ring: see kHemisphereBelow in the C++ twin.
+    if (direction.z<-0.45) return false;
+    if (direction.z<0) direction=normalize(float3(direction.xy,0));
     if (dot(direction.xy,direction.xy)<1e-12) {
         views=20;weights=float4(1,0,0,0);return true;
     }

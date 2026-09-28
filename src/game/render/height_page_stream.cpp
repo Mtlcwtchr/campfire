@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 
 namespace game {
 
@@ -40,6 +42,7 @@ PackedHeightPage packHeightPage(std::shared_ptr<const world::streaming::BakedPag
         if (water && !ocean && !lake) {
             const auto bankHead = head;
             int nearest = 3;
+            std::size_t lakeNeighbour = i;
             const int x=int(i%side),y=int(i/side);
             for (int dy=-1;dy<=1;++dy) for (int dx=-1;dx<=1;++dx) {
                 const int nx=x+dx,ny=y+dy,distance=dx*dx+dy*dy;
@@ -48,6 +51,30 @@ PackedHeightPage packHeightPage(std::shared_ptr<const world::streaming::BakedPag
                 if (p.water.waterBodyId[n]<=world::streaming::kOceanWaterBodyId) continue;
                 if (bankHead!=sea && bankHead!=p.water.surfaceQuantized[n]) continue;
                 lake=true;nearest=distance;head=p.water.surfaceQuantized[n];
+                lakeNeighbour=n;
+            }
+            // The lake's level lent to a dry bank is for filtering only: it
+            // must never stand above the bank's own ground. Where the ground
+            // outside a lake falls away below the lake (the far side of its
+            // rim, an outlet slope) the borrowed level made water there - a
+            // lake hanging in the air over the valley beside it.
+            if (head != bankHead) {
+                const double bed = low + p.base.heightQuantized[i] * range / 65535.0 +
+                    ((i < p.large.deltaQuantized.size() ? p.large.deltaQuantized[i] : 0) +
+                     (i < p.medium.deltaQuantized.size() ? p.medium.deltaQuantized[i] : 0)) * 0.01;
+                const double level = low + head * range / 65535.0;
+                if (level > bed && range > 0) {
+                    if (std::getenv("ASR_WATER_DEBUG") && level - bed > 0.5)
+                        std::fprintf(stderr, "lake-bank page=%d,%d level=%.2f bank=%.2f (%.2f m under) lake-cell-bed=%.2f\n",
+                                     p.base.key.x, p.base.key.y, level, bed, level - bed,
+                                     low + p.base.heightQuantized[lakeNeighbour] * range / 65535.0),
+                        std::fprintf(stderr, "    bank-base=%.2f bank-deltas=%.2f\n",
+                                     low + p.base.heightQuantized[i] * range / 65535.0,
+                                     ((i < p.large.deltaQuantized.size() ? p.large.deltaQuantized[i] : 0) +
+                                      (i < p.medium.deltaQuantized.size() ? p.medium.deltaQuantized[i] : 0)) * 0.01);
+                    head = static_cast<std::uint16_t>(std::clamp(
+                        std::floor((bed - low) / range * 65535.0), 0.0, 65535.0));
+                }
             }
         }
         out.fields[0][i * 4 + 2] = head;

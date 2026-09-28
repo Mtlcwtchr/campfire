@@ -161,6 +161,14 @@ bool GpuTerrain::accept(engine::Device& device, std::shared_ptr<const Plan> plan
         if (meshes_.contains(block.mesh.get())) continue;
         MeshBuffers buffers;
         buffers.source = block.mesh;
+        buffers.highBed = -1e9f;
+        const auto& bed = block.mesh->bed;
+        const auto& head = block.mesh->head;
+        for (std::size_t v = 0; v < bed.size(); ++v) {
+            buffers.highBed = std::max(buffers.highBed, bed[v]);
+            if (v < head.size() && head[v] > bed[v] + 0.05f && head[v] > 0.25f) buffers.inland = true;
+        }
+        if (bed.empty()) { buffers.highBed = 1e9f; buffers.inland = true; }
         buffers.vertices = upload.add(SDL_GPU_BUFFERUSAGE_VERTEX,block.mesh->vertices.data(),
             block.mesh->vertices.size()*sizeof(world::terrain::AdaptiveVertex));
         buffers.indices = upload.add(SDL_GPU_BUFFERUSAGE_INDEX,block.mesh->indices.data(),
@@ -612,6 +620,8 @@ void GpuTerrain::gather(const engine::Frame& frame) {
         into.vertices = it->second.vertices.get();
         into.indices = it->second.indices.get();
         into.waterIndices = block.mesh->wetIndices;
+        into.highBed = it->second.highBed;
+        into.inland = it->second.inland;
         into.mesh = block.mesh.get();
         into.parameters = parameters(block);
         engine::render::TerrainPatch patch;

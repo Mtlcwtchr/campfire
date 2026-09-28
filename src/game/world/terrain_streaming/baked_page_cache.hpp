@@ -11,7 +11,7 @@ namespace world::streaming {
 // Bump the format for layout changes, the generation version for changes to
 // HeightField, GraphCarver, material/travel rules or parent refinement semantics.
 inline constexpr std::uint32_t kBakedPageCacheVersion = 1;
-inline constexpr std::uint32_t kBakedPageGenerationVersion = 10; // dry-bank hydraulic heads and 1-based reach coverage
+inline constexpr std::uint32_t kBakedPageGenerationVersion = 11; // natural-basin shores filled to the lake level
 
 class BakedPageCache {
 public:

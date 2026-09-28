@@ -162,7 +162,9 @@ std::string SceneModelsPass::report() const {
         }()},
         {"gpu_cluster_selection",gpuReady_},
         {"gpu_cluster_buckets",gpuClusterBuckets_},
-        {"mesh_triangles",meshTriangles_},{"mesh_triangle_budget",world::decor::kMeshTriangleBudget},
+        {"mesh_triangles",meshTriangles_},{"mesh_triangle_budget",vegetationTriangleBudget_},
+        {"vegetation_mesh_pixels",vegetationMeshPixels_},{"vegetation_mesh_floor_px",vegetationMeshFloor_},
+        {"vegetation_budget_used",vegetationBudgetUsed_},
         {"populations",scatter_.populations},{"candidate_spacing_m",world::decor::kCell},
         {"shared_geometry_bytes",geometryBytes_},{"instance_upload_bytes",(meshes_+cards_)*sizeof(Instance)},
         {"sampled_sites",scatter_.sampled},{"water_tiles_skipped",scatter_.waterTilesSkipped},
@@ -1452,23 +1454,34 @@ void SceneModelsPass::collect(const engine::Frame& frame,engine::DrawQueue& queu
     // the old metres line still admitted every tree within it as a mesh;
     // now only as many as the budget holds are, and the rest are impostors
     // however near. Worked out once per frame over the whole selection.
+    //
+    // Charged what each tree will ACTUALLY cost: for a clustered model that is
+    // its own source cut at its own size on screen, which near the camera is
+    // many times the coarse chain level the budget used to be charged. Charged
+    // the chain, a dense wood always "fitted", so the budget never bit.
     vegetationMeshFloor_=0;
-    if (viewReady_ && vegetationMeshPixels_>0) {
+    vegetationBudgetUsed_=0;
+    if (vegetationMeshPixels_>0) {
         vegetationDemand_.clear();
         for (const auto& batch:selected.batches) {
             const auto& model=models_[batch.mesh];
             if (!model.vegetation) continue;
             const auto level=std::min<std::size_t>(batch.level,model.levels.size()-1);
-            const std::size_t chain=model.levels[level].count/3 +
-                (level<model.cardLevels.size()?model.cardLevels[level].count/3:0);
+            const std::size_t cards=level<model.cardLevels.size()?model.cardLevels[level].count/3:0;
+            const std::size_t chain=model.levels[level].count/3+cards;
             for (std::uint32_t i=0;i<batch.count;++i) {
                 const auto at=batch.first+i;
                 if (!keep[at] || hierarchyReplaced[at] || pixels[at]<vegetationMeshPixels_) continue;
-                vegetationDemand_.push_back({pixels[at],chain});
+                std::size_t cost=chain;
+                if (model.clusterReady && pixels[at]>0)
+                    cost=sourceTriangles(batch.mesh,screen.allowance*model.extent()/pixels[at])+cards;
+                vegetationDemand_.push_back({pixels[at],std::max<std::size_t>(cost,1)});
             }
         }
         vegetationMeshFloor_=std::max(vegetationMeshPixels_,
             world::decor::meshPixelThreshold(vegetationDemand_,vegetationTriangleBudget_));
+        for (const auto& demand:vegetationDemand_)
+            if (demand.pixels>=vegetationMeshFloor_) vegetationBudgetUsed_+=demand.triangles;
     }
     for (const auto& batch:selected.batches) {
         const auto& model=models_[batch.mesh];
@@ -1580,8 +1593,12 @@ void SceneModelsPass::collect(const engine::Frame& frame,engine::DrawQueue& queu
             const auto at=batch.first+i;
             if (!keep[at] || hierarchyReplaced[at]) continue;
             const auto& source=selected.instances[at];
-            auto lod=world::decor::objectLod(pixels[at],0,meshStartPixels_);
+            auto lod=world::decor::objectLod(pixels[at],0,
+                model.vegetation && vegetationMeshFloor_>0 ? vegetationMeshFloor_ : meshStartPixels_);
             if (viewReady_) lod.mesh=meshWeights[at];
+            // Only an eye far below the tree (see kHemisphereBelow) has no
+            // hemisphere view; a model without the 8 side views then stays a
+            // mesh. Everything seen from the ground now has one.
             if (model.hemisphereImpostor>=0 && viewReady_ && !hemisphereAllowed[at]) lod.mesh=1;
             lod.coverage*=detail[at]*hierarchyNearCoverage[at];
             // Hand-over to the GPU far trees: placed vegetation dissolves over
@@ -2004,7 +2021,16 @@ void SceneModelsPass::collect(const engine::Frame& frame,engine::DrawQueue& queu
                   << " source-draws=" << sourcePlan.plan.draws.size()
                   << " source-tri=" << sourcePlan.plan.triangles
                   << " regular-draws=" << regularPlan.draws.size()
-                  << " regular-tri=" << regularPlan.triangles << '\n';
+                  << " regular-tri=" << regularPlan.triangles
+                  << " veg-mesh-floor-px=" << vegetationMeshFloor_
+                  << " veg-budget=" << vegetationBudgetUsed_ << '/' << vegetationTriangleBudget_ << '\n';
+        // Which models are being drawn as meshes, and whether each counts as
+        // vegetation (the screen-size line and the budget only govern those).
+        std::cerr << "scene-meshes";
+        for (const auto& batch:sourceInstances.batches)
+            std::cerr << ' ' << (batch.mesh<world::decor::kModels.size()?world::decor::kModels[batch.mesh]:"?")
+                      << (models_[batch.mesh].vegetation?"(veg)":"") << 'x' << batch.count;
+        std::cerr << '\n';
         std::cerr << "scene-time frame=" << frame.step*1000 << "ms"
                   << " objects=" << (densityCullMs_+densitySelectMs_+densityHierarchyMs_+
                                      collectHorizonMs_+collectCullMs_+collectSelectMs_+

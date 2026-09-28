@@ -143,6 +143,10 @@ decor::Scatter WorldSnapshot::scatter(decor::ScatterBounds bounds, const ecology
             site.snow = ground.of(Material::Snow).toDouble();
             site.hasMaterials = true;
             return site;
+        },
+        [&](double wx, double wy) {
+            return query.underWater({core::Fixed::fromDoubleForContent(wx),
+                                     core::Fixed::fromDoubleForContent(wy)});
         });
     result.revision = delta.region(double(bounds.minX), double(bounds.minY));
     std::erase_if(result.objects, [&](const auto& object) {

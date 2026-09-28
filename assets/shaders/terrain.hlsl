@@ -819,5 +819,5 @@ float4 terrainSurface(TerrainOut input)
         const float3 layer = saturate(map.rgb * lerp(0.68, 1.12, saturate(ground)));
         finished = lerp(finished, layer, map.a);
     }
-    return float4(finished, 1.0);
+    return float4(finished, sceneDepthAlpha(float3(input.worldXY, input.worldHeight)));
 }

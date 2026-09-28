@@ -254,3 +254,69 @@ TEST(natural_basin_local_index_preserves_legacy_lake_shore_support) {
     }
 }
 
+namespace {
+// The basin world with a shore standing only five metres over the lake, and
+// a detail layer cutting thirty metres into all of it - the gullies every real
+// hillside has, and deeper than the shore stands.
+struct GulliedShore : BasinWorld {
+    GulliedShore() {
+        for (auto& h : foundation->heightDm[static_cast<std::size_t>(generation::TerrainStage::Slopes)])
+            if (h == 900) h = 500;
+    }
+    CarvedSample at(const GraphCarver& carver, int x, int y) const {
+        const core::WorldPos p{Fixed::fromInt(x), Fixed::fromInt(y)};
+        return carver.carve(p, foundation->sample(p.x, p.y, generation::TerrainStage::Slopes),
+                            Fixed::fromInt(-30));
+    }
+};
+} // namespace
+
+TEST(natural_basin_water_never_ends_over_lower_ground) {
+    // A lake's water ends where the ground comes up through its level, and
+    // nowhere else. It used to end on the edge of the flooded lattice as well,
+    // over whatever the gullies had cut there: a wall of water standing thirty
+    // metres over the hillside, which is a lake hanging in the air.
+    GulliedShore world;
+    const auto graph = buildHydrologyGraph(world.map);
+    const auto& lake = graph.waterBodies.at(1);
+    CHECK_EQ(lake.level, Fixed::fromInt(45));
+    const GraphCarver carver(graph, {position(32, 32), position(54, 46)}, 0);
+    std::size_t shore = 0;
+    for (int y = 34 * 64; y <= 44 * 64; y += 4)
+        for (int x = 32 * 64; x < 54 * 64; x += 4) {
+            const auto here = world.at(carver, x, y);
+            for (const auto& there : {world.at(carver, x + 4, y), world.at(carver, x, y + 4)}) {
+                if (here.wet == there.wet) continue;
+                const auto& wet = here.wet ? here : there;
+                const auto& dry = here.wet ? there : here;
+                ++shore;
+                CHECK_EQ(wet.body, lake.id);
+                CHECK(dry.floor >= wet.surface - Fixed::ratio(1, 2));
+            }
+        }
+    CHECK(shore > 0);
+    // And the gullies are still there, inside the lake and out on the hill.
+    CHECK(world.at(carver, 40 * 64, 38 * 64).floor < Fixed::fromInt(0));
+    CHECK(world.at(carver, 40 * 64, 45 * 64 + 32).floor < Fixed::fromInt(25));
+}
+
+TEST(natural_basin_shore_fill_agrees_across_page_windows) {
+    GulliedShore world;
+    const auto graph = buildHydrologyGraph(world.map);
+    const GraphCarver whole(graph, {position(32, 32), position(56, 48)}, 0);
+    const GraphCarver left(graph, {{Fixed::fromInt(2560), Fixed::fromInt(2048)},
+                                  {Fixed::fromInt(3072), Fixed::fromInt(2560)}}, 8);
+    const GraphCarver right(graph, {{Fixed::fromInt(3072), Fixed::fromInt(2048)},
+                                   {Fixed::fromInt(3584), Fixed::fromInt(2560)}}, 8);
+    for (int y = 34 * 64; y <= 43 * 64; y += 4)
+        for (int dx = -8; dx <= 8; dx += 4) {
+            const auto expected = world.at(whole, 3072 + dx, y);
+            for (const auto* window : {&left, &right}) {
+                const auto actual = world.at(*window, 3072 + dx, y);
+                CHECK_EQ(actual.floor, expected.floor);
+                CHECK_EQ(actual.surface, expected.surface);
+                CHECK_EQ(actual.wet, expected.wet);
+                CHECK_EQ(actual.body, expected.body);
+            }
+        }
+}

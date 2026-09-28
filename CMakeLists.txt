@@ -229,6 +229,11 @@ target_link_libraries(terrain_resolution_probe PRIVATE asr_world nlohmann_json a
 add_executable(terrain_subdivision_probe tools/terrain_subdivision_probe.cpp)
 target_link_libraries(terrain_subdivision_probe PRIVATE asr_world nlohmann_json asr_warnings)
 
+# lake_edge_probe - counts lake water that ends over lower ground (a lake
+# hanging in the air) in the baked pages of every lake the graph holds.
+add_executable(lake_edge_probe tools/lake_edge_probe.cpp)
+target_link_libraries(lake_edge_probe PRIVATE asr_world asr_warnings)
+
 add_executable(terrain_feature_probe tools/terrain_feature_probe.cpp)
 target_link_libraries(terrain_feature_probe PRIVATE asr_world nlohmann_json asr_warnings)
 

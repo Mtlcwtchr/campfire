@@ -82,7 +82,6 @@ GraphCarver::GraphCarver(const HydrologyGraph& graph, core::WorldRect area,
     // Standing water over its source lattice: connected Slopes nodes when
     // available, otherwise legacy macro-cell centres. The page index includes
     // interpolation support, so only locally relevant bodies need copying.
-    // One cell of margin either side serves the four-corner lookup.
     cellMetres_ = Fixed::fromInt(graph.macroCellMetres > 0 ? graph.macroCellMetres : 1);
     for (const auto id : wantedBodies) {
         const auto* body = waterBodyOf(graph, id);
@@ -91,11 +90,31 @@ GraphCarver::GraphCarver(const HydrologyGraph& graph, core::WorldRect area,
         naturalBasins_ = true;
         break;
     }
+    // A natural basin's dilated edge is read two nodes past the window (see
+    // shoreAt), and the index only promises one: a body standing just beyond
+    // it still decides where the ground inside has to hold its water.
+    if (naturalBasins_) {
+        const Fixed beyond = cellMetres_ * Fixed::fromInt(2);
+        const auto from = tileAt({grown.min.x - beyond, grown.min.y - beyond});
+        const auto to = tileAt({grown.max.x + beyond, grown.max.y + beyond});
+        for (std::int32_t y = from.y; y <= to.y; ++y)
+            for (std::int32_t x = from.x; x <= to.x; ++x) {
+                if (x >= first.x && x <= last.x && y >= first.y && y <= last.y) continue;
+                const auto* page = findHydrologySpatialPage(graph, {x, y, 0});
+                if (page == nullptr) continue;
+                wantedBodies.insert(wantedBodies.end(), page->waterBodies.begin(), page->waterBodies.end());
+            }
+        std::sort(wantedBodies.begin(), wantedBodies.end());
+        wantedBodies.erase(std::unique(wantedBodies.begin(), wantedBodies.end()), wantedBodies.end());
+    }
     const std::int64_t metres = cellMetres_.toInt();
-    firstCellX_ = floorDiv(grown.min.x.toInt(), metres) - 1;
-    firstCellY_ = floorDiv(grown.min.y.toInt(), metres) - 1;
-    cellsWide_ = floorDiv(grown.max.x.toInt(), metres) + 2 - firstCellX_;
-    cellsHigh_ = floorDiv(grown.max.y.toInt(), metres) + 2 - firstCellY_;
+    // Two cells of margin either side: one for the four-corner lookup, and one
+    // more so that whether a corner is on a footprint's dilated edge (see
+    // shoreAt) is decided from the same neighbours in every window.
+    firstCellX_ = floorDiv(grown.min.x.toInt(), metres) - 2;
+    firstCellY_ = floorDiv(grown.min.y.toInt(), metres) - 2;
+    cellsWide_ = floorDiv(grown.max.x.toInt(), metres) + 3 - firstCellX_;
+    cellsHigh_ = floorDiv(grown.max.y.toInt(), metres) + 3 - firstCellY_;
     if (cellsWide_ > 0 && cellsHigh_ > 0 &&
         cellsWide_ * cellsHigh_ < 1024 * 1024) {
         basins_.assign(static_cast<std::size_t>(cellsWide_ * cellsHigh_), Basin{});
@@ -117,6 +136,35 @@ GraphCarver::GraphCarver(const HydrologyGraph& graph, core::WorldRect area,
                 basin.floor = naturalBasins_ ? core::kZero :
                         body.macroCellFloor[static_cast<std::size_t>(it - samples.begin())];
             }
+        }
+        // The footprint's own edge, one node out. Its nodes are the first dry
+        // ones on the lattice the basin was flooded over, so the water has to
+        // have ended by the time it reaches them - see carve.
+        if (naturalBasins_) {
+            for (Basin& basin : basins_)
+                if (basin.id != kInvalidWaterBodyId) {
+                    basin.shore = basin.id;
+                    basin.shoreLevel = basin.level;
+                }
+            for (std::int64_t y = 0; y < cellsHigh_; ++y)
+                for (std::int64_t x = 0; x < cellsWide_; ++x) {
+                    const Basin& source = basins_[static_cast<std::size_t>(y * cellsWide_ + x)];
+                    if (source.id == kInvalidWaterBodyId) continue;
+                    for (std::int64_t dy = -1; dy <= 1; ++dy)
+                        for (std::int64_t dx = -1; dx <= 1; ++dx) {
+                            const std::int64_t nx = x + dx, ny = y + dy;
+                            if (nx < 0 || ny < 0 || nx >= cellsWide_ || ny >= cellsHigh_) continue;
+                            Basin& edge = basins_[static_cast<std::size_t>(ny * cellsWide_ + nx)];
+                            if (edge.id != kInvalidWaterBodyId) continue;   // a body's own node is its own
+                            // Two bodies beside one node: the higher head, so
+                            // neither of them can end on it with water in hand.
+                            if (edge.shore == kInvalidWaterBodyId || source.level > edge.shoreLevel ||
+                                (source.level == edge.shoreLevel && source.id < edge.shore)) {
+                                edge.shore = source.id;
+                                edge.shoreLevel = source.level;
+                            }
+                        }
+                }
         }
     } else {
         cellsWide_ = cellsHigh_ = 0;
@@ -210,6 +258,30 @@ Fixed GraphCarver::coverAt(WorldPos at, WaterBodyId& body, Fixed& level, Fixed& 
     // towards nothing by the ones that are not.
     if (cover.raw > 0) floor = floor / cover;
     return cover;
+}
+
+Fixed GraphCarver::shoreAt(WorldPos at, Fixed& level) const {
+    level = core::kZero;
+    if (cellsWide_ == 0 || !naturalBasins_) return core::kZero;
+    const Fixed gx = at.x / cellMetres_;
+    const Fixed gy = at.y / cellMetres_;
+    const std::int64_t cx = gx.toInt(), cy = gy.toInt();
+    const Fixed tx = gx - Fixed::fromInt(cx), ty = gy - Fixed::fromInt(cy);
+    Fixed shore = core::kZero;
+    Fixed strongest = core::kZero;
+    for (int dy = 0; dy <= 1; ++dy)
+        for (int dx = 0; dx <= 1; ++dx) {
+            const Basin* basin = basinAt(cx + dx, cy + dy);
+            if (basin == nullptr || basin->shore == kInvalidWaterBodyId) continue;
+            const Fixed weight = (dx == 0 ? core::kOne - tx : tx) *
+                                 (dy == 0 ? core::kOne - ty : ty);
+            shore += weight;
+            if (weight.raw > strongest.raw) {
+                strongest = weight;
+                level = basin->shoreLevel;
+            }
+        }
+    return shore;
 }
 
 CarvedSample GraphCarver::carve(WorldPos at, Fixed country, Fixed detail) const {
@@ -358,6 +430,59 @@ CarvedSample GraphCarver::carve(WorldPos at, Fixed country, Fixed detail) const 
     const Fixed damped = ground + detail * keep;
     out.floor = damped;
 
+    // No valley is cut below the lake it runs into.
+    //
+    // A natural basin is flooded over the Slopes lattice, and the lattice's
+    // own edge is where it stops: the first dry node round it stands at or
+    // above the level, and the smooth country between those nodes does too.
+    // Nothing cut into that country afterwards knows it. The detail layer's
+    // gullies go tens of metres into the ground, and the flank of a valley
+    // passing below the lake is drawn down towards its river; either one put
+    // the shore under the level, so the water ran on over it and ended where
+    // the footprint did - on a lattice line, standing over ground fifty metres
+    // below it. Measured over every lake on three seeds, four samples of a
+    // lake's shoreline in five were such a wall, and every one of them was on
+    // the edge of the footprint. That is a lake hanging in the air.
+    //
+    // A lake is the base level of the ground draining into it, and nothing
+    // is cut below its base level: towards the edge of the footprint the cut
+    // is filled back up to the level, wholly on the edge itself, where the
+    // water then ends against ground rather than against nothing. What is
+    // filled is the cut and not the country, so where the country itself falls
+    // away beyond a rim there is no wall of the lake's own making.
+    //
+    // With one exception, and it is on the edge itself. The basin is flooded
+    // four ways, and the country between two diagonal nodes is not: where the
+    // first dry node off a corner of the footprint stands below the level the
+    // smooth ground between them does too, and the water leaks out across the
+    // corner to end on the lattice line all the same. There - within a quarter
+    // of a cell of the edge, and nowhere else - the ground is brought up to the
+    // level even where the country is not, which is the least bank that can
+    // hold the water in.
+    //
+    // Inside, the fill starts halfway from the last flooded node, so a lake
+    // keeps the inlets the gullies give its shore and they shoal out before the
+    // edge; beyond, it fades over one more cell, so the cuts come back into the
+    // hillside instead of stopping at a line. Worked out here and applied once
+    // the reaches have had their say, because it is their valleys too.
+    Fixed shoreFill = core::kZero, shoreBound = core::kZero;
+    if (naturalBasins_) {
+        Fixed shoreLevel;
+        const Fixed shore = shoreAt(at, shoreLevel);
+        if (shore.raw > 0) {
+            const bool inside = basinBody != kInvalidWaterBodyId;
+            shoreFill = inside ? (cover < Fixed::ratio(1, 2)
+                                          ? ease(core::kOne - cover * Fixed::fromInt(2))
+                                          : core::kZero)
+                               : ease(shore);
+            const Fixed level = inside ? basinLevel : shoreLevel;
+            const Fixed edge = inside ? ease(core::kOne - cover * Fixed::fromInt(4))
+                                      : ease((shore - Fixed::ratio(3, 4)) * Fixed::fromInt(4));
+            const Fixed low = core::min(ground, level);
+            shoreBound = low + (level - low) * edge;
+        }
+    }
+
     Fixed nearest = Fixed::fromInt(1 << 20);
     Fixed highest = core::kZero;
     bool anyWater = false;
@@ -434,6 +559,18 @@ CarvedSample GraphCarver::carve(WorldPos at, Fixed country, Fixed detail) const 
             highest = hit.surface;
             anyWater = true;
         }
+    }
+
+    // The shore of a natural basin, filled back to the level (see above). A
+    // channel through it is left open, as the rim below leaves an inlet open:
+    // filled over, an inflow is dammed short of the lake and an outflow never
+    // leaves it.
+    if (shoreFill.raw > 0 && out.floor < shoreBound) {
+        const Fixed open =
+                out.reach != kInvalidRiverId
+                        ? ease(out.bankDistance / Fixed::fromInt(2 * kSampleMetres))
+                        : core::kOne;
+        out.floor = core::lerp(out.floor, shoreBound, shoreFill * open);
     }
 
     // A lake is contained by its rim, and the rim is the only ground a body

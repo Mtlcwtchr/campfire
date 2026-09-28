@@ -16,7 +16,7 @@ engine::PassPlace WeatherPass::setup(engine::Device& device,engine::RenderPipeli
     auto graphics=device.makePipeline(wanted);
     if (!graphics) return {};
     pipeline_=into.take(std::move(graphics));
-    return {engine::passOf(Pass::Weather),engine::stageOf(Stage::World),
+    return {engine::passOf(Pass::Weather),engine::stageOf(Stage::Surface),
             static_cast<engine::PassOrder>(240)};
 }
 bool WeatherPass::anything(const engine::Frame& frame) const {

@@ -116,6 +116,10 @@ struct Frame {
     // Where the multisampled colour is folded to one sample a pixel at the end
     // of a stage. Null when there is no multisampling.
     SDL_GPUTexture* resolve = nullptr;
+    // A one-sample copy of the picture as it stood before a stage that asked
+    // for it (StageInfo::grabColour). Sampled, never drawn into. Its alpha is
+    // the encoded view distance the opaque passes wrote (scene_depth.hlsli).
+    SDL_GPUTexture* grab = nullptr;
     Uint32 width = 0, height = 0;
     std::uint64_t index = 0;
     double seconds = 0;       // since the run began

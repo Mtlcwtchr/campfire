@@ -11,10 +11,21 @@
 #include <vector>
 
 namespace game {
+// The choices of the resolution dropdown, in physical pixels. 0 x 0 is the
+// desktop's own, fullscreen.
+struct Resolution { const char* name; int width, height; };
+inline constexpr std::array<Resolution, 8> kResolutions{{
+    {"Window (as is)", -1, -1},
+    {"1280 x 720", 1280, 720}, {"1600 x 900", 1600, 900}, {"1920 x 1080", 1920, 1080},
+    {"2560 x 1440", 2560, 1440}, {"3200 x 1800", 3200, 1800}, {"3840 x 2160", 3840, 2160},
+    {"Fullscreen (desktop)", 0, 0}}};
 struct GraphicsSettings {
     // Quality
     int quality = 2;                 // 0 low, 1 medium, 2 high, 3 ultra: LOD error allowance
     int antialiasing = 1;            // 0 off, 1 MSAA 4x (rebuilds the render state)
+    // Window resolution: 0 leaves the window as it is, the rest are the
+    // entries of kResolutions (pixels, not points), the last is fullscreen.
+    int resolution = 0;
     bool shadows = true;
     float shadowSoftness = 1.0f;     // procedural shadow filter spread, texels
     bool forestProxies = true;       // 32 m runtime proxies

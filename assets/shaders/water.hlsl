@@ -140,12 +140,17 @@ float waveComponent(float2 p, float2 direction, float wavelength, float clock,
 {
     const float k = 6.2831853 / wavelength;
     const float2 across = float2(-direction.y, direction.x);
-    const float bend = dot(p, across) * k * 0.17 + offset;
+    // Crests that meander and break up rather than ruling straight lines
+    // across the sea: a strong sideways bend, and a slow wander of the phase
+    // over a few wavelengths (its own slope is small beside the wave's and is
+    // left out). Straight crests caught the sun as straight white strokes.
+    const float bend = dot(p, across) * k * 0.23 + offset;
+    const float wander = (noiseAt(p / (wavelength * 2.3) + offset * 7.1) - 0.5) * 3.2;
     const float phase = dot(p, direction) * k - clock * sqrt(9.81 * k) +
-                        offset + sin(bend) * 0.65;
+                        offset + sin(bend) * 1.6 + wander;
     const float resolved = waterWaveResolution(wavelength, spacing);
     slope = waterWaveDerivative(phase) * resolved *
-            (direction * k + across * (cos(bend) * k * 0.17 * 0.65));
+            (direction * k + across * (cos(bend) * k * 0.23 * 1.6));
     return waterWaveShape(phase) * resolved;
 }
 
@@ -208,8 +213,10 @@ WaterOut WaterVS(WaterIn input)
     // Thin flowing sheets have no room for large waves; flat deep water does,
     // regardless of how steep the submerged terrain happens to be.
     const float room = waterWaveRoom(depth, cover);
+    // The sea runs half as tall again as the wind alone would say: it is fed
+    // by swell from storms a long way off, and a flat sea reads as a lake.
     output.lift = swell * room * waterWaveAmplitude(wind.z) * (1.0-output.ice)*
-                  wbWaveScale(input.waterMotion.z,input.waterMotion.w);
+                  wbWaveScale(input.waterMotion.z,input.waterMotion.w) * (1.0 + 0.6 * ocean);
     level += output.lift;
     level = lerp(level,max(level,bed.z+0.025),ocean);
     output.position = project(float3(bed.xy, level));

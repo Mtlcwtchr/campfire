@@ -29,6 +29,9 @@ public:
     // needs; every ring then costs the same: side^2 vertex runs of six.
     static constexpr std::uint32_t kRings = 5;
     static constexpr double kBaseSpacing = 40.0;
+    // The start distance kBaseSpacing is the right cell for; further out the
+    // cells grow in proportion (FarTreesPass::collect).
+    static constexpr double kReferenceStart = 1500.0;
     static constexpr double kBand = 160.0;
 
 private:

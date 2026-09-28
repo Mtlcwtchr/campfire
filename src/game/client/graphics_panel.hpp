@@ -11,7 +11,7 @@
 namespace client {
 class GraphicsPanel {
 public:
-    static constexpr int kWide = 380, kHigh = 560;
+    static constexpr int kWide = 380, kHigh = 590;
     // Draws the panel and applies what the pointer did. Returns true when a
     // setting changed this frame.
     bool draw(ui::Ui& ui, game::GraphicsSettings& settings);

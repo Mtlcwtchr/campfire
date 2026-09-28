@@ -82,6 +82,12 @@ private:
         core::Fixed floor;   // the ground the flood covered, in metres
         core::Fixed level;   // the body's head
         WaterBodyId id = kInvalidWaterBodyId;
+        // Natural basins only: the body whose footprint this node is on or
+        // beside, and its head. The footprint dilated by one node, so the
+        // ground can be told where a lake's water has to end a cell before the
+        // footprint itself says so.
+        core::Fixed shoreLevel;
+        WaterBodyId shore = kInvalidWaterBodyId;
     };
 
     [[nodiscard]] const Basin* basinAt(std::int64_t cellX, std::int64_t cellY) const;
@@ -89,6 +95,9 @@ private:
     // the middle of a body, nought is off it, and between is the rim.
     [[nodiscard]] core::Fixed coverAt(core::WorldPos at, WaterBodyId& body, core::Fixed& level,
                                       core::Fixed& floor) const;
+    // The same over the dilated footprint: one everywhere the water may
+    // stand and on the line where it has to stop, nought a cell beyond it.
+    [[nodiscard]] core::Fixed shoreAt(core::WorldPos at, core::Fixed& level) const;
 
     // Which legs can reach which patch of ground.
     //

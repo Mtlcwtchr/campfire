@@ -1,4 +1,5 @@
 #pragma once
+#include <array>
 // The water, over the ground it stands on.
 //
 // The same triangles as the ground, out of the same buffers, with a different
@@ -37,7 +38,9 @@ public:
 private:
     GpuTerrain* pages_ = nullptr;
     engine::RenderPipeline* renderer_ = nullptr;
-    engine::PipelineSlot pagePipeline_ = 0;
+    engine::PipelineSlot pagePipeline_ = 0, sheetPipeline_ = 0;
+    // Where the sea grid is centred this frame (the point the view looks at).
+    static std::array<double, 2> sheetCentre(const engine::Frame& frame);
     engine::BindingSet pageBindings_ = engine::kNoBindings;
     engine::BindingSet pageFragmentBindings_ = engine::kNoBindings;
     const engine::MeshCache& cache_;
@@ -47,7 +50,7 @@ private:
     engine::BindingSet bindings_ = engine::kNoBindings;
     engine::BindingSet vertexBindings_ = engine::kNoBindings;
     engine::Texture surface_;
-    engine::Sampler sampler_;
+    engine::Sampler sampler_, sceneSampler_;
     engine::Buffer gridIndices_;
     std::uint32_t gridIndexCount_ = 0;
 };

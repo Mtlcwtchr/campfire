@@ -184,5 +184,5 @@ float4 FoliagePS(FoliageOut input) : SV_Target0
     const float backlight = pow(saturate(dot(-landscapeSun(), landscapeEye(input.worldPosition)) * 0.5 + 0.5), 3.0);
     lit += pigment * float3(1.06, 1.0, 0.70) * (backlight * up * 0.16) * shadow;
     lit *= lerp(0.80, 1.0, smoothstep(0.0, 0.65, up));
-    return float4(landscapeFinish(lit, input.worldPosition), 1.0);
+    return float4(landscapeFinish(lit, input.worldPosition), sceneDepthAlpha(input.worldPosition));
 }

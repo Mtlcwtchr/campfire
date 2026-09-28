@@ -118,6 +118,7 @@ bool Runner::frame(Device& device, Scene scene) {
     frame.colour = targets_.colour();
     frame.depth = targets_.depth();
     frame.resolve = targets_.multisampled() ? targets_.resolved() : nullptr;
+    frame.grab = targets_.grab();
     frame.width = width;
     frame.height = height;
     frame.index = frames_;

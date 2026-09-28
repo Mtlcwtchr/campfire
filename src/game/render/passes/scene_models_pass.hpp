@@ -185,6 +185,7 @@ private:
     double drawDistance_=60000;
     bool forestProxiesOn_=true,farForestOn_=true,massOn_=true;
     double vegetationMeshPixels_=0,vegetationMeshFloor_=0;
+    std::size_t vegetationBudgetUsed_=0;   // triangles the meshes kept this frame are charged
     std::size_t vegetationTriangleBudget_=world::decor::kMeshTriangleBudget;
     std::vector<world::decor::MeshDemand> vegetationDemand_;   // reused every frame
     // Per-frame working storage for collect(): cleared each frame, never

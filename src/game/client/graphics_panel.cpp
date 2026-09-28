@@ -76,6 +76,11 @@ bool GraphicsPanel::draw(ui::Ui& ui, game::GraphicsSettings& s) {
     switch (tab_) {
     case 0:
         choose("Preset", "graphics.preset", {"Low", "Medium", "High", "Ultra"}, preset);
+        {
+            std::vector<std::string> names;
+            for (const auto& r : game::kResolutions) names.emplace_back(r.name);
+            choose("Resolution", "graphics.resolution", std::move(names), s.resolution);
+        }
         choose("Anti-aliasing", "graphics.aa", {"Off", "MSAA 4x"}, s.antialiasing);
         choose("Terrain textures", "graphics.textures", {"1024 (half)", "2048 (UE source)"}, s.terrainTextures);
         slider(ui, ui::widgetId("graphics.draw"), x, y, "Draw distance", s.drawDistanceKm, 2, 60, "%.1f km", true);
@@ -86,8 +91,8 @@ bool GraphicsPanel::draw(ui::Ui& ui, game::GraphicsSettings& s) {
         toggle(ui, ui::widgetId("graphics.far"), x, y, "Far forest hierarchy", s.farForest);
         toggle(ui, ui::widgetId("graphics.mass"), x, y, "Mass clusters (128 m merged)", s.massClusters);
         slider(ui, ui::widgetId("graphics.objerr"), x, y, "Object LOD error", s.objectError, 1, 16, "x%.1f", true);
-        slider(ui, ui::widgetId("graphics.vegmesh"), x, y, "Tree mesh from", s.vegetationMeshPixels, 20, 2000, "%.0f px", true);
-        slider(ui, ui::widgetId("graphics.vegbudget"), x, y, "Tree mesh budget", s.vegetationMeshKiloTriangles, 50, 4000, "%.0fk tris", true);
+        slider(ui, ui::widgetId("graphics.vegmesh"), x, y, "Tree mesh from", s.vegetationMeshPixels, 20, 8000, "%.0f px", true);
+        slider(ui, ui::widgetId("graphics.vegbudget"), x, y, "Tree mesh budget", s.vegetationMeshKiloTriangles, 5, 8000, "%.0fk tris", true);
         toggle(ui, ui::widgetId("graphics.fartrees"), x, y, "Trees to the horizon (GPU)", s.farTrees);
         slider(ui, ui::widgetId("graphics.fartreestart"), x, y, "Placed objects reach", s.farTreesStart, 400, 6000, "%.0f m", true);
         y += 6;

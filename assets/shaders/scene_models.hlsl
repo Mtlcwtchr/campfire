@@ -178,7 +178,7 @@ float4 shadeModel(ModelOut i,bool front,bool depthAware,out float resultDepth) {
     float3 lit=pigment*landscapeDaylight(n,lookRootOcclusion(i.extra.x),shadow);
     const float transmission=pow(saturate(dot(-landscapeSun(),landscapeEye(i.world))),3.0);
     lit+=pigment*float3(1.0,0.95,0.65)*transmission*i.flags.w*i.extra.x*0.18*shadow;
-    return float4(landscapeFinish(lit,i.world),1);
+    return float4(landscapeFinish(lit,i.world),sceneDepthAlpha(i.world));
 }
 float4 ModelPS(ModelOut i,bool front : SV_IsFrontFace) : SV_Target0 {
     float unused;

@@ -12,8 +12,9 @@ void GraphicsSettings::clampAll() {
     terrainBlend = std::clamp(terrainBlend, 0.5f, 12.0f);
     objectError = std::clamp(objectError, 1.0f, 16.0f);
     farTreesStart = std::clamp(farTreesStart, 400.0f, 6000.0f);
-    vegetationMeshPixels = std::clamp(vegetationMeshPixels, 20.0f, 2000.0f);
-    vegetationMeshKiloTriangles = std::clamp(vegetationMeshKiloTriangles, 50.0f, 4000.0f);
+    resolution = std::clamp(resolution, 0, int(kResolutions.size()) - 1);
+    vegetationMeshPixels = std::clamp(vegetationMeshPixels, 20.0f, 8000.0f);
+    vegetationMeshKiloTriangles = std::clamp(vegetationMeshKiloTriangles, 5.0f, 8000.0f);
     drawDistanceKm = std::clamp(drawDistanceKm, 2.0f, 60.0f);
     fogStart = std::clamp(fogStart, 0.0f, 0.9f);
     sunElevation = std::clamp(sunElevation, 2.0f, 89.0f);
@@ -43,7 +44,7 @@ GraphicsSettings graphicsPreset(int quality, GraphicsSettings keep) {
 }
 
 #define GRAPHICS_FIELDS(X) \
-    X(quality) X(antialiasing) X(shadows) X(shadowSoftness) X(forestProxies) X(farForest) \
+    X(quality) X(antialiasing) X(resolution) X(shadows) X(shadowSoftness) X(forestProxies) X(farForest) \
     X(massClusters) X(objectError) X(vegetationMeshPixels) X(vegetationMeshKiloTriangles) X(farTrees) X(farTreesStart) \
     X(terrainBlend) X(terrainTextures) X(drawDistanceKm) X(fog) X(fogStart) X(sunElevation) X(sunAzimuth) \
     X(sunIntensity) X(ambient) X(exposure) X(skybox) X(skyRotation) X(clouds) X(cloudQuality) \

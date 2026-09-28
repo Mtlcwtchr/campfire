@@ -33,6 +33,13 @@ public:
     }
     std::vector<SDL_GPUTextureSamplerBinding> bindings() const;
     std::array<float, 16> parameters(const Block& block) const;
+    // The same layout for a draw that is no square of the cut - the open-sea
+    // sheet - and reads the page atlas at whatever level is resident: the
+    // table size and the height window, no tile, no morph, no grid overlay.
+    std::array<float, 16> sheetParameters() const {
+        return {0, 2, 0, 4, 0, 0, low_, range_, 0, 0, 0, 14,
+                float(tableWidth_), float(tableHeight_), 0, 1};
+    }
 
     // The cut as the passes want it: gathered once per frame, ordered, grouped
     // by level and measured against the screen. Four passes used to walk
@@ -41,6 +48,13 @@ public:
         SDL_GPUBuffer* vertices = nullptr;
         SDL_GPUBuffer* indices = nullptr;
         std::uint32_t waterIndices = 0;     // the surface alone, with no skirt
+        // The real height range, unlike the plan's conservative bounds: the
+        // highest bed in the square, and whether any water in it stands above
+        // sea level. A square wholly under the sea with none has nothing for
+        // page water to draw (the sea is the sheet's), and one deep enough
+        // has no ground anyone can see.
+        float highBed = 0;
+        bool inland = true;
         const world::terrain::AdaptiveMesh* mesh = nullptr;
         std::array<float, 16> parameters{};
     };
@@ -119,6 +133,8 @@ private:
     struct MeshBuffers {
         std::shared_ptr<const world::terrain::AdaptiveMesh> source;
         engine::Buffer vertices, indices;
+        float highBed = 0;       // the highest ground in the square
+        bool inland = false;     // any water standing above sea level
         std::uint64_t lastSerial = 0;
     };
     std::unordered_map<const world::terrain::AdaptiveMesh*, MeshBuffers> meshes_;

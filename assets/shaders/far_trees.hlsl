@@ -107,10 +107,15 @@ FarTreeOut FarTreesVS(uint vertex : SV_VertexID, uint instance : SV_InstanceID)
     if (address.z == 0.0) { level = 2; address = pageAddress(p, 2); }
     if (address.z == 0.0) return hidden();
     const float4 w0 = pageFields(address.xy, level, 1);
-    const float2 w1 = pageFields(address.xy, level, 2).xy;
+    const float4 plane2 = pageFields(address.xy, level, 2);
+    const float2 w1 = plane2.xy;
     const float bed = pageHeight(p, level);
     const float head = morphWindow.z + pageFields(address.xy, level, 0).z * morphWindow.w;
     if (head > bed - 0.3) return hidden(); // water
+    // And not on a shore texel either: z is the share of it under water. At
+    // 64 m a texel that is partly lake draws its waterline somewhere inside
+    // it, and a tree there stands in the drawn water.
+    if (plane2.z > 0.04) return hidden();
 
     // Where a wood stands: the climate's woodland, on soil (not sand, bare
     // rock, snow or bog), in the forest mass and not in its clearings, thinner
@@ -179,6 +184,6 @@ float4 FarTreesPS(FarTreeOut input) : SV_Target0
     const float shadow = proceduralShadow(input.world, normal);
     const float3 pigment = landscapePigment(texel.rgb * input.tint, 1.0);
     const float3 lit = pigment * landscapeDaylight(normal, 0.85, shadow);
-    return float4(landscapeFinish(lit, input.world), 1.0);
+    return float4(landscapeFinish(lit, input.world), sceneDepthAlpha(input.world));
 }
 

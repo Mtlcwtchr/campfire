@@ -32,22 +32,13 @@ void TerrainCollectPass::run(engine::Frame& frame) {
     }
 #endif
     engine::Device::Uploader uploader(*frame.device);
-    // The sea, under everything the ground did not cover. Snapped to a coarse
-    // grid so that panning does not rebuild it every frame, and wide enough
-    // that the camera cannot see past its edge.
+    // The sea: one grid, built once, in coordinates relative to where the
+    // camera looks (the water pass hands the vertex stage that centre). Dense
+    // there and exponentially coarser outwards, so its vertices can carry the
+    // waves rolling onto a beach up close and still reach past the horizon.
     {
-        const double wanted = camera_.perspective() ? camera_.farPlane * 3.0 :
-                              std::max(4000.0, gpu_.radius() * 6.0);
-        const int exponent = int(std::ceil(std::log2(wanted)));
-        const double span = std::ldexp(1.0, exponent);
-        const double snap = span / 8;
-        const double cx = std::floor(camera_.centreX / snap) * snap;
-        const double cy = std::floor(camera_.centreY / snap) * snap;
-        const auto key = static_cast<std::int64_t>(0x5EA0000000000000ull ^
-                         (std::uint64_t(exponent) << 40) ^
-                         ((std::uint64_t(std::int64_t(cx / snap)) & 0xfffff) << 20) ^
-                         (std::uint64_t(std::int64_t(cy / snap)) & 0xfffff));
-        cache_.want(uploader, key, kMeshHasWater, [&] { return buildSea(cx, cy, span); }, {});
+        const auto key = static_cast<std::int64_t>(0x5EA0000000000001ull);
+        cache_.want(uploader, key, kMeshHasWater, [&] { return buildSea(0, 0, kSeaHalfSpan * 2); }, {});
     }
     uploader.finish();
     // The same tail the explorer keeps its own patches for. Shorter here and the
@@ -132,10 +123,22 @@ engine::Scene sceneFor(const client::Camera& camera,
 }
 
 engine::MeshUpload TerrainCollectPass::buildSea(double centreX, double centreY, double span) {
-    // Sixty-four across. Fine enough that the swell reads at a close zoom and
-    // coarse enough to cost nothing at a wide one, where the waves are smaller
-    // than a pixel anyway.
-    constexpr int kSide = 64;
+    // 256 across, placed on a sinh curve: x = S sinh(a u) / sinh(a) for u in
+    // [-1, 1]. About 0.6 m between vertices at the centre, a few metres fifty
+    // metres out, and the last ring hundreds of kilometres away. morphUv.x
+    // carries each vertex's own spacing, which is what decides the shortest
+    // wave it may carry.
+    constexpr int kSide = 256;
+    constexpr double kCurve = 12.0;
+    const double half = span * 0.5;
+    const auto place = [&](int i) {
+        const double u = double(i) / kSide * 2.0 - 1.0;
+        return half * std::sinh(kCurve * u) / std::sinh(kCurve);
+    };
+    const auto spacingAt = [&](int i) {
+        const double u = double(i) / kSide * 2.0 - 1.0;
+        return half * kCurve * std::cosh(kCurve * u) / std::sinh(kCurve) * (2.0 / kSide);
+    };
     // The shelf the world falls to past its last cell, so the shader reads
     // this as deep ocean rather than as a beach.
     constexpr float kBed = -60.0f;
@@ -144,14 +147,14 @@ engine::MeshUpload TerrainCollectPass::buildSea(double centreX, double centreY, 
     for (int row = 0; row <= kSide; ++row)
         for (int column = 0; column <= kSide; ++column) {
             TerrainVertexGpu gpu{};
-            gpu.position[0] = static_cast<float>(centreX + (double(column) / kSide - 0.5) * span);
-            gpu.position[1] = static_cast<float>(centreY + (double(row) / kSide - 0.5) * span);
+            gpu.position[0] = static_cast<float>(centreX + place(column));
+            gpu.position[1] = static_cast<float>(centreY + place(row));
             gpu.position[2] = kBed;
             gpu.normal[2] = 1.0f;
             gpu.weights0[2] = 1.0f;   // sand under it, for what little shows
             gpu.uv[0] = gpu.position[0] / static_cast<float>(kMaterialMetres);
             gpu.uv[1] = gpu.position[1] / static_cast<float>(kMaterialMetres);
-            gpu.morphUv[0] = gpu.uv[0];
+            gpu.morphUv[0] = static_cast<float>(std::max(spacingAt(column), spacingAt(row)));
             gpu.morphUv[1] = gpu.uv[1];
             gpu.morphHeight = kBed;
             gpu.morphNormal[2] = 1.0f;

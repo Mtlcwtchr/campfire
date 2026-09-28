@@ -43,6 +43,13 @@ struct Scatter {
 double forestDensity(std::uint64_t seed,double x,double y);
 using LandTest = std::function<bool(int,int)>; // conservative 512 m page admission
 using SiteSample = std::function<Site(double,double)>;
+// Whether a point is under water. Optional: asked only of candidates that are
+// about to become trees, bushes or logs, around their footprint.
+using WetTest = std::function<bool(double,double)>;
+// How far a wooded object keeps from the waterline, in metres. The rendered
+// shore is interpolated from 4-16 m page texels, so the carve's exact wet
+// line alone let trunks stand in the drawn water.
+inline constexpr double kShoreClearance = 7.0;
 struct ScatterBounds {
     std::int64_t minX=0,minY=0,maxX=0,maxY=0; // half-open world-metre bounds
     auto operator<=>(const ScatterBounds&) const = default;
@@ -61,7 +68,7 @@ struct ScatterBoundsHash {
     }
 };
 Scatter scatter(std::uint64_t seed,ScatterBounds bounds,double width,double height,
-                const LandTest& land,const SiteSample& sample);
+                const LandTest& land,const SiteSample& sample,const WetTest& wet={});
 Scatter scatter(std::uint64_t seed,int regionX,int regionY,double width,double height,
                 const LandTest& land,const SiteSample& sample,int radiusMetres=kRadius);
 struct Lod { float mesh=0,coverage=0; };

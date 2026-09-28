@@ -173,6 +173,20 @@ bool RenderPipeline::run(Frame& frame) {
         while (end < order.size() && static_cast<std::uint8_t>(order[end].key >> 56) == stage) ++end;
 
         const StageInfo& info = stages_[stage];
+        // The picture so far, for a stage that has to see behind itself. Only
+        // between render passes can it be copied, which is why it is a stage
+        // boundary rather than something a pass does.
+        if (info.grabColour && frame.grab != nullptr) {
+            SDL_GPUTexture* source = frame.resolve != nullptr ? frame.resolve : frame.colour;
+            if (SDL_GPUCopyPass* copy = SDL_BeginGPUCopyPass(frame.commands)) {
+                SDL_GPUTextureLocation from{};
+                from.texture = source;
+                SDL_GPUTextureLocation to{};
+                to.texture = frame.grab;
+                SDL_CopyGPUTextureToTexture(copy, &from, &to, frame.width, frame.height, 1, false);
+                SDL_EndGPUCopyPass(copy);
+            }
+        }
         SDL_GPUColorTargetInfo colour{};
         colour.texture = frame.colour;
         colour.clear_color = info.clear;

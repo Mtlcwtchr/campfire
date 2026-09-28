@@ -73,6 +73,11 @@ struct StageInfo {
     SDL_FColor clear{0, 0, 0, 1};
     bool useDepth = true;
     bool clearDepth = true;
+    // Copy the finished picture so far (resolved, one sample a pixel) into
+    // `Frame::grab` before this stage begins, for passes that have to see
+    // what is behind and around them: water refracting its bed and
+    // reflecting its shores.
+    bool grabColour = false;
 };
 
 // What one state change cost, for the overlay. An honest batcher should be able

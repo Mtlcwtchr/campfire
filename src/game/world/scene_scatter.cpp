@@ -85,7 +85,7 @@ std::size_t ScatterBounds::cells() const {
         ? std::size_t(wide*high):std::numeric_limits<std::size_t>::max();
 }
 Scatter scatter(std::uint64_t seed,ScatterBounds bounds,double width,double height,
-                const LandTest& land,const SiteSample& sample) {
+                const LandTest& land,const SiteSample& sample,const WetTest& wet) {
     const auto cells=bounds.cells();
     if (!land || !sample || !(width>0 && height>0) || !std::isfinite(width+height) ||
         !cells || cells>kMaxScatterCells)
@@ -151,6 +151,17 @@ Scatter scatter(std::uint64_t seed,ScatterBounds bounds,double width,double heig
                 model=kind<0.4?5:(kind<0.65?6:7);
             }
             else continue;
+            // Nothing wooded grows out of a lake or a river: its footprint,
+            // and a margin for the drawn shore, has to be dry ground. Asked
+            // only now, of the few candidates that got this far - four carve
+            // queries each rather than four for every sample. The random
+            // stream is already spent above, so dropping one here moves no
+            // other object.
+            if (wet && model!=3) {
+                const double r=kShoreClearance*(model<2?1.0:0.6);
+                if (wet(x+r,y) || wet(x-r,y) || wet(x,y+r) || wet(x,y-r) ||
+                    wet(x+r*0.7,y+r*0.7) || wet(x-r*0.7,y-r*0.7)) continue;
+            }
             ++result.populations[model];
             result.objects.push_back({id,x,y,site.height-(model==3?0.25:0.08),
                 float(0.75+random()*0.65),float(random()*2*std::acos(-1.0)),

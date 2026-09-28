@@ -62,6 +62,16 @@ bool Targets::resize(Device& device, Uint32 width, Uint32 height) {
         width_ = height_ = 0;
         return false;
     }
+    // What a stage that has to see the picture behind it reads (water). A copy
+    // destination and a sampled texture, never a target.
+    info.format = Device::kColourFormat;
+    info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+    info.sample_count = SDL_GPU_SAMPLECOUNT_1;
+    grab_ = device.makeTexture(info);
+    if (!grab_) {
+        width_ = height_ = 0;
+        return false;
+    }
     width_ = width;
     height_ = height;
     return true;
@@ -94,6 +104,10 @@ bool saveTargetAsPng(Device& device, const Targets& targets, const std::string& 
     bool ok = false;
     if (surface && mapped) {
         std::memcpy(surface->pixels, mapped, bytes);
+        // The target's alpha carries the encoded view distance (for water's
+        // reflections), not coverage: the picture itself is opaque.
+        auto* pixels = static_cast<Uint8*>(surface->pixels);
+        for (std::size_t i = 3; i < bytes; i += 4) pixels[i] = 255;
         ok = IMG_SavePNG(surface, path.c_str());
     }
     if (surface) SDL_DestroySurface(surface);

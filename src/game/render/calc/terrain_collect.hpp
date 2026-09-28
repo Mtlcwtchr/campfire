@@ -78,6 +78,8 @@ private:
     // every other stretch of sea has, or the join where real water meets it is
     // a line. Its bed sits at the shelf depth, so the shader reads it as deep
     // ocean; its surface is nought, which is where the shader puts the vertex.
+    // Half the width of the sea grid, metres: past any horizon the camera sees.
+    static constexpr double kSeaHalfSpan = 400000.0;
     engine::MeshUpload buildSea(double centreX, double centreY, double span);
     std::vector<std::uint32_t> seaIndices_;
 

@@ -66,7 +66,7 @@ engine::PassPlace SpritePass::setup(engine::Device& device, engine::RenderPipeli
     cutout_.mesh = soft_.mesh = std::move(shape);
     cutout_.material.textures({{pages_.get(), sampler_.get()}});
     soft_.material.textures({{pages_.get(), sampler_.get()}});
-    return {engine::passOf(Pass::Sprite), engine::stageOf(Stage::World),
+    return {engine::passOf(Pass::Sprite), engine::stageOf(Stage::Surface),
             static_cast<engine::PassOrder>(Order::Blended)};
 }
 

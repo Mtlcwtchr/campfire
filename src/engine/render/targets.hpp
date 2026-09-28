@@ -27,17 +27,20 @@ public:
     // reading the finished picture reads this and does not care either way.
     SDL_GPUTexture* resolved() const { return resolve_ ? resolve_.get() : colour_.get(); }
     bool multisampled() const { return static_cast<bool>(resolve_); }
+    // One-sample, sampled copy of the picture taken between stages.
+    SDL_GPUTexture* grab() const { return grab_.get(); }
     Uint32 width() const { return width_; }
     Uint32 height() const { return height_; }
     void reset() {
         colour_.reset();
         depth_.reset();
         resolve_.reset();
+        grab_.reset();
         width_ = height_ = 0;
     }
 
 private:
-    Texture colour_, depth_, resolve_;
+    Texture colour_, depth_, resolve_, grab_;
     Uint32 width_ = 0, height_ = 0;
 };
 

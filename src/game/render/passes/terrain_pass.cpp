@@ -204,7 +204,11 @@ void TerrainPass::collect(const engine::Frame& frame, engine::DrawQueue& queue) 
         // each square's buffers and parameters resolved. This pass used to
         // re-derive all of it, and so did the water pass beside it.
         for (const auto& patch : pages_->gathered().patches) {
+            // Sea floor too deep to be seen through the water over it (the
+            // sheet's column is opaque long before 30 m): not drawn at all.
+            // Out at sea this was most of the squares in the picture.
             const auto& drawn = pages_->drawn(patch.source);
+            if (drawn.highBed < -30.0f && !drawn.inland) continue;
             if (frame.work && patch.level < frame.work->groundByLevel.size()) {
                 ++frame.work->groundByLevel[patch.level];
                 if (drawn.mesh)

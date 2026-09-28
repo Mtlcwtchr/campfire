@@ -250,7 +250,10 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
     // Saved graphics first, then the command line on top: a shot asked for
     // with --draw-distance or --no-fog must get exactly that.
     menu.graphics() = game::loadGraphicsSettings(graphicsFile());
-    if (!shotPath.empty() || options.benchFrames > 0) menu.graphics() = game::GraphicsSettings{}; // reproducible runs
+    // Reproducible runs, unless the run is there to reproduce what the saved
+    // settings do (ASR_SHOT_USER_GRAPHICS=1).
+    if ((!shotPath.empty() || options.benchFrames > 0) && !std::getenv("ASR_SHOT_USER_GRAPHICS"))
+        menu.graphics() = game::GraphicsSettings{};
     if (options.drawDistance > 0) menu.drawDistance(options.drawDistance);
     if (!options.fog) menu.graphics().fog = false;
     view.fog(options.fog);
@@ -265,6 +268,8 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
     // live camera flies. Empty when not inspecting.
     std::optional<Camera> frozen;
     bool leftWasDown = false;
+    // What the resolution dropdown last put the window at; 0 = untouched.
+    int appliedResolution = 0;
     if (options.benchFrames > 0)
         bench = std::make_unique<ExploreBench>(options.benchFrames, options.benchJson, options.benchLoadFrames);
     const bool scripted = bench != nullptr;
@@ -417,6 +422,22 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
                 controls.dragging = controls.orbiting = false;
                 controls.velocityX = controls.velocityY = 0;
                 menu.panelChanged();
+            }
+        }
+        // The resolution dropdown. Its sizes are pixels, and SDL sizes a window
+        // in points, so they are divided by the display's density: on a Retina
+        // screen 1920 x 1080 is a 960 x 540 point window. The render targets
+        // follow the swapchain on the next frame by themselves.
+        if (window && menu.graphics().resolution != appliedResolution) {
+            appliedResolution = menu.graphics().resolution;
+            const auto& wanted = game::kResolutions[std::size_t(appliedResolution)];
+            if (wanted.width == 0) {
+                SDL_SetWindowFullscreen(window, true);
+            } else if (wanted.width > 0) {
+                SDL_SetWindowFullscreen(window, false);
+                const float density = std::max(0.25f, SDL_GetWindowPixelDensity(window));
+                SDL_SetWindowSize(window, int(std::lround(wanted.width / density)),
+                                  int(std::lround(wanted.height / density)));
             }
         }
         view.cull(frozen ? &*frozen : nullptr);

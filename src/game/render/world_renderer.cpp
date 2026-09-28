@@ -90,7 +90,8 @@ bool WorldRenderer::synchronize() {
     runner_->add(std::move(prepare));
 
     auto drawing = std::make_unique<engine::RenderPipeline>(engine::PipelineId(Phase::Render));
-    drawing->stages({engine::StageInfo{true, {0.07f, 0.155f, 0.195f, 1.0f}, true, true}});
+    drawing->stages({engine::StageInfo{true, {0.07f, 0.155f, 0.195f, 1.0f}, true, true},
+                     engine::StageInfo{false, {0, 0, 0, 1}, true, false, true}});
     std::vector<std::string> materials;
     for (std::size_t i = 0; i < content::kBlendedMaterials && i < ground_.size(); ++i)
         materials.push_back("ground/" + ground_[i].name);
