@@ -14,11 +14,13 @@
   "fog": true,
   "fogStart": 0.3547169268131256,
   "forestProxies": false,
+  "grade": true,
+  "gradeStrength": 1.0,
   "massClusters": false,
-  "objectError": 1.0,
+  "objectError": 1.951345443725586,
   "quality": 2,
   "resolution": 3,
-  "shadowSoftness": 1.680436611175537,
+  "shadowSoftness": 1.3175700902938843,
   "shadows": true,
   "skyRotation": 0.0,
   "skybox": true,
@@ -27,6 +29,6 @@
   "sunIntensity": 1.9249250888824463,
   "terrainBlend": 1.4905403852462769,
   "terrainTextures": 1,
-  "vegetationMeshKiloTriangles": 112.51814270019531,
-  "vegetationMeshPixels": 591.3701782226563
+  "vegetationMeshKiloTriangles": 190.1445770263672,
+  "vegetationMeshPixels": 606.1507568359375
 }
