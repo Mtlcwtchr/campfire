@@ -109,6 +109,10 @@ engine::PassPlace WaterPass::setup(engine::Device& device, engine::RenderPipelin
         detail.insert(detail.end(), fields.begin() + 3, fields.end());
         // Slot 10, sceneGrab: replaced every frame with the frame's copy.
         detail.push_back({surface_.get(), sceneSampler_.get()});
+        // Slots 11, 12: the kinds of water (engine/biomes, water_pages.hlsl).
+        const auto biomes = pages_->biomeBindings();
+        if (biomes.size() != 2) return {};
+        detail.insert(detail.end(), biomes.begin(), biomes.end());
         pageFragmentBindings_ = into.take(std::move(detail));
     }
 
@@ -165,6 +169,9 @@ void WaterPass::collect(const engine::Frame& frame, engine::DrawQueue& queue) {
         std::vector<SDL_GPUTextureSamplerBinding> detail{{surface_.get(), sampler_.get()}};
         detail.insert(detail.end(), current.begin() + 3, current.end());
         detail.push_back({frame.grab, sceneSampler_.get()});
+        const auto biomes = pages_->biomeBindings();
+        if (biomes.size() != 2) return;
+        detail.insert(detail.end(), biomes.begin(), biomes.end());
         renderer_->replace(pageFragmentBindings_, std::move(detail));
         current.resize(3);
         renderer_->replaceVertex(vertexBindings_, std::move(current));

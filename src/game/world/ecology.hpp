@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -41,6 +42,7 @@ struct Cell {
     std::uint16_t masks = 0;
     Biome biome = Biome::Steppe;
     std::uint8_t succession = 0;
+    bool operator==(const Cell&) const = default;
 };
 inline float unit(float value) { return std::clamp(value, 0.0f, 1.0f); }
 inline void classify(Cell& c, const Physical& p) {
@@ -116,39 +118,173 @@ inline void advance(Cell& c, const Physical& p, float days) {
     c.fertility = unit(c.fertility + (p.naturalFertility - c.fertility) * recovery);
     classify(c, p);
 }
+// 128 m: the page procedural objects are numbered in (object_id.hpp) and the
+// region every change is announced in, so a consumer rebuilds one page rather
+// than guessing what an edit reached.
+inline constexpr int kPageMetres = 128;
+inline Key page(double x, double y) { return key(x, y, kPageMetres); }
+
+// An object a person put into the world, rather than one the generator placed.
+// Its id comes from the same hash as a generated one's, under a stage of its
+// own (object_id.hpp), so the two can never be confused.
+struct Added {
+    double x = 0, y = 0;
+    float yaw = 0, scale = 1, tint = 1;
+    std::uint32_t model = 0;   // index into decor::kModels
+    bool operator==(const Added&) const = default;
+};
+
 struct Delta {
     std::uint64_t revision = 0;
     std::map<Key, Cell> cells;
     std::map<std::uint64_t, Key> removed;
+    // By the page they stand in, so the scatter of one page finds its own
+    // without walking every object ever planted.
+    std::map<Key, std::map<std::uint64_t, Added>> added;
+    // Pages emptied of whole kinds of generated object at once, one bit per
+    // decor model: what a clear-cut stores instead of a record for every tree
+    // it took, which after a long history would be millions of them.
+    std::map<Key, std::uint32_t> cleared;
     std::map<Key, std::uint64_t> regions; // 128 m ownership regions
     std::uint64_t region(double x, double y) const {
-        const auto it = regions.find(key(x, y, 128));
+        const auto it = regions.find(page(x, y));
         return it == regions.end() ? 0 : it->second;
     }
+    bool clears(double x, double y, std::uint32_t model) const {
+        if (cleared.empty() || model >= 32) return false;
+        const auto it = cleared.find(page(x, y));
+        return it != cleared.end() && (it->second & (1u << model)) != 0;
+    }
+    std::size_t addedCount() const {
+        std::size_t n = 0;
+        for (const auto& [where, objects] : added) n += objects.size();
+        return n;
+    }
+    // What was changed, without the counters that say when: equal content is
+    // the same world whatever order and session it was made in.
+    bool sameContent(const Delta& o) const {
+        return cells == o.cells && removed == o.removed && added == o.added && cleared == o.cleared;
+    }
 };
+
+// The changes, on a delta being built. The store copies and applies one; a
+// loader applies thousands to one delta and publishes it once. Each announces
+// itself in the page it touched and says whether it changed anything.
+inline void setCell(Delta& d, double x, double y, const Cell& cell) {
+    d.cells[key(x, y)] = cell;
+    d.regions[page(x, y)] = ++d.revision;
+}
+inline bool removeObject(Delta& d, std::uint64_t id, double x, double y) {
+    // Something planted is simply gone again; something generated is
+    // remembered as removed, because the generator will make it every time.
+    if (const auto at = d.added.find(page(x, y)); at != d.added.end() && at->second.erase(id)) {
+        if (at->second.empty()) d.added.erase(at);
+        d.regions[page(x, y)] = ++d.revision;
+        return true;
+    }
+    if (d.removed.contains(id)) return false;
+    d.removed[id] = key(x, y);
+    d.regions[page(x, y)] = ++d.revision;
+    return true;
+}
+// A generated object that was removed stands again: what undoing a removal
+// is. The generator makes it every time, so forgetting the removal is enough.
+inline bool restoreObject(Delta& d, std::uint64_t id, double x, double y) {
+    if (d.removed.erase(id) == 0) return false;
+    d.regions[page(x, y)] = ++d.revision;
+    return true;
+}
+inline bool addObject(Delta& d, std::uint64_t id, const Added& object) {
+    if (id == 0) return false;
+    d.added[page(object.x, object.y)][id] = object;
+    d.regions[page(object.x, object.y)] = ++d.revision;
+    return true;
+}
+inline bool clearPage(Delta& d, double x, double y, std::uint32_t models) {
+    auto& mask = d.cleared[page(x, y)];
+    if ((mask | models) == mask) {
+        if (!mask) d.cleared.erase(page(x, y));
+        return false;
+    }
+    mask |= models;
+    d.regions[page(x, y)] = ++d.revision;
+    return true;
+}
+
 // Copy-on-write event state. Workers retain one coherent immutable revision.
 // Only edits are stored: deterministic unvisited cells require no allocation.
 class Store {
 public:
+    // Told of every change, under the store's lock, with the page it was
+    // announced in and the revision it got. The persistent delta listens, so a
+    // change is saved whoever made it. Must not call back into the store.
+    using Observer = std::function<void(Key page, std::uint64_t revision)>;
+    void observe(Observer observer) { std::lock_guard lock(mutex_); observer_ = std::move(observer); }
+
     std::shared_ptr<const Delta> read() const { std::lock_guard lock(mutex_); return delta_; }
     void set(double x, double y, Cell cell) {
         std::lock_guard lock(mutex_);
         auto next = std::make_shared<Delta>(*delta_);
-        next->cells[key(x, y)] = cell;
-        next->regions[key(x, y, 128)] = ++next->revision;
-        delta_ = std::move(next);
+        setCell(*next, x, y, cell);
+        publish(std::move(next), page(x, y));
     }
-    void remove(std::uint64_t id, double x, double y) {
+    bool remove(std::uint64_t id, double x, double y) {
         std::lock_guard lock(mutex_);
-        if (delta_->removed.contains(id)) return;
+        const auto at = delta_->added.find(page(x, y));
+        const bool planted = at != delta_->added.end() && at->second.contains(id);
+        if (!planted && delta_->removed.contains(id)) return false;
         auto next = std::make_shared<Delta>(*delta_);
-        next->removed[id] = key(x, y);
-        next->regions[key(x, y, 128)] = ++next->revision;
+        removeObject(*next, id, x, y);
+        publish(std::move(next), page(x, y));
+        return true;
+    }
+    bool add(std::uint64_t id, const Added& object) {
+        std::lock_guard lock(mutex_);
+        if (id == 0) return false;
+        auto next = std::make_shared<Delta>(*delta_);
+        addObject(*next, id, object);
+        publish(std::move(next), page(object.x, object.y));
+        return true;
+    }
+    // Undoes a removal of a generated object (restoreObject above).
+    bool unremove(std::uint64_t id, double x, double y) {
+        std::lock_guard lock(mutex_);
+        if (!delta_->removed.contains(id)) return false;
+        auto next = std::make_shared<Delta>(*delta_);
+        restoreObject(*next, id, x, y);
+        publish(std::move(next), page(x, y));
+        return true;
+    }
+    bool clear(double x, double y, std::uint32_t models) {
+        std::lock_guard lock(mutex_);
+        auto next = std::make_shared<Delta>(*delta_);
+        if (!clearPage(*next, x, y, models)) return false;
+        publish(std::move(next), page(x, y));
+        return true;
+    }
+    // A whole delta at once, for a loader. Every page either side touched is
+    // announced at one new revision, above anything a reader has seen, so no
+    // cache keyed on the old revisions survives it.
+    void restore(Delta loaded) {
+        std::lock_guard lock(mutex_);
+        auto next = std::make_shared<Delta>(std::move(loaded));
+        next->revision = delta_->revision + 1;
+        std::map<Key, std::uint64_t> regions = delta_->regions;
+        for (const auto& [where, revision] : next->regions) regions[where] = 0;
+        for (auto& [where, revision] : regions) revision = next->revision;
+        next->regions = std::move(regions);
         delta_ = std::move(next);
+        if (observer_)
+            for (const auto& [where, revision] : delta_->regions) observer_(where, revision);
     }
 private:
+    void publish(std::shared_ptr<Delta> next, Key where) {
+        delta_ = std::move(next);
+        if (observer_) observer_(where, delta_->revision);
+    }
     mutable std::mutex mutex_;
     std::shared_ptr<const Delta> delta_ = std::make_shared<const Delta>();
+    Observer observer_;
 };
 } // namespace world::ecology
 

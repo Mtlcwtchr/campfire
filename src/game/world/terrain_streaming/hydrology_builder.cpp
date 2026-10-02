@@ -1,7 +1,12 @@
+#include "engine/core/progress.hpp"
+#include <cstdio>
+#include <chrono>
 #include "game/world/terrain_streaming/hydrology_builder.hpp"
 
 #include "game/world/height_field.hpp"
 #include "game/world/terrain_streaming/graph_carve.hpp"
+#include "game/world/terrain_streaming/hydrology_cache.hpp"
+#include <string>
 
 #include <atomic>
 #include <memory>
@@ -11,6 +16,7 @@
 
 #include <algorithm>
 #include <map>
+#include <unordered_map>
 #include <queue>
 #include <limits>
 #include <utility>
@@ -19,6 +25,8 @@
 #include <stdexcept>
 
 #include "engine/core/rng.hpp"
+#include "engine/core/lane_hash.hpp"
+#include <type_traits>
 #include "game/generation/hybrid_terrain.hpp"
 #include "game/generation/terrain_foundation.hpp"
 #include "game/world/coords.hpp"
@@ -82,29 +90,41 @@ std::uint64_t fingerprintOf(const generation::WorldMapData& world) {
     hash = mixIn(hash, static_cast<std::uint64_t>(generation::kMetresPerCell));
     hash = mixIn(hash, static_cast<std::uint64_t>(generation::kMetresPerElevationStep));
     if (world.hybridTerrain) hash = mixIn(hash, world.hybridTerrain->fingerprint());
-    if (world.terrainFoundation) hash = mixIn(hash, world.terrainFoundation->fingerprint());
-    for (const generation::WorldCell& cell : world.cells) {
+    // The cache key, not the canonical FNV identity: the same ground gives the
+    // same key, and it costs tens of milliseconds rather than hundreds.
+    if (world.terrainFoundation) hash = mixIn(hash, world.terrainFoundation->contentKey());
+    // Every value the extraction reads, four lanes at a time (core::LaneHash):
+    // a splitmix per cell was a quarter of a second on the reference world.
+    core::LaneHash cells(hash);
+    cells.addAll(world.cells, [](const generation::WorldCell& cell) {
         // Moisture is in here because it decides what counts as a stream, and
         // so reaches the width of every channel on the map.
-        hash = mixIn(hash, (std::uint64_t(cell.elevation) << 40) |
-                                   (std::uint64_t(cell.drainSize) << 32) |
-                                   (std::uint64_t(std::uint8_t(cell.drainOut)) << 24) |
-                                   (std::uint64_t(std::uint8_t(cell.riverOut)) << 16) |
-                                   (std::uint64_t(cell.moisture) << 8) |
-                                   (cell.sea ? 2u : 0u) | (cell.river ? 1u : 0u));
-    }
-    const auto fold = [&hash](const std::vector<std::int32_t>& field) {
-        hash = mixIn(hash, field.size());
-        for (const std::int32_t value : field)
-            hash = mixIn(hash, static_cast<std::uint64_t>(static_cast<std::uint32_t>(value)));
+        return (std::uint64_t(cell.elevation) << 40) |
+               (std::uint64_t(cell.drainSize) << 32) |
+               (std::uint64_t(std::uint8_t(cell.drainOut)) << 24) |
+               (std::uint64_t(std::uint8_t(cell.riverOut)) << 16) |
+               (std::uint64_t(cell.moisture) << 8) |
+               (cell.sea ? 2u : 0u) | (cell.river ? 1u : 0u);
+    });
+    // The sparse fields chunk by chunk: a chunk the field does not hold reads
+    // as its fill and costs one word, so the sea costs next to nothing.
+    const auto field = [&cells](const auto& values) {
+        using T = typename std::remove_cvref_t<decltype(values)>::value_type;
+        const auto key = [](T v) { return std::uint64_t(std::make_unsigned_t<T>(v)); };
+        cells.add(values.size());
+        cells.add(key(values.fill()));
+        values.visitChunks([&](std::size_t, const auto& chunk) { cells.addAll(chunk, key); },
+                           [&](std::size_t) { cells.add(0xab5e47c4u); });
     };
-    fold(world.lakeRegionField);
-    fold(world.lakeLevelField);
-    fold(world.riverDischargeField);
-    hash = mixIn(hash, world.flowDirectionField.size());
-    for (const std::int8_t dir : world.flowDirectionField)
-        hash = mixIn(hash, static_cast<std::uint64_t>(static_cast<std::uint8_t>(dir)));
-    return hash;
+    field(world.lakeRegionField);
+    field(world.lakeLevelField);
+    field(world.riverDischargeField);
+    field(world.flowDirectionField);
+    // What the water layer forces or forbids, and the rivers dial.
+    field(world.waterPaintField);
+    cells.add(std::uint64_t(std::lround(double(world.riverShare) * 1000.0)));
+    if (world.graphRiverFlow) cells.add(0x9100ull + world.graphRiverFlow);
+    return cells.value();
 }
 
 // ---------------------------------------------------------------------------
@@ -327,7 +347,8 @@ struct MacroHydrology {
     [[nodiscard]] std::uint8_t streamFlowIn(const generation::WorldCell& cell) const {
         const std::int32_t shift = 2 - (static_cast<std::int32_t>(cell.moisture) * 4) / 255;
         return static_cast<std::uint8_t>(std::clamp<std::int32_t>(
-                static_cast<std::int32_t>(streamFlow) + shift, kNarrowestWetFlow, 15));
+                static_cast<std::int32_t>(streamFlow) + shift,
+                std::max(kNarrowestWetFlow, world ? world->graphRiverFlow : std::uint8_t(0)), 15));
     }
 
     // Width goes as the square root of the flow, which is what a real channel
@@ -387,12 +408,20 @@ MacroHydrology resolveHydrology(const generation::WorldMapData& world,
     }
     std::int64_t running = 0;
     std::uint8_t chosen = 15;
+    // The share is the world's own dial (WorldMapData::riverShare: more or
+    // fewer rivers on land made by hand), one in three when nobody set it.
+    const double share = std::clamp(double(kWetShareNumerator) / double(kWetShareDenominator) *
+                                            double(world.riverShare), 0.05, 0.9);
     for (int size = 15; size >= 0; --size) {
         running += above[size];
         chosen = static_cast<std::uint8_t>(size);
-        if (running * kWetShareDenominator >= carved * kWetShareNumerator) break;
+        // Exactly the integer rule when the dial is untouched: a world nobody
+        // set it on gets the streams it always had, to the cell.
+        if (world.riverShare == 1.0f ? running * kWetShareDenominator >= carved * kWetShareNumerator
+                                     : double(running) >= double(carved) * share)
+            break;
     }
-    out.streamFlow = std::max(chosen, kNarrowestWetFlow);
+    out.streamFlow = std::max({chosen, kNarrowestWetFlow, world.graphRiverFlow});
 
     out.surface.assign(count, core::kZero);
     out.wet.assign(count, 0);
@@ -424,9 +453,8 @@ MacroHydrology resolveHydrology(const generation::WorldMapData& world,
     //
     // The field is asked for the country and the detail only. It has no graph
     // yet - this is the graph - and it does not need one for either.
-    world::HeightField terrain(&world, world.seed);
     const std::int64_t cellMetres = generation::kMetresPerCell;
-    const auto groundAt = [&](Fixed x, Fixed y) {
+    const auto groundAt = [&](const world::HeightField& terrain, Fixed x, Fixed y) {
         const auto pieces = terrain.piecesAt(x, y);
         return pieces.country + pieces.moved;
     };
@@ -452,14 +480,14 @@ MacroHydrology resolveHydrology(const generation::WorldMapData& world,
     // into is walked instead. That is the way the water goes, to within the
     // smoothing the course puts on it later, and the lowest ground along it is
     // the ground the water will actually find.
-    const auto thalwegOf = [&](std::size_t cell) {
+    const auto thalwegOf = [&](const world::HeightField& terrain, std::size_t cell) {
         const core::WorldPos here = centreOfCell(cell);
-        Fixed lowest = groundAt(here.x, here.y);
+        Fixed lowest = groundAt(terrain, here.x, here.y);
         for (const auto [ox, oy] : {std::pair{-1, 0}, std::pair{1, 0}, std::pair{0, -1},
                                     std::pair{0, 1}}) {
             const Fixed px = here.x + Fixed::fromInt(ox * cellMetres / 3);
             const Fixed py = here.y + Fixed::fromInt(oy * cellMetres / 3);
-            lowest = core::min(lowest, groundAt(px, py));
+            lowest = core::min(lowest, groundAt(terrain, px, py));
         }
         const std::int32_t next = downstream[cell];
         if (next >= 0) {
@@ -467,24 +495,45 @@ MacroHydrology resolveHydrology(const generation::WorldMapData& world,
             constexpr int kSteps = 8;
             for (int step = 1; step < kSteps; ++step) {
                 const Fixed t = Fixed::ratio(step, kSteps);
-                lowest = core::min(lowest, groundAt(here.x + (there.x - here.x) * t,
+                lowest = core::min(lowest, groundAt(terrain, here.x + (there.x - here.x) * t,
                                                     here.y + (there.y - here.y) * t));
             }
         }
         return lowest;
     };
 
-    for (std::size_t i = 0; i < count; ++i) {
-        const generation::WorldCell& cell = world.cells[i];
-        const bool lake = i < world.lakeDepthField.size() && world.lakeDepthField[i] > 0 &&
-                          i < world.lakeLevelField.size();
-        const int head = cell.sea ? 0 : lake ? world.lakeLevelField[i] : cell.elevation;
-        Fixed surface = Fixed::fromInt(static_cast<std::int64_t>(std::max(0, head)) *
-                                       generation::kMetresPerElevationStep);
-        if (!cell.sea && !lake)
-            surface = core::min(surface, thalwegOf(i));
-        out.surface[i] = surface;
-        out.wet[i] = !cell.sea && (cell.river || cell.drainSize >= out.streamFlowIn(cell));
+    // Every cell on its own, so rows of them go wide across the machine: the
+    // ground under a thalweg is most of what resolving the map costs.
+    const std::size_t rows = std::size_t(std::max(0, world.height));
+    std::atomic<std::size_t> nextRow{0};
+    const auto resolveRows = [&] {
+        world::HeightField terrain(&world, world.seed);   // a field keeps caches: one to a thread
+        for (std::size_t row = nextRow++; row < rows; row = nextRow++)
+            for (std::size_t i = row * std::size_t(width), end = std::min(count, i + std::size_t(width)); i < end; ++i) {
+                const generation::WorldCell& cell = world.cells[i];
+                const bool lake = i < world.lakeDepthField.size() && world.lakeDepthField[i] > 0 &&
+                                  i < world.lakeLevelField.size();
+                const int head = cell.sea ? 0 : lake ? world.lakeLevelField[i] : cell.elevation;
+                Fixed surface = Fixed::fromInt(static_cast<std::int64_t>(std::max(0, head)) *
+                                               generation::kMetresPerElevationStep);
+                if (!cell.sea && !lake)
+                    surface = core::min(surface, thalwegOf(terrain, i));
+                out.surface[i] = surface;
+                // What was painted on the water layer is kept: a course holds
+                // water however little gathers in it, dry ground holds none.
+                const auto paint = i < world.waterPaintField.size()
+                        ? static_cast<generation::WaterPaint>(world.waterPaintField[i]) : generation::WaterPaint::None;
+                out.wet[i] = !cell.sea && paint != generation::WaterPaint::Dry &&
+                             (cell.river || cell.drainSize >= out.streamFlowIn(cell) ||
+                              paint == generation::WaterPaint::Course);
+            }
+    };
+    {
+        const unsigned threads = std::clamp(std::thread::hardware_concurrency(), 1u, 8u);
+        std::vector<std::thread> workers;
+        for (unsigned t = 1; t < threads && rows > 64; ++t) workers.emplace_back(resolveRows);
+        resolveRows();
+        for (auto& w : workers) w.join();
     }
 
     // Iterative topological resolution: no recursive stack on a continent's
@@ -513,9 +562,15 @@ MacroHydrology resolveHydrology(const generation::WorldMapData& world,
             order.push_back(n);
         }
     }
+    // Water inherited downstream - except into ground painted dry, where it
+    // sinks (the water layer, WaterPaint::Dry): nothing painted dry is wet.
+    const auto paintedDry = [&](std::size_t i) {
+        return i < world.waterPaintField.size() &&
+               world.waterPaintField[i] == std::uint8_t(generation::WaterPaint::Dry);
+    };
     for (auto it = order.rbegin(); it != order.rend(); ++it) {
         const auto next = downstream[static_cast<std::size_t>(*it)];
-        if (next >= 0 && out.wet[static_cast<std::size_t>(*it)])
+        if (next >= 0 && out.wet[static_cast<std::size_t>(*it)] && !paintedDry(static_cast<std::size_t>(next)))
             out.wet[static_cast<std::size_t>(next)] = 1;
     }
     return out;
@@ -656,17 +711,12 @@ void indexGraph(HydrologyGraph& graph, const generation::WorldMapData& world) {
             first = last + 1;
         }
     }
-    // The ocean keeps no footprint of its own, so it is indexed straight off
-    // the sea mask. Without this a page query would be total for lakes and
-    // partial for the one body most of the map is made of.
-    const auto count = static_cast<std::size_t>(std::max(0, world.width)) *
-                       static_cast<std::size_t>(std::max(0, world.height));
-    for (std::size_t i = 0; i < count && i < world.cells.size(); ++i)
-        if (world.cells[i].sea)
-            indexBodyCell(kOceanWaterBodyId,
-                          {static_cast<std::int32_t>(i % std::size_t(world.width)),
-                           static_cast<std::int32_t>(i / std::size_t(world.width))}, 0);
-
+    // The ocean is not indexed. It keeps no footprint of its own, and nobody
+    // asks the index for it: the carve decides it from the ground (below the
+    // sea's level and no other water there, graph_carve.cpp), and a page
+    // wants the index for its reaches and its lakes. Indexed off the sea mask
+    // it was one entry for every sea cell of the world - sixteen million of
+    // them, gigabytes and seconds, for a world of nothing but sea.
     graph.spatialPages.clear();
     graph.spatialPages.reserve(pages.size());
     for (auto& entry : pages) {
@@ -678,6 +728,410 @@ void indexGraph(HydrologyGraph& graph, const generation::WorldMapData& world) {
         page.waterBodies.erase(std::unique(page.waterBodies.begin(), page.waterBodies.end()),
                                page.waterBodies.end());
         graph.spatialPages.push_back(std::move(page));
+    }
+}
+
+
+// ---------------------------------------------------------------------------
+// The water fitted where the country changed, and nowhere else.
+//
+// Fitting the lakes and the courses to the carved ground (below) is most of
+// what a graph costs - three seconds of the reference world's three and a
+// half - and all of it went again after any edit anywhere: an island redrawn
+// off the coast of a continent refitted every river of the continent.
+//
+// Fitting is local. A course's banks are read through carvers that gather
+// every reach and lake indexed within two and a half kilometres of the bank,
+// and a lake's flood reads the ground half a kilometre past its basin through
+// the same carvers; nothing further away is read at all. So the courses and
+// lakes fall into groups - everything within four kilometres of something
+// else in the group, and joined through every node and every lake a course
+// touches - and no group reads anything of another. Fitting one group on its
+// own gives it exactly what fitting the world gives it, and so:
+//
+// - a group whose every input is what it was when it was last fitted takes
+//   that fit back (the key below is every value of its items before fitting,
+//   and every value of the ground under it and around it), and
+// - the groups that are fitted go wide across the machine, one to a thread.
+//
+// The graph comes out bit for bit the same either way; the cache only decides
+// how much of it is worked out again.
+// ---------------------------------------------------------------------------
+
+constexpr std::uint32_t kNoGroup = ~std::uint32_t{0};
+// How far apart two items may be and still read each other, doubled for
+// margin: a carver's window (a kilometre, aligned) plus its halo (900 m) plus
+// a storage page, which is how far a carver gathers past its window.
+constexpr std::int64_t kFitReach = 2048;   // each side, so 4 km between two boxes
+
+struct FitGroups {
+    std::vector<std::uint32_t> ofSegment;   // by segment index
+    std::vector<std::uint32_t> ofBody;      // by body index; kNoGroup for the ocean
+    std::vector<std::vector<RiverId>> segments;    // per group, ascending
+    std::vector<std::vector<WaterBodyId>> bodies;  // per group, ascending
+    std::vector<std::vector<RiverNodeId>> nodes;   // per group, ascending
+    std::vector<core::WorldRect> bounds;           // per group, what its items cover
+    std::vector<std::uint64_t> keys;
+    std::vector<std::uint8_t> active;              // fitted in this build
+    // Whether a fit may be taken from, or kept for, another build: only over a
+    // foundation, where the ground a fit reads is what fitKey hashes. Without
+    // one the height field reads the whole of the macro map's cells.
+    bool cacheable = false;
+    bool segmentActive(RiverId id) const { return active[ofSegment[id - 1]] != 0; }
+    bool bodyActive(std::size_t index) const {
+        return ofBody[index] != kNoGroup && active[ofBody[index]] != 0;
+    }
+};
+
+core::WorldRect bodyBounds(const WaterBody& body) {
+    const std::int64_t cell = generation::kMetresPerCell;
+    std::int64_t lowX = std::numeric_limits<std::int64_t>::max(), lowY = lowX;
+    std::int64_t highX = std::numeric_limits<std::int64_t>::min(), highY = highX;
+    for (const TilePos c : body.macroCells) {
+        lowX = std::min(lowX, c.x * cell); highX = std::max(highX, (c.x + 1) * cell);
+        lowY = std::min(lowY, c.y * cell); highY = std::max(highY, (c.y + 1) * cell);
+    }
+    for (const TilePos s : body.basinSamples) {
+        const std::int64_t step = std::max(1, body.basinStep);
+        lowX = std::min(lowX, s.x * step); highX = std::max(highX, (s.x + 1) * step);
+        lowY = std::min(lowY, s.y * step); highY = std::max(highY, (s.y + 1) * step);
+    }
+    if (lowX > highX) return {};
+    // The flood looks half a kilometre past its basin.
+    lowX -= cell; lowY -= cell; highX += cell; highY += cell;
+    return {{Fixed::fromInt(lowX), Fixed::fromInt(lowY)}, {Fixed::fromInt(highX), Fixed::fromInt(highY)}};
+}
+
+FitGroups fitGroups(const HydrologyGraph& graph) {
+    const std::size_t segmentCount = graph.segments.size(), bodyCount = graph.waterBodies.size();
+    // Items: segments first, then bodies.
+    std::vector<std::uint32_t> parent(segmentCount + bodyCount);
+    for (std::size_t i = 0; i < parent.size(); ++i) parent[i] = std::uint32_t(i);
+    const auto find = [&](std::uint32_t a) {
+        while (parent[a] != a) a = parent[a] = parent[parent[a]];
+        return a;
+    };
+    const auto join = [&](std::uint32_t a, std::uint32_t b) {
+        a = find(a); b = find(b);
+        if (a != b) parent[std::max(a, b)] = std::min(a, b);
+    };
+    const auto isLake = [&](WaterBodyId id) {
+        const WaterBody* body = waterBodyOf(graph, id);
+        return body != nullptr && body->kind == WaterBodyKind::Lake;
+    };
+    const auto bodyItem = [&](WaterBodyId id) { return std::uint32_t(segmentCount + id - 1); };
+    // Through the network: the courses meeting at a node, a course and the
+    // lake it leaves or ends in.
+    std::vector<std::uint32_t> atNode(graph.nodes.size() + 1, kNoGroup);
+    for (std::size_t s = 0; s < segmentCount; ++s) {
+        const RiverSegment& segment = graph.segments[s];
+        for (const RiverNodeId node : {segment.from, segment.to}) {
+            if (node == kInvalidRiverNodeId) continue;
+            if (atNode[node] == kNoGroup) atNode[node] = std::uint32_t(s);
+            else join(atNode[node], std::uint32_t(s));
+            const WaterBodyId body = graph.nodes[node - 1].waterBody;
+            if (isLake(body)) join(std::uint32_t(s), bodyItem(body));
+        }
+        if (isLake(segment.sourceWaterBody)) join(std::uint32_t(s), bodyItem(segment.sourceWaterBody));
+        if (isLake(segment.destinationWaterBody)) join(std::uint32_t(s), bodyItem(segment.destinationWaterBody));
+    }
+    // And through the country: anything whose boxes, each grown by the reach,
+    // share a square of the grid.
+    constexpr std::int64_t kGrid = 4096;
+    std::unordered_map<std::uint64_t, std::uint32_t> firstIn;
+    std::vector<core::WorldRect> itemBounds(parent.size());
+    std::vector<std::uint8_t> present(parent.size(), 0);
+    const auto place = [&](std::uint32_t item, core::WorldRect box) {
+        itemBounds[item] = box;
+        present[item] = 1;
+        const std::int64_t x0 = floorDiv(box.min.x.toInt() - kFitReach, kGrid), x1 = floorDiv(box.max.x.toInt() + kFitReach, kGrid);
+        const std::int64_t y0 = floorDiv(box.min.y.toInt() - kFitReach, kGrid), y1 = floorDiv(box.max.y.toInt() + kFitReach, kGrid);
+        for (std::int64_t y = y0; y <= y1; ++y)
+            for (std::int64_t x = x0; x <= x1; ++x) {
+                const std::uint64_t square = (std::uint64_t(std::uint32_t(std::int32_t(y))) << 32) | std::uint32_t(std::int32_t(x));
+                const auto [it, fresh] = firstIn.emplace(square, item);
+                if (!fresh) join(it->second, item);
+            }
+    };
+    for (std::size_t s = 0; s < segmentCount; ++s) place(std::uint32_t(s), graph.segments[s].bounds);
+    for (std::size_t b = 0; b < bodyCount; ++b)
+        if (graph.waterBodies[b].kind == WaterBodyKind::Lake)
+            place(std::uint32_t(segmentCount + b), bodyBounds(graph.waterBodies[b]));
+
+    // Numbered by their first item, which is the order of the IDs.
+    FitGroups groups;
+    groups.ofSegment.assign(segmentCount, kNoGroup);
+    groups.ofBody.assign(bodyCount, kNoGroup);
+    std::vector<std::uint32_t> numberOf(parent.size(), kNoGroup);
+    const auto groupOf = [&](std::uint32_t item) {
+        const std::uint32_t root = find(item);
+        if (numberOf[root] == kNoGroup) {
+            numberOf[root] = std::uint32_t(groups.segments.size());
+            groups.segments.emplace_back();
+            groups.bodies.emplace_back();
+            groups.nodes.emplace_back();
+            groups.bounds.push_back(itemBounds[item]);
+        }
+        const std::uint32_t g = numberOf[root];
+        core::WorldRect& box = groups.bounds[g];
+        const core::WorldRect& mine = itemBounds[item];
+        box = {{core::min(box.min.x, mine.min.x), core::min(box.min.y, mine.min.y)},
+               {core::max(box.max.x, mine.max.x), core::max(box.max.y, mine.max.y)}};
+        return g;
+    };
+    for (std::size_t s = 0; s < segmentCount; ++s) {
+        const std::uint32_t g = groupOf(std::uint32_t(s));
+        groups.ofSegment[s] = g;
+        groups.segments[g].push_back(graph.segments[s].id);
+        for (const RiverNodeId node : {graph.segments[s].from, graph.segments[s].to})
+            if (node != kInvalidRiverNodeId) groups.nodes[g].push_back(node);
+    }
+    for (std::size_t b = 0; b < bodyCount; ++b) {
+        if (!present[segmentCount + b]) continue;
+        const std::uint32_t g = groupOf(std::uint32_t(segmentCount + b));
+        groups.ofBody[b] = g;
+        groups.bodies[g].push_back(graph.waterBodies[b].id);
+    }
+    for (auto& nodes : groups.nodes) {
+        std::sort(nodes.begin(), nodes.end());
+        nodes.erase(std::unique(nodes.begin(), nodes.end()), nodes.end());
+    }
+    groups.active.assign(groups.segments.size(), 1);
+    groups.keys.assign(groups.segments.size(), 0);
+    return groups;
+}
+
+// Every value a group's fit reads: its items as they stand before it, and the
+// ground under and around them. IDs are left out - they are where the item
+// falls in the world's order, and an edit elsewhere moves them - and what an
+// ID points at goes in instead.
+std::uint64_t fitKey(const HydrologyGraph& graph, const generation::WorldMapData& world,
+                     const FitGroups& groups, std::uint32_t g, const std::vector<std::size_t>& sharedFrom) {
+    core::LaneHash hash(mixIn(0x7f4a7c159e3779b9ull, kHydrologyGraphVersion));
+    hash.add(world.seed);
+    hash.add(std::uint64_t(world.width));
+    hash.add(std::uint64_t(world.height));
+    hash.add(std::uint64_t(world.terrainStage));
+    // The hybrid terrain is one piece for the whole world, and its identity
+    // moves with any of it. Over a foundation the ground a fit reads is the
+    // foundation's (HeightField::piecesAt) and the hybrid is not read at all;
+    // without one it is, and every group keys on the whole of it.
+    if (world.hybridTerrain && !world.terrainFoundation) hash.add(world.hybridTerrain->fingerprint());
+    const auto fixed = [](Fixed f) { return std::uint64_t(f.raw); };
+    const auto position = [&](WorldPos p) { hash.add(fixed(p.x)); hash.add(fixed(p.y)); };
+    const auto nodeKey = [&](RiverNodeId id) {
+        if (id == kInvalidRiverNodeId) { hash.add(0x51ab); return; }
+        const RiverNode& node = graph.nodes[id - 1];
+        hash.add(std::uint64_t(node.macroCell));
+        hash.add(std::uint64_t(node.kind));
+        hash.add(fixed(node.surface));
+        hash.add(node.waterBody == kOceanWaterBodyId ? 1u : node.waterBody == kInvalidWaterBodyId ? 0u : 2u);
+    };
+    for (const RiverId id : groups.segments[g]) {
+        const RiverSegment& segment = graph.segments[id - 1];
+        nodeKey(segment.from);
+        nodeKey(segment.to);
+        hash.add(segment.sourceWaterBody != kInvalidWaterBodyId);
+        hash.add(segment.destinationWaterBody == kOceanWaterBodyId ? 1u :
+                 segment.destinationWaterBody == kInvalidWaterBodyId ? 0u : 2u);
+        hash.add(segment.order);
+        hash.add(fixed(segment.width)); hash.add(fixed(segment.depth)); hash.add(fixed(segment.valleyReach));
+        hash.add(fixed(segment.discharge));
+        position(segment.bounds.min); position(segment.bounds.max);
+        hash.add(id < sharedFrom.size() ? sharedFrom[id] : 0);
+        hash.addAll(segment.course, [&](const ReachPoint& p) {
+            return std::uint64_t(p.position.x.raw) * 0x9e3779b97f4a7c15ull ^ std::uint64_t(p.position.y.raw) ^
+                   (std::uint64_t(p.surface.raw) << 1) ^ (std::uint64_t(p.halfWidth.raw) << 7) ^
+                   (std::uint64_t(p.depth.raw) << 13) ^ (std::uint64_t(p.valleyReach.raw) << 19);
+        });
+        hash.addAll(segment.macroCells);
+    }
+    for (const WaterBodyId id : groups.bodies[g]) {
+        const WaterBody& body = graph.waterBodies[id - 1];
+        hash.add(fixed(body.level));
+        hash.add(std::uint64_t(body.basinStep));
+        hash.add(std::uint64_t(body.sourceRegion));
+        hash.add(body.inlets.size()); hash.add(body.outlets.size());
+        hash.addAll(body.macroCells, [](TilePos c) { return (std::uint64_t(std::uint32_t(c.y)) << 32) | std::uint32_t(c.x); });
+        hash.addAll(body.macroCellFloor, [](Fixed f) { return std::uint64_t(f.raw); });
+        hash.addAll(body.basinSamples, [](TilePos c) { return (std::uint64_t(std::uint32_t(c.y)) << 32) | std::uint32_t(c.x); });
+    }
+    // The ground: the box of the items, grown by how far their fit reads.
+    const core::WorldRect& box = groups.bounds[g];
+    const std::int64_t minX = box.min.x.toInt() - kFitReach, minY = box.min.y.toInt() - kFitReach;
+    const std::int64_t maxX = box.max.x.toInt() + kFitReach, maxY = box.max.y.toInt() + kFitReach;
+    hash.add(0x6c0u);
+    {
+        const std::int64_t cell = generation::kMetresPerCell;
+        const std::int32_t x0 = std::int32_t(std::clamp<std::int64_t>(floorDiv(minX, cell) - 1, 0, world.width - 1));
+        const std::int32_t x1 = std::int32_t(std::clamp<std::int64_t>(floorDiv(maxX, cell) + 1, 0, world.width - 1));
+        const std::int32_t y0 = std::int32_t(std::clamp<std::int64_t>(floorDiv(minY, cell) - 1, 0, world.height - 1));
+        const std::int32_t y1 = std::int32_t(std::clamp<std::int64_t>(floorDiv(maxY, cell) + 1, 0, world.height - 1));
+        hash.add(std::uint64_t(x0) | (std::uint64_t(y0) << 32));
+        hash.add(std::uint64_t(x1) | (std::uint64_t(y1) << 32));
+        const auto count = world.cells.size();
+        for (std::int32_t y = y0; y <= y1; ++y)
+            for (std::int32_t x = x0; x <= x1; ++x) {
+                const std::size_t i = std::size_t(y) * std::size_t(world.width) + std::size_t(x);
+                const generation::WorldCell& cell = world.cells[i];
+                hash.add((std::uint64_t(cell.elevation) << 40) | (std::uint64_t(cell.drainSize) << 32) |
+                         (std::uint64_t(std::uint8_t(cell.drainOut)) << 24) |
+                         (std::uint64_t(std::uint8_t(cell.riverOut)) << 16) | (std::uint64_t(cell.moisture) << 8) |
+                         (cell.sea ? 2u : 0u) | (cell.river ? 1u : 0u));
+                hash.add((std::uint64_t(cell.riverSize) << 32) | (std::uint64_t(std::uint8_t(cell.climate)) << 16) |
+                         (std::uint64_t(cell.temperature) << 8) | std::uint64_t(std::uint8_t(cell.biome)));
+                const auto at = [&](const auto& field) {
+                    return i < field.size() ? std::uint64_t(std::uint32_t(field[i])) : 0x5eull;
+                };
+                hash.add(at(world.lakeRegionField) ^ (at(world.lakeLevelField) << 32));
+                hash.add(at(world.lakeDepthField) ^ (at(world.riverDischargeField) << 32));
+                hash.add(at(world.flowDirectionField));
+                (void)count;
+            }
+    }
+    if (const auto* f = world.terrainFoundation.get()) {
+        const std::int64_t step = std::max(1, f->step);
+        const int x0 = int(std::clamp<std::int64_t>(floorDiv(minX, step) - 2, 0, f->columns - 1));
+        const int x1 = int(std::clamp<std::int64_t>(floorDiv(maxX, step) + 2, 0, f->columns - 1));
+        const int y0 = int(std::clamp<std::int64_t>(floorDiv(minY, step) - 2, 0, f->rows - 1));
+        const int y1 = int(std::clamp<std::int64_t>(floorDiv(maxY, step) + 2, 0, f->rows - 1));
+        hash.add(std::uint64_t(f->step)); hash.add(std::uint64_t(f->columns)); hash.add(std::uint64_t(f->rows));
+        const std::size_t lattice = std::size_t(f->columns) * std::size_t(f->rows);
+        for (int y = y0; y <= y1; ++y)
+            for (int x = x0; x <= x1; ++x) {
+                const std::size_t i = std::size_t(y) * std::size_t(f->columns) + std::size_t(x);
+                for (const auto& plane : f->heightDm) hash.add(i < plane.size() ? std::uint64_t(std::uint32_t(plane[i])) : 0x7eull);
+                if (f->receiver.size() == lattice) hash.add(std::uint64_t(std::uint32_t(f->receiver[i])));
+                if (f->accumulation.size() == lattice) hash.add(f->accumulation[i]);
+            }
+        const int px0 = std::max(0, int(floorDiv(minX, 512)) - 1), px1 = std::min(f->pageColumns - 1, int(floorDiv(maxX, 512)) + 1);
+        const int py0 = std::max(0, int(floorDiv(minY, 512)) - 1), py1 = std::min(f->pageRows - 1, int(floorDiv(maxY, 512)) + 1);
+        for (int y = py0; y <= py1; ++y)
+            for (int x = px0; x <= px1; ++x) {
+                const std::size_t i = std::size_t(y) * std::size_t(f->pageColumns) + std::size_t(x);
+                hash.add(i < f->detailPages.size() ? f->detailPages[i] : 0x3du);
+            }
+    }
+    return hash.value();
+}
+
+// What a group's fit came out as, in the order of its items.
+struct GroupFit {
+    std::vector<std::vector<Fixed>> surfaces;   // per segment, per course point
+    std::vector<Fixed> nodeSurfaces;
+    struct Lake { Fixed level; std::int32_t basinStep = 0; std::vector<TilePos> samples; };
+    std::vector<Lake> lakes;
+    std::size_t bytes() const {
+        std::size_t n = sizeof(*this) + nodeSurfaces.size() * sizeof(Fixed);
+        for (const auto& s : surfaces) n += s.size() * sizeof(Fixed) + sizeof(s);
+        for (const auto& l : lakes) n += l.samples.size() * sizeof(TilePos) + sizeof(l);
+        return n;
+    }
+};
+
+// The fits of the last builds, by key. Held for the process: an editor
+// rebuilding the world after every stroke is what they are for, and what an
+// edit leaves alone is most of the world. Bounded; the oldest go first.
+class FitCache {
+public:
+    static FitCache& instance() { static FitCache cache; return cache; }
+    void clear() {
+        const std::lock_guard<std::mutex> lock(guard_);
+        held_.clear();
+        bytes_ = 0;
+    }
+    std::shared_ptr<const GroupFit> find(std::uint64_t key) {
+        const std::lock_guard<std::mutex> lock(guard_);
+        if (limit_ == 0) return nullptr;   // ASR_HYDRO_FIT_CACHE_MB=0: every group fitted, every time
+        const auto it = held_.find(key);
+        if (it == held_.end()) return nullptr;
+        it->second.used = ++clock_;
+        return it->second.fit;
+    }
+    void keep(std::uint64_t key, std::shared_ptr<const GroupFit> fit) {
+        const std::lock_guard<std::mutex> lock(guard_);
+        if (limit_ == 0) return;
+        const std::size_t size = fit->bytes();
+        auto& slot = held_[key];
+        if (slot.fit) bytes_ -= slot.fit->bytes();
+        slot = {std::move(fit), ++clock_};
+        bytes_ += size;
+        while (bytes_ > limit_ && held_.size() > 1) {
+            auto oldest = held_.begin();
+            for (auto it = held_.begin(); it != held_.end(); ++it)
+                if (it->second.used < oldest->second.used) oldest = it;
+            bytes_ -= oldest->second.fit->bytes();
+            held_.erase(oldest);
+        }
+    }
+private:
+    FitCache() {
+        if (const char* mb = std::getenv("ASR_HYDRO_FIT_CACHE_MB")) limit_ = std::size_t(std::max(0, std::atoi(mb))) << 20;
+    }
+    struct Slot { std::shared_ptr<const GroupFit> fit; std::uint64_t used = 0; };
+    std::mutex guard_;
+    std::unordered_map<std::uint64_t, Slot> held_;
+    std::size_t bytes_ = 0, limit_ = std::size_t(256) << 20;
+    std::uint64_t clock_ = 0;
+};
+
+// Every group's key, and the fit of each group whose key was seen before
+// laid over it: that group is not fitted again.
+void reuseFits(HydrologyGraph& graph, const generation::WorldMapData& world, FitGroups& groups,
+               const std::vector<std::size_t>& sharedFrom) {
+    groups.cacheable = world.terrainFoundation != nullptr;
+    if (!groups.cacheable) return;
+    for (std::uint32_t g = 0; g < groups.segments.size(); ++g) {
+        groups.keys[g] = fitKey(graph, world, groups, g, sharedFrom);
+        const auto fit = FitCache::instance().find(groups.keys[g]);
+        if (!fit || fit->surfaces.size() != groups.segments[g].size() ||
+            fit->nodeSurfaces.size() != groups.nodes[g].size() || fit->lakes.size() != groups.bodies[g].size())
+            continue;
+        bool fits = true;
+        for (std::size_t n = 0; n < groups.segments[g].size() && fits; ++n)
+            fits = fit->surfaces[n].size() == graph.segments[groups.segments[g][n] - 1].course.size();
+        if (!fits) continue;
+        for (std::size_t n = 0; n < groups.segments[g].size(); ++n) {
+            auto& course = graph.segments[groups.segments[g][n] - 1].course;
+            for (std::size_t i = 0; i < course.size(); ++i) course[i].surface = fit->surfaces[n][i];
+        }
+        for (std::size_t n = 0; n < groups.nodes[g].size(); ++n)
+            graph.nodes[groups.nodes[g][n] - 1].surface = fit->nodeSurfaces[n];
+        for (std::size_t n = 0; n < groups.bodies[g].size(); ++n) {
+            WaterBody& body = graph.waterBodies[groups.bodies[g][n] - 1];
+            body.level = fit->lakes[n].level;
+            body.basinStep = fit->lakes[n].basinStep;
+            body.basinSamples = fit->lakes[n].samples;
+        }
+        groups.active[g] = 0;
+    }
+}
+
+std::mutex lastFitsGuard;
+HydrologyFitStats lastFits;
+
+void keepFits(const HydrologyGraph& graph, const FitGroups& groups) {
+    {
+        const std::lock_guard<std::mutex> lock(lastFitsGuard);
+        lastFits.groups = groups.active.size();
+        lastFits.fitted = std::size_t(std::count(groups.active.begin(), groups.active.end(), std::uint8_t(1)));
+    }
+    if (!groups.cacheable) return;
+    for (std::uint32_t g = 0; g < groups.segments.size(); ++g) {
+        if (!groups.active[g]) continue;
+        auto fit = std::make_shared<GroupFit>();
+        for (const RiverId id : groups.segments[g]) {
+            std::vector<Fixed> surfaces;
+            surfaces.reserve(graph.segments[id - 1].course.size());
+            for (const ReachPoint& p : graph.segments[id - 1].course) surfaces.push_back(p.surface);
+            fit->surfaces.push_back(std::move(surfaces));
+        }
+        for (const RiverNodeId id : groups.nodes[g]) fit->nodeSurfaces.push_back(graph.nodes[id - 1].surface);
+        for (const WaterBodyId id : groups.bodies[g]) {
+            const WaterBody& body = graph.waterBodies[id - 1];
+            fit->lakes.push_back({body.level, body.basinStep, body.basinSamples});
+        }
+        FitCache::instance().keep(groups.keys[g], std::move(fit));
     }
 }
 
@@ -725,8 +1179,15 @@ private:
 // only as low as the water in it - and so is the sea. Where the flood reaches
 // the edge of the country it may look at, the water has found its way out and
 // the level falls to wherever that was.
-void refineLakesOnCarvedGround(HydrologyGraph& graph, const generation::WorldMapData& world) {
-    constexpr std::int64_t kStep = kNaturalBasinStep;
+void refineLakesOnCarvedGround(HydrologyGraph& graph, const generation::WorldMapData& world,
+                               const FitGroups& groups) {
+    constexpr std::int64_t kFinest = kNaturalBasinStep;
+    // A lake is flooded at sixteen metres when that is at most a million
+    // samples - sixteen kilometres a side, which is every lake a world of
+    // painted regions has - and at twice that, and twice again, when it is
+    // larger: an inland sea is found out to its outlet just as well at a
+    // hundred metres, and at sixteen it was tens of seconds a lake.
+    constexpr std::int64_t kMostSamples = 1024 * 1024;
     const std::int64_t margin = generation::kMetresPerCell;
     const std::int64_t wide = std::int64_t(std::max(0, world.width)) * generation::kMetresPerCell;
     const std::int64_t high = std::int64_t(std::max(0, world.height)) * generation::kMetresPerCell;
@@ -736,6 +1197,7 @@ void refineLakesOnCarvedGround(HydrologyGraph& graph, const generation::WorldMap
     struct Refit {
         bool done = false;
         Fixed level;
+        std::int32_t step = 0;
         std::vector<TilePos> samples;
     };
     std::vector<Refit> refits(graph.waterBodies.size());
@@ -748,6 +1210,11 @@ void refineLakesOnCarvedGround(HydrologyGraph& graph, const generation::WorldMap
             lowX = std::min(lowX, s.x * step); highX = std::max(highX, s.x * step);
             lowY = std::min(lowY, s.y * step); highY = std::max(highY, s.y * step);
         }
+        std::int64_t kStep = kFinest;
+        while ((std::min(wide, highX + margin) - std::max<std::int64_t>(0, lowX - margin)) / kStep *
+                       ((std::min(high, highY + margin) - std::max<std::int64_t>(0, lowY - margin)) / kStep) >
+               kMostSamples)
+            kStep *= 2;
         const std::int64_t x0 = floorDiv(std::max<std::int64_t>(0, lowX - margin), kStep);
         const std::int64_t y0 = floorDiv(std::max<std::int64_t>(0, lowY - margin), kStep);
         const std::int64_t x1 = floorDiv(std::min(wide, highX + margin), kStep);
@@ -800,6 +1267,7 @@ void refineLakesOnCarvedGround(HydrologyGraph& graph, const generation::WorldMap
             push(x, y + 1, here);
         }
         out.done = true;
+        out.step = std::int32_t(kStep);
         out.level = core::min(body.level, level);
         for (const auto [cost, local] : reached)
             if (cost < out.level.raw)
@@ -814,23 +1282,36 @@ void refineLakesOnCarvedGround(HydrologyGraph& graph, const generation::WorldMap
         HeightField ground(&world, world.seed);   // a field keeps caches: one to a thread
         WindowedCarver carvers(graph, false);
         for (std::size_t i = nextBody++; i < graph.waterBodies.size(); i = nextBody++)
-            refit(graph.waterBodies[i], ground, carvers, refits[i]);
+            if (groups.bodyActive(i)) refit(graph.waterBodies[i], ground, carvers, refits[i]);
     };
     const unsigned threads = std::clamp(std::thread::hardware_concurrency(), 1u, 8u);
     std::vector<std::thread> workers;
     for (unsigned t = 1; t < threads; ++t) workers.emplace_back(work);
     work();
     for (auto& worker : workers) worker.join();
+    if (std::getenv("ASR_HYDRO_TRACE")) {
+        std::size_t lakes = 0, samples = 0, largest = 0, coarse = 0;
+        for (const auto& r : refits)
+            if (r.done) {
+                ++lakes;
+                samples += r.samples.size();
+                largest = std::max(largest, r.samples.size());
+                coarse += r.step > kFinest;
+            }
+        std::fprintf(stderr, "hydrology lakes refitted %zu (%zu coarser), %zu samples under water, largest %zu\n",
+                     lakes, coarse, samples, largest);
+    }
     for (std::size_t i = 0; i < graph.waterBodies.size(); ++i) {
         if (!refits[i].done) continue;
         WaterBody& body = graph.waterBodies[i];
         body.level = refits[i].level;
-        body.basinStep = static_cast<std::int32_t>(kStep);
+        body.basinStep = refits[i].step;
         body.basinSamples = std::move(refits[i].samples);
     }
     // The reaches that meet a lake meet it at its level.
     for (RiverNode& node : graph.nodes) {
         if (node.kind != RiverNodeKind::LakeInlet && node.kind != RiverNodeKind::LakeOutlet) continue;
+        if (node.waterBody == kInvalidWaterBodyId || !groups.bodyActive(node.waterBody - 1)) continue;
         if (const WaterBody* body = waterBodyOf(graph, node.waterBody); body && body->kind == WaterBodyKind::Lake)
             node.surface = body->level;
     }
@@ -855,14 +1336,21 @@ void refineLakesOnCarvedGround(HydrologyGraph& graph, const generation::WorldMap
 // falls down the valley wall to the trunk: a waterfall, with the trunk to
 // fall into. Upstream first, twice over: a trunk fitted after the tributary
 // that meets it can still lower the ground under that tributary's end.
+//
+// A group at a time (FitGroups): nothing one group reads is written by
+// another, so the groups go wide across the machine, and each is fitted in
+// the order the whole world's fit would have come to its courses in.
 void fitCoursesToCarvedGround(HydrologyGraph& graph, const generation::WorldMapData& world,
-                              const std::vector<std::size_t>& sharedFrom) {
+                              const std::vector<std::size_t>& sharedFrom, const FitGroups& groups) {
     if (graph.segments.empty()) return;
-    HeightField ground(&world, world.seed);
     auto& segments = graph.segments;
     auto& nodes = graph.nodes;
     std::vector<RiverId> leaving(nodes.size() + 1, kInvalidRiverId);
     for (const RiverSegment& segment : segments) leaving[segment.from] = segment.id;
+    // Shared, and written by each group only at its own nodes.
+    std::vector<std::size_t> arriving(nodes.size() + 1, 0);
+    std::vector<Fixed> arrived(nodes.size() + 1, Fixed::fromInt(1 << 20));
+    std::atomic<std::size_t> fittedCourses{0};
     const auto lakeLevel = [&](WaterBodyId id, Fixed& level) {
         const WaterBody* body = waterBodyOf(graph, id);
         if (body == nullptr || body->kind != WaterBodyKind::Lake) return false;
@@ -871,14 +1359,12 @@ void fitCoursesToCarvedGround(HydrologyGraph& graph, const generation::WorldMapD
     };
     // One pass a call: the caller alternates this with refitting the lakes,
     // and the second round is what catches a trunk fitted after a tributary.
-    for (int pass = 0; pass < 1; ++pass) {
-        std::vector<std::size_t> arriving(nodes.size() + 1, 0);
-        for (const RiverSegment& segment : segments)
-            if (segment.to != kInvalidRiverNodeId) ++arriving[segment.to];
-        std::vector<Fixed> arrived(nodes.size() + 1, Fixed::fromInt(1 << 20));
+    const auto fitGroup = [&](const std::vector<RiverId>& members, HeightField& ground) {
+        for (const RiverId id : members)
+            if (segments[id - 1].to != kInvalidRiverNodeId) ++arriving[segments[id - 1].to];
         std::vector<RiverId> order;
-        for (const RiverSegment& segment : segments)
-            if (arriving[segment.from] == 0) order.push_back(segment.id);
+        for (const RiverId id : members)
+            if (arriving[segments[id - 1].from] == 0) order.push_back(id);
         for (std::size_t next = 0; next < order.size(); ++next) {
             RiverSegment& segment = segments[order[next] - 1];
             auto& course = segment.course;
@@ -941,6 +1427,7 @@ void fitCoursesToCarvedGround(HydrologyGraph& graph, const generation::WorldMapD
                 running = core::min(running, lowest);
                 point.surface = core::max(running, floorLevel);
             }
+            core::progressStep(std::int64_t(fittedCourses.fetch_add(1, std::memory_order_relaxed) + 1));
             if (segment.to != kInvalidRiverNodeId) {
                 arrived[segment.to] = core::min(arrived[segment.to], course.back().surface);
                 const RiverId onward = leaving[segment.to];
@@ -950,11 +1437,13 @@ void fitCoursesToCarvedGround(HydrologyGraph& graph, const generation::WorldMapD
         // The nodes follow the courses, and every course arriving at a node
         // ends at that node's head: a step there is the fall into the river
         // below, drawn over the last chord.
-        for (const RiverSegment& segment : segments) {
+        for (const RiverId id : members) {
+            const RiverSegment& segment = segments[id - 1];
             RiverNode& from = nodes[segment.from - 1];
             if (from.kind != RiverNodeKind::LakeOutlet) from.surface = segment.course.front().surface;
         }
-        for (RiverSegment& segment : segments) {
+        for (const RiverId id : members) {
+            RiverSegment& segment = segments[id - 1];
             if (segment.to == kInvalidRiverNodeId) continue;
             RiverNode& to = nodes[segment.to - 1];
             if (leaving[to.id] == kInvalidRiverId && to.kind != RiverNodeKind::LakeInlet)
@@ -970,14 +1459,43 @@ void fitCoursesToCarvedGround(HydrologyGraph& graph, const generation::WorldMapD
                 for (std::size_t i = sharedFrom[segment.id]; i < segment.course.size(); ++i)
                     segment.course[i].surface = to.surface;
         }
-    }
+    };
+    // The largest first, so the last thread is not left with the continent.
+    std::vector<std::uint32_t> work;
+    for (std::uint32_t g = 0; g < groups.segments.size(); ++g)
+        if (groups.active[g] && !groups.segments[g].empty()) work.push_back(g);
+    std::stable_sort(work.begin(), work.end(), [&](std::uint32_t a, std::uint32_t b) {
+        return groups.segments[a].size() > groups.segments[b].size();
+    });
+    std::atomic<std::size_t> next{0};
+    std::size_t courses = 0;
+    for (const std::uint32_t g : work) courses += groups.segments[g].size();
+    core::progress("rivers: fitting courses to the ground", 0, std::int64_t(courses));
+    const auto worker = [&] {
+        HeightField ground(&world, world.seed);   // a field keeps caches: one to a thread
+        for (std::size_t i = next++; i < work.size(); i = next++) fitGroup(groups.segments[work[i]], ground);
+    };
+    const unsigned threads = std::clamp<unsigned>(std::min<std::size_t>(work.size(), std::thread::hardware_concurrency()), 1u, 8u);
+    std::vector<std::thread> workers;
+    for (unsigned t = 1; t < threads; ++t) workers.emplace_back(worker);
+    worker();
+    for (auto& w : workers) w.join();
 }
 } // namespace
 
 HydrologyGraph buildHydrologyGraph(const generation::WorldMapData& world) {
+    static const bool traced = std::getenv("ASR_HYDRO_TRACE") != nullptr;
+    auto lapAt = std::chrono::steady_clock::now();
+    const auto lapTrace = [&](const char* what) {
+        if (!traced) return;
+        const auto now = std::chrono::steady_clock::now();
+        std::fprintf(stderr, "hydrology %s %.1f ms\n", what, std::chrono::duration<double, std::milli>(now - lapAt).count());
+        lapAt = now;
+    };
     HydrologyGraph graph;
     graph.worldSeed = world.seed;
     graph.macroCellMetres = generation::kMetresPerCell;
+    core::progress("rivers: drainage");
 
     const std::int32_t width = world.width;
     const std::int32_t height = world.height;
@@ -987,6 +1505,17 @@ HydrologyGraph buildHydrologyGraph(const generation::WorldMapData& world) {
     graph.macroHeight = height;
     graph.sourceFingerprint = fingerprintOf(world);
 
+    // Nothing but sea: the ocean is the whole graph, and every array below
+    // would be a cell's worth of nothing for every cell of the world.
+    if (std::none_of(world.cells.begin(), world.cells.end(), [](const generation::WorldCell& c) { return !c.sea; })) {
+        WaterBody ocean;
+        ocean.id = kOceanWaterBodyId;
+        ocean.kind = WaterBodyKind::Ocean;
+        ocean.sourceRegion = -1;
+        ocean.level = core::kZero;
+        graph.waterBodies.push_back(ocean);
+        return graph;
+    }
     const auto columnOf = [width](std::size_t cell) {
         return static_cast<std::int32_t>(cell % static_cast<std::size_t>(width));
     };
@@ -1015,6 +1544,29 @@ HydrologyGraph buildHydrologyGraph(const generation::WorldMapData& world) {
         const TilePos down = core::neighbour(positionOf(i), dir);
         if (!world.inBounds(down)) continue;   // off the map: a terminal, not a course
         downstream[i] = down.y * width + down.x;
+    }
+
+    // Land that drains nowhere and holds no lake: ground whose water has not
+    // been asked for yet (an import, a pinned sketch - the editor's Primary
+    // and Relief stages). The ocean is all the water there is, and walking a
+    // continent's worth of cells to find no course in it is what made an
+    // import of heights alone wait minutes on "rivers".
+    {
+        const bool drains = std::any_of(downstream.begin(), downstream.end(), [](std::int32_t d) { return d >= 0; });
+        bool lakes = false;
+        if (world.lakeRegionField.size() == count)
+            for (std::size_t i = 0; i < count && !lakes; ++i)
+                lakes = world.lakeRegionField[i] >= 0 && !world.cells[i].sea;
+        if (!drains && !lakes) {
+            WaterBody ocean;
+            ocean.id = kOceanWaterBodyId;
+            ocean.kind = WaterBodyKind::Ocean;
+            ocean.sourceRegion = -1;
+            ocean.level = core::kZero;
+            graph.waterBodies.push_back(ocean);
+            indexGraph(graph, world);
+            return graph;
+        }
     }
 
     // --- water bodies -------------------------------------------------------
@@ -1094,6 +1646,13 @@ HydrologyGraph buildHydrologyGraph(const generation::WorldMapData& world) {
     // downstream of those - with no camera and no LOD in it. Dry drainage
     // stays out: a gully is a valley, not a body.
     MacroHydrology hydro = resolveHydrology(world, downstream);
+    {
+        const std::lock_guard<std::mutex> lock(lastFitsGuard);
+        lastFits.streamFlow = hydro.streamFlow;
+        lastFits.largestFlow = hydro.largestFlow;
+    }
+    lapTrace("resolve");
+    core::progress("rivers: basins");
     if (world.terrainFoundation) {
         for (auto& body:bodies)
             if (body.kind==WaterBodyKind::Lake)
@@ -1125,6 +1684,8 @@ HydrologyGraph buildHydrologyGraph(const generation::WorldMapData& world) {
                 naturalBasin(body,*world.terrainFoundation,graph.macroCellMetres);
     }
 
+    lapTrace("basins");
+    core::progress("rivers: courses");
     const auto flows = [&](std::size_t cell) {
         return !world.cells[cell].sea && hydro.wet[cell] != 0;
     };
@@ -1496,6 +2057,8 @@ HydrologyGraph buildHydrologyGraph(const generation::WorldMapData& world) {
         segments.push_back(std::move(segment));
     }
 
+    lapTrace("segments");
+    core::progress("rivers: order");
     // --- how it all joins up -------------------------------------------------
     for (RiverNode& node : nodes) {
         const RiverId out = outgoingOf[node.id];
@@ -1752,7 +2315,21 @@ HydrologyGraph buildHydrologyGraph(const generation::WorldMapData& world) {
     //
     // Built before the fittings below, which carve through it, and again after
     // standing water has been refitted to the ground it ended up on.
+    lapTrace("order");
+    core::progress("rivers: fit groups");
+    // Which water reads which, and the fit of every group that is what it was
+    // the last time it was fitted (FitGroups): only the rest are fitted below.
+    FitGroups groups = fitGroups(graph);
+    reuseFits(graph, world, groups, sharedFrom);
+    if (traced) {
+        std::size_t fitted = 0;
+        for (const auto a : groups.active) fitted += a;
+        std::fprintf(stderr, "hydrology %zu group(s), %zu to fit\n", groups.active.size(), fitted);
+    }
+    lapTrace("groups");
+    core::progress("rivers: index");
     indexGraph(graph, world);
+    lapTrace("index");
 
     // --- the water fitted to the ground it ended up in --------------------------
     //
@@ -1763,11 +2340,16 @@ HydrologyGraph buildHydrologyGraph(const generation::WorldMapData& world) {
     // level from it. Twice, since each moves the ground the other stands on.
     for (int round = 0; round < 2; ++round) {
         if (world.terrainFoundation) {
-            refineLakesOnCarvedGround(graph, world);
+            core::progress("rivers: fitting lakes to the ground");
+            refineLakesOnCarvedGround(graph, world, groups);
+            lapTrace("refine lakes");
             indexGraph(graph, world);
+            lapTrace("index");
         }
-        fitCoursesToCarvedGround(graph, world, sharedFrom);
+        fitCoursesToCarvedGround(graph, world, sharedFrom, groups);
+        lapTrace("fit courses");
     }
+    keepFits(graph, groups);
     return graph;
 }
 
@@ -1775,8 +2357,21 @@ HydrologyGraph buildHydrologyGraph(const generation::WorldMapData& world) {
 
 namespace world::streaming {
 
+std::uint64_t hydrologySourceFingerprint(const generation::WorldMapData& world) { return fingerprintOf(world); }
+
+HydrologyFitStats lastHydrologyFits() {
+    const std::lock_guard<std::mutex> lock(lastFitsGuard);
+    return lastFits;
+}
+void forgetHydrologyFits() { FitCache::instance().clear(); }
+
 std::shared_ptr<const HydrologyGraph> sharedHydrologyGraph(
         const generation::WorldMapData& world) {
+    return sharedHydrologyGraph(world, {});
+}
+
+std::shared_ptr<const HydrologyGraph> sharedHydrologyGraph(
+        const generation::WorldMapData& world, const std::filesystem::path& cacheRoot) {
     struct Held {
         const generation::WorldMapData* map;
         std::uint64_t seed;
@@ -1797,7 +2392,22 @@ std::shared_ptr<const HydrologyGraph> sharedHydrologyGraph(
             it = held.erase(it);   // its world has gone
         }
     }
-    auto graph = std::make_shared<const HydrologyGraph>(buildHydrologyGraph(world));
+    // From disk when this very map was opened before: the graph is a pure
+    // function of the map, and building it is most of what raising a
+    // snapshot costs. Held under the lock like the build is, so two fields
+    // asking at once do not both read it.
+    std::shared_ptr<const HydrologyGraph> graph;
+    std::filesystem::path root;
+    if (!cacheRoot.empty() && world.width > 0 && world.height > 0) {
+        const std::uint64_t source = fingerprintOf(world);
+        root = cacheRoot / "graphs" / (std::to_string(world.seed) + "-" + std::to_string(source));
+        HydrologyGraph stored;
+        if (readHydrologyGraphCache(root, world.seed, source, stored)) graph = std::make_shared<const HydrologyGraph>(std::move(stored));
+    }
+    if (!graph) {
+        graph = std::make_shared<const HydrologyGraph>(buildHydrologyGraph(world));
+        if (!root.empty()) (void)writeHydrologyGraphCache(root, *graph);
+    }
     held.push_back({&world, world.seed, world.width, world.height, graph});
     return graph;
 }

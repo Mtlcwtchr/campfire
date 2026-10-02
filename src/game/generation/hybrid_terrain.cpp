@@ -1,6 +1,7 @@
 #include "game/generation/hybrid_terrain.hpp"
 #include "game/generation/mountain_shape.hpp"
 #include "game/generation/world_map_gen.hpp"
+#include "game/generation/world_layout.hpp"
 #include "engine/core/hash.hpp"
 #include "engine/core/rng.hpp"
 #include <nlohmann/json.hpp>
@@ -436,7 +437,7 @@ static std::shared_ptr<HybridTerrain> buildHybridTerrain(WorldMapData& world, co
         for (const auto& other : terrain->patches) {
             const auto dx=std::int64_t(p.originX+p.radius)-other.originX-other.radius;
             const auto dy=std::int64_t(p.originY+p.radius)-other.originY-other.radius;
-            const auto reach=std::int64_t(p.radius)+other.radius+540;
+            const auto reach=std::int64_t(p.radius)+other.radius+kMetresPerCell;
             if (dx*dx+dy*dy<reach*reach) return false;
         }
         std::vector<const CatalogEntry*> choices;
@@ -453,8 +454,8 @@ static std::shared_ptr<HybridTerrain> buildHybridTerrain(WorldMapData& world, co
         // Align to the regional contour using rational unit directions. There
         // is no platform-dependent sin/cos in placement or sampling.
         constexpr int directions[8][2]={{5,0},{4,3},{0,5},{-3,4},{-5,0},{-4,-3},{0,-5},{3,-4}};
-        const auto gx=baseAt(world,centreX+Fixed::fromInt(540),centreY)-baseAt(world,centreX-Fixed::fromInt(540),centreY);
-        const auto gy=baseAt(world,centreX,centreY+Fixed::fromInt(540))-baseAt(world,centreX,centreY-Fixed::fromInt(540));
+        const auto gx=baseAt(world,centreX+Fixed::fromInt(kMetresPerCell),centreY)-baseAt(world,centreX-Fixed::fromInt(kMetresPerCell),centreY);
+        const auto gy=baseAt(world,centreX,centreY+Fixed::fromInt(kMetresPerCell))-baseAt(world,centreX,centreY-Fixed::fromInt(kMetresPerCell));
         int direction=static_cast<int>(seed%8); Fixed best=Fixed::fromInt(-100000);
         if (family==LandformFamily::Folded || family==LandformFamily::Alpine || family==LandformFamily::Glacial) {
             for (int d=0;d<8;++d) {
@@ -580,7 +581,7 @@ static std::shared_ptr<HybridTerrain> buildHybridTerrain(WorldMapData& world, co
             // Context-fitting plane preserves the regional direction. Fine
             // fractals decorate the DEM without duplicating its mountain scale.
             if (!island && !mountain && family!=LandformFamily::Volcanic)
-                target+=(gx*dx+gy*dy)/Fixed::fromInt(1080)*Fixed::ratio(1,4);
+                target+=(gx*dx+gy*dy)/Fixed::fromInt(2*kMetresPerCell)*Fixed::ratio(1,4);
             if (mountain) {
                 const auto high=core::saturate(shape/relief);
                 // No uniform layer of new summits: at most two metres near a
@@ -608,6 +609,9 @@ static std::shared_ptr<HybridTerrain> buildHybridTerrain(WorldMapData& world, co
             const auto i=std::size_t(y)*world.width+x;
             if (world.cells[i].sea!=island || world.distanceToCoast[i]<(island ? 9 : 5)) continue;
             if (!island && world.cells[i].elevation>150) continue;
+            // An empty region is open sea and stays so: no hotspot island in
+            // it, and nothing whose footprint reaches into its border band.
+            if (params.layout && generatedAt(*params.layout,x,y)<0.999f) continue;
             const auto h=atSeed(world.seed^0x701ca,x,y);
             const auto score=std::int64_t(world.upliftField[i])*4+world.riftField[i]*3+(h%500);
             candidates.emplace_back(score,i);

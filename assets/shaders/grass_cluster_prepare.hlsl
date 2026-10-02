@@ -23,7 +23,8 @@ void PrepareCS(uint3 id : SV_DispatchThreadID) {
     // foliageCommunity.height <= 1.15; random scale <= .85; coarse width caps
     // at cell 64. FoliageVS caps height at 1.3*1.9. windReach is the analytic
     // displacement bound of FoliageVS, not a bound on this frame's gust alone.
-    const float width = 0.85 * 1.15 * (cell > 2.5 ? min(cell, 64.0) * 0.32 : 1.0);
+    // A fine root's turf cards stand up to 0.8 m off it (world::kTurfReach).
+    const float width = 0.85 * 1.15 * (cell > 2.5 ? min(cell, 64.0) * 0.32 : 1.0) + (cell > 2.5 ? 0.0 : 0.8);
     const float halfHeight = (high - low + 2.47) * 0.5;
     const float3 centre = float3(a.xy, (high + low + 2.47) * 0.5 - 0.025);
     const float radius = length(float2(width + windReach, halfHeight)) + 0.01;

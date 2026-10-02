@@ -11,6 +11,9 @@
 #include "engine/render/frame.hpp"
 
 #include "game/generation/world_map_gen.hpp"
+#include "game/generation/world_brush.hpp"
+#include "game/generation/world_layout.hpp"
+#include "game/generation/world_sketch.hpp"
 #include "game/render/height_page_atlas.hpp"
 #include "game/render/height_page_stream.hpp"
 #include "game/render/gpu_terrain.hpp"
@@ -731,7 +734,12 @@ static void checkPageSurfaceGpu(bool adaptive, bool water = false, bool stages =
             if (flags&1) bed=std::min(bed-32,100.0f);
             if (water) {
                 if (flags & 4) {
-                    CHECK(std::abs(actual-int(std::lround(std::clamp((head-bed)/1024+0.5f,0.0f,1.0f)*255)))<=1);
+                    // The waterline is per FRAGMENT from the page fields, never
+                    // the mesh's bed/head (resolveWaterPageDetail): here the
+                    // dry fixture page, 0 head over the page's own bed. Only
+                    // cover stays the mesh's on the explicit path.
+                    const float pageBed = std::lerp(100.0f, 287.5f, morph);
+                    CHECK(std::abs(actual-int(std::lround(std::clamp(-pageBed/1024+0.5f,0.0f,1.0f)*255)))<=1);
                     CHECK_EQ(shadedHeight,flags&1?0:255);
                 } else {
                     CHECK_EQ(shadedHeight,0); // legacy grid still uses the dry page
@@ -965,12 +973,14 @@ TEST(terrain_depth_clamp_does_not_pull_buried_skirts_in_front) {
     if (!gpu.ready) return;
     struct Vertex { float position[3], colour[3]; };
     const Vertex points[]{
-        {{-1, -1, 0.7f}, {0, 1, 0}}, {{3, -1, 0.7f}, {0, 1, 0}}, {{-1, 3, 0.7f}, {0, 1, 0}},
+        // Reversed depth (Camera::viewProjection): nearer is larger, the far
+        // plane is nought.
+        {{-1, -1, 0.3f}, {0, 1, 0}}, {{3, -1, 0.3f}, {0, 1, 0}}, {{-1, 3, 0.3f}, {0, 1, 0}},
         // At screen centre the wall is behind the green surface. Clamping
-        // its far vertices to 1 BEFORE interpolation incorrectly brings it forward.
-        {{-1, -1, 0.1f}, {1, 0, 0}}, {{3, -1, 3.0f}, {1, 0, 0}}, {{-1, 3, 3.0f}, {1, 0, 0}},
+        // its far vertices to 0 BEFORE interpolation incorrectly brings it forward.
+        {{-1, -1, 0.9f}, {1, 0, 0}}, {{3, -1, -2.0f}, {1, 0, 0}}, {{-1, 3, -2.0f}, {1, 0, 0}},
         // Ground wholly beyond the depth slab must still render, not be clipped.
-        {{-1, -1, 2.0f}, {1, 0, 0}}, {{3, -1, 2.0f}, {1, 0, 0}}, {{-1, 3, 2.0f}, {1, 0, 0}}};
+        {{-1, -1, -1.0f}, {1, 0, 0}}, {{3, -1, -1.0f}, {1, 0, 0}}, {{-1, 3, -1.0f}, {1, 0, 0}}};
     auto vertices = gpu.device.uploadBuffer(SDL_GPU_BUFFERUSAGE_VERTEX, points, sizeof(points));
     engine::PipelineWanted wanted;
     wanted.shaderFile = "terrain_depth_probe.hlsl";
@@ -1010,7 +1020,7 @@ TEST(terrain_depth_clamp_does_not_pull_buried_skirts_in_front) {
         colour.texture = target.get();
         colour.load_op = SDL_GPU_LOADOP_CLEAR; colour.store_op = SDL_GPU_STOREOP_STORE;
         SDL_GPUDepthStencilTargetInfo depth{};
-        depth.texture = depthTarget.get(); depth.clear_depth = 1;
+        depth.texture = depthTarget.get(); depth.clear_depth = 0;
         depth.load_op = SDL_GPU_LOADOP_CLEAR; depth.store_op = SDL_GPU_STOREOP_STORE;
         depth.stencil_load_op = SDL_GPU_LOADOP_DONT_CARE;
         depth.stencil_store_op = SDL_GPU_STOREOP_DONT_CARE;
@@ -1102,7 +1112,11 @@ TEST(terrain_materials_preserve_identity_channels_and_normals_across_zoom) {
         if (mode == 9 || mode == 10) continue; // real material arrays are tested below
         std::array<int, 4> reference{};
         bool first = true;
+        // Mode 5: the previous zoom's colour, and this zoom's first rotation.
+        std::array<int, 4> previousZoom{}, thisZoom{};
+        bool havePreviousZoom = false;
         for (const float footprint : {0.03f, 0.08f, 0.25f, 0.75f, 1.5f, 3.2f}) {
+            if (mode == 5 && footprint != 0.03f) { previousZoom = thisZoom; havePreviousZoom = true; }
             for (const float rotation : {0.0f, 0.7f, 1.8f}) {
                 auto* commands = SDL_AcquireGPUCommandBuffer(gpu.device.handle());
                 CHECK(commands != nullptr);
@@ -1169,24 +1183,29 @@ TEST(terrain_materials_preserve_identity_channels_and_normals_across_zoom) {
                     CHECK(std::abs(actual[0]-140)<=1);CHECK(std::abs(actual[1]-102)<=1);
                     CHECK(std::abs(actual[2]-64)<=1);CHECK_EQ(actual[3],255);
                 }
-                if (mode == 5 && footprint > 3.0f * 0.35f) {
-                    // Unresolved Perlin must converge to the noise-free blend,
-                    // not preserve a subpixel pattern (and alias on zoom-out).
-                    const float width = 0.2f * 0.62f; // fixture's grass/rock profile
-                    const float u = (0.04f + width) / (2.0f * width);
-                    const float mix = u * u * (3.0f - 2.0f * u);
-                    const std::array<int, 4> mean{
-                        int(std::lround(140 + (48 - 140) * mix)),
-                        int(std::lround(128 + (112 - 128) * mix)),
-                        int(std::lround(120 + (36 - 120) * mix)), int(std::lround(255 * mix))};
-                    for (int i = 0; i < 4; ++i) {
-                        CHECK(actual[i] >= std::min(reference[i], mean[i]) - 1);
-                        CHECK(actual[i] <= std::max(reference[i], mean[i]) + 1);
-                        if (footprint >= 3.0f) CHECK(std::abs(actual[i] - mean[i]) <= 1);
+                if (mode == 5) {
+                    // Coverage (alpha = ground.mix) must not move with zoom or
+                    // rotation: the tie between the two materials is where it is.
+                    CHECK(std::abs(actual[3] - reference[3]) <= 1);
+                    // What is DRAWN is height-biased by each side's texture height
+                    // (groundHereIn), and this fixture inverts the heights along the
+                    // mip chain, so the drawn colour legitimately shifts with zoom.
+                    // It may only shift one way - from the close-up towards the far
+                    // colour, never back (no subpixel pattern surviving or aliasing
+                    // on zoom-out) - and never depend on rotation.
+                    if (rotation == 0.0f) thisZoom = actual;
+                    for (int i = 0; i < 3; ++i) {
+                        CHECK(std::abs(actual[i] - thisZoom[i]) <= 1);
+                        if (havePreviousZoom) {
+                            const int before = previousZoom[i] - reference[i];
+                            const int now = actual[i] - reference[i];
+                            CHECK(std::abs(now) + 1 >= std::abs(before));
+                            CHECK(before * now >= 0 || std::abs(before) <= 1 || std::abs(now) <= 1);
+                        }
                     }
-                } else if (mode == 5 || mode == 7 || mode >= 11) {
+                } else if (mode == 7 || mode >= 11) {
                     for (int i = 0; i < 4; ++i) {
-                        const int tolerance = mode == 5 ? 1 : 3; // lighting/haze, not repaint
+                        const int tolerance = 3; // lighting/haze, not repaint
                         if (std::abs(actual[i] - reference[i]) > tolerance)
                             std::cerr << "material mode=" << mode << " footprint=" << footprint
                                       << " channel=" << i << " got=" << actual[i]
@@ -1276,7 +1295,9 @@ TEST(terrain_materials_preserve_identity_channels_and_normals_across_zoom) {
                             data[p * 4 + 1] * 0.7152 + data[p * 4 + 2] * 0.0722;
                         luminanceSum += luminance / 4096.0;
                         luminanceSquared += luminance * luminance / 4096.0;
-                        CHECK_EQ(data[p * 4 + 3], 255);
+                        // groundHere is opaque; TerrainPS writes the scene depth
+                        // into alpha (sceneDepthAlpha), 0 under this orthographic probe.
+                        CHECK_EQ(data[p * 4 + 3], mode == 9 ? 255 : 0);
                     }
                     const double contrast = std::sqrt(std::max(0.0,
                         luminanceSquared - luminanceSum * luminanceSum)) /
@@ -1288,11 +1309,15 @@ TEST(terrain_materials_preserve_identity_channels_and_normals_across_zoom) {
                     // Preserve physical close-up detail, not a minimum amount
                     // of noise at every distance. The macro-band regression
                     // below checks that unresolved grain does not come back.
+                    // The floor follows the source: dry sand is an even, fine
+                    // grain (its own albedo CV is ~0.06 against 0.10-0.19 for
+                    // the others), and shading keeps a like share of each.
+                    const double minimumContrast = layer == 2 ? 0.012 : 0.025;
                     if (mode == 9 && layer != 5 && footprint <= 0.08f) {
-                        if (contrast < 0.025)
+                        if (contrast < minimumContrast)
                             std::cerr << materials[layer] << " lost texture at pixel=" << footprint
                                       << " slope=" << slope << " contrast=" << contrast << '\n';
-                        CHECK(contrast >= 0.025);
+                        CHECK(contrast >= minimumContrast);
                     }
                     if (previews) {
                         auto* image = SDL_CreateSurfaceFrom(64, 64, SDL_PIXELFORMAT_RGBA32, data, 64 * 4);
@@ -1534,5 +1559,125 @@ TEST(terrain_erosion_gpu_survives_distance_but_filters_unresolved_bands) {
             SDL_UnmapGPUTransferBuffer(gpu.device.handle(),transfer.get());
         }
     }
+}
+
+
+TEST(sketch_pass_extrudes_the_painted_coast_and_nothing_else) {
+    // The editor's coast sketch through its real shader: a top where the
+    // paint is land, clipped at the painted shore, and the sea left alone.
+    Gpu gpu;
+    CHECK(gpu.ready);
+    if (!gpu.ready) return;
+    auto layout = generation::emptyLayout(1, 1, 3);
+    generation::beginSketch(layout, 0, 0);
+    generation::Brush paint;
+    paint.tool = generation::BrushTool::Paint;
+    paint.value = 900;
+    paint.strength = 1.0f;
+    paint.hardness = 0.8f;
+    paint.radius = generation::legalRadius(generation::LayerId::Continents, layout, 30000);
+    const double centre = 0.5 * double(generation::kRegionMetres);
+    generation::dab(layout, generation::LayerId::Continents, paint, centre, centre, nullptr);
+    const auto mesh = generation::sketchMesh(layout);
+    CHECK(!mesh.empty());
+    if (mesh.empty()) return;
+
+    constexpr Uint32 side = 64;
+    SDL_GPUTextureCreateInfo info{};
+    info.type = SDL_GPU_TEXTURETYPE_2D;
+    info.format = engine::Device::kColourFormat;
+    info.usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
+    info.width = info.height = side;
+    info.layer_count_or_depth = info.num_levels = 1;
+    info.sample_count = SDL_GPU_SAMPLECOUNT_1;
+    auto target = gpu.device.makeTexture(info);
+    info.format = engine::Device::kDepthFormat;
+    info.usage = SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET;
+    auto depth = gpu.device.makeTexture(info);
+    engine::PipelineWanted wanted;
+    wanted.shaderFile = "sketch.hlsl";
+    wanted.vertexEntry = "SketchVS";
+    wanted.fragmentEntry = "SketchPS";
+    wanted.buffers = {{0, sizeof(generation::SketchMesh::Vertex), SDL_GPU_VERTEXINPUTRATE_VERTEX, 0}};
+    wanted.attributes = {{0, 0, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4, 0}};
+    wanted.blend = false;
+    wanted.depthTest = true;
+    wanted.depthWrite = false;
+    auto pipeline = gpu.device.makePipeline(wanted);
+    if (!pipeline) std::cerr << gpu.device.error() << '\n';
+    auto vertices = gpu.device.uploadBuffer(SDL_GPU_BUFFERUSAGE_VERTEX, mesh.vertices.data(),
+                                            mesh.vertices.size() * sizeof(mesh.vertices[0]));
+    auto indices = gpu.device.uploadBuffer(SDL_GPU_BUFFERUSAGE_INDEX, mesh.indices.data(),
+                                           mesh.indices.size() * sizeof(mesh.indices[0]));
+    SDL_GPUTransferBufferCreateInfo transferInfo{};
+    transferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD;
+    transferInfo.size = side * side * 4;
+    engine::Owned<SDL_GPUTransferBuffer, SDL_ReleaseGPUTransferBuffer> transfer(
+        gpu.device.handle(), SDL_CreateGPUTransferBuffer(gpu.device.handle(), &transferInfo));
+    CHECK(bool(target) && bool(depth) && bool(pipeline) && bool(vertices) && bool(indices) && bool(transfer));
+    if (!target || !depth || !pipeline || !vertices || !indices || !transfer) return;
+
+    // Straight down over the region, depth from the height.
+    engine::Scene scene{};
+    const float half = float(centre);
+    const float matrix[16]{1.0f / half, 0, 0, -1.0f,
+                           0, -1.0f / half, 0, 1.0f,
+                           0, 0, 1e-4f, 0.5f,   // reversed depth: higher is nearer
+                           0, 0, 0, 1};
+    std::copy(std::begin(matrix), std::end(matrix), scene.viewProjection);
+    std::array<float, 16> own{};
+    own[0] = mesh.shore;
+    auto* commands = SDL_AcquireGPUCommandBuffer(gpu.device.handle());
+    CHECK(commands != nullptr);
+    if (!commands) return;
+    SDL_PushGPUVertexUniformData(commands, 0, &scene, sizeof(scene));
+    SDL_PushGPUFragmentUniformData(commands, 0, &scene, sizeof(scene));
+    SDL_PushGPUFragmentUniformData(commands, 1, own.data(), sizeof(own));
+    SDL_GPUColorTargetInfo colour{};
+    colour.texture = target.get();
+    colour.load_op = SDL_GPU_LOADOP_CLEAR;
+    colour.store_op = SDL_GPU_STOREOP_STORE;
+    SDL_GPUDepthStencilTargetInfo depthTarget{};
+    depthTarget.texture = depth.get();
+    depthTarget.clear_depth = 0.0f;
+    depthTarget.load_op = SDL_GPU_LOADOP_CLEAR;
+    depthTarget.store_op = SDL_GPU_STOREOP_DONT_CARE;
+    depthTarget.stencil_load_op = SDL_GPU_LOADOP_DONT_CARE;
+    depthTarget.stencil_store_op = SDL_GPU_STOREOP_DONT_CARE;
+    auto* render = SDL_BeginGPURenderPass(commands, &colour, 1, &depthTarget);
+    SDL_BindGPUGraphicsPipeline(render, pipeline.get());
+    const SDL_GPUBufferBinding vertexBinding{vertices.get(), 0};
+    SDL_BindGPUVertexBuffers(render, 0, &vertexBinding, 1);
+    const SDL_GPUBufferBinding indexBinding{indices.get(), 0};
+    SDL_BindGPUIndexBuffer(render, &indexBinding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
+    SDL_DrawGPUIndexedPrimitives(render, Uint32(mesh.indices.size()), 1, 0, 0, 0);
+    SDL_EndGPURenderPass(render);
+    auto* copy = SDL_BeginGPUCopyPass(commands);
+    const SDL_GPUTextureRegion region{target.get(), 0, 0, 0, 0, 0, side, side, 1};
+    const SDL_GPUTextureTransferInfo destination{transfer.get(), 0, side, side};
+    SDL_DownloadFromGPUTexture(copy, &region, &destination);
+    SDL_EndGPUCopyPass(copy);
+    CHECK(gpu.device.submitFrame(commands));
+    CHECK(SDL_WaitForGPUIdle(gpu.device.handle()));
+    const auto* pixels = static_cast<const Uint8*>(SDL_MapGPUTransferBuffer(gpu.device.handle(), transfer.get(), false));
+    CHECK(pixels != nullptr);
+    if (!pixels) return;
+    const auto at = [&](Uint32 x, Uint32 y) { return pixels + (y * side + x) * 4; };
+    // The middle of the painted land: parchment, warm (red over green over blue).
+    const Uint8* land = at(side / 2, side / 2);
+    CHECK(land[0] > 80 && land[0] > land[1] && land[1] > land[2]);
+    CHECK_EQ(land[3], 255);
+    // Far out at sea, where nothing was painted: nothing drawn.
+    const Uint8* sea = at(3, 3);
+    CHECK_EQ(int(sea[0]) + sea[1] + sea[2] + sea[3], 0);
+    // Past the brush's edge (30 km of a 65.5 km half-width) but inside the
+    // mesh's quads: clipped at the shore, not drawn as a square.
+    const Uint8* past = at(side / 2 + 29, side / 2);
+    CHECK_EQ(int(past[0]) + past[1] + past[2], 0);
+    std::size_t drawn = 0;
+    for (Uint32 i = 0; i < side * side; ++i) drawn += pixels[i * 4 + 3] != 0;
+    // A disc of radius ~30 km over a 131 km square: about 16% of it.
+    CHECK(drawn > side * side / 12 && drawn < side * side / 3);
+    SDL_UnmapGPUTransferBuffer(gpu.device.handle(), transfer.get());
 }
 

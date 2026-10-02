@@ -725,12 +725,14 @@ TEST(staged_foundation_macro_joins_are_smooth_without_overshooting_crests) {
                 (t<=16?20+3*t:68+9*(t-16));
         }
         const auto f=buildTerrainFoundation(w,p,0,1000);
+        // Macro node 16, wherever the cell size puts it.
+        constexpr int node=16*kMetresPerCell;
         const auto at=[&](int t) {
-            return f->sample(Fixed::fromInt(vertical?8640:t),Fixed::fromInt(vertical?t:8640),TerrainStage::Tectonics);
+            return f->sample(Fixed::fromInt(vertical?node:t),Fixed::fromInt(vertical?t:node),TerrainStage::Tectonics);
         };
         // Macro node 16 happens to lie on H64. Bilinear upsampling leaves a
         // 1.6 m second difference here, even though this is a broad landform.
-        const auto centre=at(8640),left=at(8576),right=at(8704);
+        const auto centre=at(node),left=at(node-64),right=at(node+64);
         CHECK(core::abs(left+right-centre*2)<Fixed::ratio(7,10));
         CHECK_EQ(centre,Fixed::ratio((crest?100:68)*22950/1000,10));
         if (crest) {
@@ -752,7 +754,10 @@ TEST(staged_foundation_resampling_preserves_planes_and_constant_boundaries) {
     // Exact integer-metre macro heights isolate reconstruction from the first
     // quantisation. Only the final H64 decimetre rounding remains.
     const auto f=buildTerrainFoundation(w,p,0,2295);
-    for (int y=640;y<12000;y+=192) for (int x=640;x<12000;x+=192) {
+    // Clear of the last cell, where the reconstruction holds the edge value
+    // rather than the plane: the same margin whatever the cell size.
+    const int end=24*kMetresPerCell-960;
+    for (int y=640;y<end;y+=192) for (int x=640;x<end;x+=192) {
         const auto actual=f->sample(Fixed::fromInt(x),Fixed::fromInt(y),TerrainStage::Tectonics);
         const auto expected=Fixed::fromInt(40)+Fixed::ratio(2*x+y,kMetresPerCell);
         CHECK(core::abs(actual-expected)<Fixed::ratio(11,100));
@@ -859,7 +864,7 @@ TEST(material_is_the_same_ground_at_every_level_of_detail) {
     w.primaryHeightField.assign(w.cells.size(),100);
     w.macroHeightField.resize(w.cells.size());
     for (int y=0;y<w.height;++y) for (int x=0;x<w.width;++x)
-        w.macroHeightField[std::size_t(y)*w.width+x]=200+900*std::max(0,12-std::abs(x-12))/12;
+        w.macroHeightField[std::size_t(y)*w.width+x]=200+900*std::max(0,3-std::abs(x-12))/3;
     for (auto& c : w.cells) { c.sea=false; c.temperature=200; c.moisture=140; }
     w.terrainFoundation=buildTerrainFoundation(w,p,0,1200);
     world::HeightField field(&w,w.seed);
@@ -870,7 +875,10 @@ TEST(material_is_the_same_ground_at_every_level_of_detail) {
         const auto sy=std::int64_t(12)*kMetresPerCell/world::kSampleMetres;
         const auto fine=field.materialsGiven(sx,sy,core::kZero,core::kZero,1);
         ++looked;
-        if (fine.of(world::Material::Rock)>Fixed::ratio(1,4)) ++stony;
+        // A fifth, not a quarter: along this flank rock runs 0.1-0.25 at
+        // either cell size, and a quarter was cleared by one sample by a
+        // thousandth - a check of where the samples fell, not of the ground.
+        if (fine.of(world::Material::Rock)>Fixed::ratio(1,5)) ++stony;
         for (const std::int64_t stride : {2,4,16,64}) {
             const auto coarse=field.materialsGiven(sx,sy,core::kZero,core::kZero,stride);
             for (std::size_t m=0;m<world::kMaterialCount;++m)
@@ -878,8 +886,10 @@ TEST(material_is_the_same_ground_at_every_level_of_detail) {
         }
     }
     CHECK(looked>10);
-    // And the flank of a nine-hundred-metre ridge is stone somewhere along it,
-    // or the invariant above is only saying that nothing is rock at any level.
+    // And the flank of a nine-hundred-metre ridge - steep, thirty-odd degrees
+    // over its kilometre and a half: a gentle flank is grass now, as it ought
+    // to be - is stone somewhere along it, or the invariant above is only
+    // saying that nothing is rock at any level.
     CHECK(stony>0);
 }
 
@@ -895,7 +905,7 @@ TEST(height_and_material_queries_are_cheap_enough_to_build_pages_with) {
     w.primaryHeightField.assign(w.cells.size(),100);
     w.macroHeightField.resize(w.cells.size());
     for (int y=0;y<w.height;++y) for (int x=0;x<w.width;++x)
-        w.macroHeightField[std::size_t(y)*w.width+x]=200+900*std::max(0,12-std::abs(x-12))/12;
+        w.macroHeightField[std::size_t(y)*w.width+x]=200+900*std::max(0,3-std::abs(x-12))/3;
     for (auto& c : w.cells) { c.sea=false; c.temperature=200; c.moisture=140; }
     w.terrainFoundation=buildTerrainFoundation(w,p,0,1200);
     world::HeightField field(&w,w.seed);

@@ -47,7 +47,8 @@ TEST(the_matrix_is_the_projection_that_was_written_out_by_hand) {
                         (dx - dy) * cam.pixelsPerTile * 0.5 + cam.viewportWidth / 2.0;
                 const double wasY = (dx + dy) * cam.pixelsPerTile * 0.25 -
                                     dz * cam.pixelsPerTile * 0.5 + cam.viewportHeight / 2.0;
-                const double wasDepth = 0.5 - ((dx + dy + 2.0 * dz) - centre) * span;
+                // Reversed depth (nearer is larger): one minus the old slab.
+                const double wasDepth = 0.5 + ((dx + dy + 2.0 * dz) - centre) * span;
 
                 const double ndcX = m[0] * wx + m[1] * wy + m[2] * wz + m[3];
                 const double ndcY = m[4] * wx + m[5] * wy + m[6] * wz + m[7];
@@ -133,7 +134,7 @@ TEST(camera_perspective_rays_project_back_at_all_orientations) {
     }
 }
 
-TEST(camera_perspective_depth_is_zero_to_one_and_scales_with_distance) {
+TEST(camera_perspective_depth_is_one_to_zero_and_scales_with_distance) {
     client::Camera cam;
     cam.mode = client::Camera::Mode::Free;
     cam.yaw = cam.pitch = 0;
@@ -141,10 +142,16 @@ TEST(camera_perspective_depth_is_zero_to_one_and_scales_with_distance) {
     float m[16];
     cam.viewProjection(m, 42, 0.001); // orthographic depth slab must be ignored
     const auto depth = [&](double distance) { return (-distance * m[8] + m[11]) / (-distance * m[12] + m[15]); };
-    CHECK(std::abs(depth(1)) < 1e-6);
-    CHECK(std::abs(depth(10000) - 1) < 1e-6);
-    CHECK(depth(0.5) < 0);
-    CHECK(depth(20000) > 1);
+    // Reversed: one at the near plane, nought at the far one, near / distance between.
+    CHECK(std::abs(depth(1) - 1) < 1e-6);
+    CHECK(std::abs(depth(10000)) < 1e-6);
+    CHECK(depth(0.5) > 1);
+    CHECK(depth(20000) < 0);
+    // Relative precision kept out to the far plane: two points a metre apart
+    // at five kilometres are many float steps apart.
+    const float a = float(depth(5000)), b = float(depth(5001));
+    CHECK(a > b);
+    CHECK(a - b > 1000.0f * (a - std::nextafter(a, 0.0f)));
     float nearX, nearY, farX, farY;
     cam.worldToScreen3D(-100, -10, 0, nearX, nearY);
     cam.worldToScreen3D(-200, -10, 0, farX, farY);

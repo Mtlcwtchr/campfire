@@ -38,13 +38,13 @@ HeightPageAtlas::HeightPageAtlas(engine::Device& device, Layout layout, bool fie
 
 std::optional<HeightPageAtlas::Address> HeightPageAtlas::upload(
         engine::Device::Uploader& uploader, const world::streaming::BaseTile& page,
-        std::uint64_t frame) {
+        std::uint64_t frame, bool replace) {
     if (!*this || !layout_.accepts(page)) return std::nullopt;
     const auto allocated = residency_.acquire(world::terrain::heightPageKey(page.key), frame);
     if (!allocated) return std::nullopt; // full of pinned pages; keep drawing the parent
     Entry& entry = entries_[allocated->slot];
     if (allocated->fresh || allocated->replacedKey) entry = {};
-    if (entry.address) return entry.address;
+    if (entry.address && !replace) return entry.address;
     const Address address = layout_.address(allocated->slot, page);
     if (!uploader.refillRegion(texture_.get(), page.heightQuantized.data(),
                                address.x, address.y, layout_.storedSamples(),
@@ -55,11 +55,11 @@ std::optional<HeightPageAtlas::Address> HeightPageAtlas::upload(
 }
 
 std::optional<HeightPageAtlas::Address> HeightPageAtlas::upload(
-        engine::Device::Uploader& uploader, const PackedHeightPage& page, std::uint64_t frame) {
+        engine::Device::Uploader& uploader, const PackedHeightPage& page, std::uint64_t frame, bool replace) {
     if (!page.source || !withFields_) return std::nullopt;
     for (const auto& plane : page.fields)
         if (plane.size() != page.source->base.heightQuantized.size() * 4) return std::nullopt;
-    const auto address = upload(uploader, page.source->base, frame);
+    const auto address = upload(uploader, page.source->base, frame, replace);
     if (!address) return std::nullopt;
     auto& entry = entries_[address->slot];
     if (entry.fieldsReady) return address;
@@ -82,7 +82,7 @@ void HeightPageAtlas::publishUploads(bool submitted) {
 }
 
 std::optional<HeightPageAtlas::Address> HeightPageAtlas::find(Key key) const {
-    if (key.level != layout_.level()) return std::nullopt;
+    if (!layout_.holds(key.level)) return std::nullopt;
     const auto slot = residency_.find(world::terrain::heightPageKey(key));
     if (!slot || entries_[*slot].pending || (withFields_ && !entries_[*slot].fieldsReady)) return std::nullopt;
     return entries_[*slot].address;
@@ -99,14 +99,20 @@ std::shared_ptr<const world::terrain::SurfacePage> HeightPageAtlas::surface(Key 
 }
 
 bool HeightPageAtlas::pin(Key key, std::uint64_t frame) {
-    if (key.level != layout_.level()) return false;
+    if (!layout_.holds(key.level)) return false;
     const auto slot = residency_.find(world::terrain::heightPageKey(key));
     return slot && entries_[*slot].address &&
            residency_.pin(world::terrain::heightPageKey(key), frame);
 }
 
+bool HeightPageAtlas::hold(Key key) {
+    if (!layout_.holds(key.level)) return false;
+    const auto slot = residency_.find(world::terrain::heightPageKey(key));
+    return slot && entries_[*slot].address && residency_.hold(world::terrain::heightPageKey(key));
+}
+
 bool HeightPageAtlas::unpin(Key key) {
-    return key.level == layout_.level() && residency_.unpin(world::terrain::heightPageKey(key));
+    return layout_.holds(key.level) && residency_.unpin(world::terrain::heightPageKey(key));
 }
 
 void HeightPageAtlas::clear() {

@@ -64,6 +64,11 @@ public:
         // Empty disables disk persistence (CPU tools remain side-effect free).
         // Only H16/H64 are persisted; I/O runs on the existing terrain workers.
         std::filesystem::path diskCacheRoot;
+        // What people dug into this world, or nothing (edit_layer.hpp). Every
+        // page is baked over it and remembers the revision it was baked at; a
+        // page something has since been dug into inside its reach is never
+        // handed out again - it is baked afresh on the next ask.
+        std::shared_ptr<const EditLayer> edits;
     };
 
     // What a page costs to keep, near enough to budget by: the arrays it owns.
@@ -80,9 +85,10 @@ public:
     static constexpr std::int32_t sampleMetresAtLevel(std::uint8_t level) {
         return level <= kFinestLevels ? (kSampleMetres << level) : 0;
     }
-    // 4 m up to 512 m, which is the coarsest spacing a page can still hold
-    // two samples of.
-    static constexpr std::uint8_t kFinestLevels = 7;
+    // 4 m up to 1024 m. Past 64 m a page is eight samples wide rather than
+    // 512 m (tile_layout.hpp, pageMetresAtLevel): H256 (level 6) and H1024
+    // (level 8) are what a view of most of a world is drawn from.
+    static constexpr std::uint8_t kFinestLevels = 8;
 
     struct Stats {
         std::size_t resident = 0;
@@ -98,6 +104,9 @@ public:
         std::size_t rebaked = 0;
         std::size_t evaluatedSamples = 0, reusedSamples = 0;
         std::size_t diskLoaded = 0, diskSaved = 0, diskMisses = 0, diskErrors = 0;
+        // Pages found older than the ground under them - resident, or baked
+        // while somebody was digging - and not handed out.
+        std::size_t stale = 0;
     };
 
     PageStore(const generation::WorldMapData& world, const HydrologyGraph& graph,
@@ -124,6 +133,21 @@ public:
     [[nodiscard]] bool containsLand(TileKey key) const;
     [[nodiscard]] const terrain::LandMask64& landMask() const { return landMask_; }
     [[nodiscard]] const HydrologyGraph& graph() const { return graph_; }
+    // How heights are encoded in every page of this store: worked out once for
+    // the world (a pass over every cell), so nobody need work it out again.
+    [[nodiscard]] const HsimQuantisation& quantisation() const { return quantisation_; }
+    [[nodiscard]] const EditLayer* edits() const { return config_.edits.get(); }
+
+    // Every metre of ground a page's samples are made from: the page, its
+    // padding, one sample more for the slopes and normals taken across the
+    // padding's edge, and one more for the interpolation between edit samples.
+    [[nodiscard]] static core::WorldRect groundReach(TileKey key, std::uint16_t padding) {
+        return tileBounds(key, (padding + 2) * sampleMetresAtLevel(key.level));
+    }
+    [[nodiscard]] core::WorldRect reach(TileKey key) const { return groundReach(key, config_.padding); }
+    // Whether nothing has been dug inside the page's reach since it was
+    // baked. Always so in a world without edits.
+    [[nodiscard]] bool current(const BakedPage& page) const;
 
     // Bake the land pages (plus a filtering halo) at the explicitly requested
     // data levels once and keep them. Geometry-only levels are not listed.
@@ -167,15 +191,18 @@ public:
     // Drop every baked page whose ground overlaps this rectangle, so the next
     // ask rebakes it.
     //
-    // What makes an edit show up. A brush writes a difference into the edit
-    // layer, and the height field adds it - but a page already baked holds the
-    // heights as they were, and the streaming has no reason to doubt it. This
-    // is that reason. Returns how many were dropped, which is what a tool
-    // reports and a test counts.
+    // Not what makes an edit show up - a page something was dug into is never
+    // handed out again anyway (see `current`) - but what gives its memory
+    // back at once rather than when the LRU reaches it. Returns how many were
+    // dropped, which is what a tool reports and a test counts.
     std::size_t forget(core::WorldRect area);
 
 private:
-    void keepLocked(TileKey key, std::shared_ptr<const BakedPage> page);
+    // Returns the page that is resident for the key afterwards.
+    std::shared_ptr<const BakedPage> keepLocked(TileKey key, std::shared_ptr<const BakedPage> page);
+    // A pinned page that was baked afresh over new ground takes its old
+    // page's place in the pinned set, which never evicts.
+    bool repinLocked(TileKey key, const std::shared_ptr<const BakedPage>& page);
     // This store's baker for the calling thread, made once.
     //
     // Owned here rather than kept in a thread_local keyed on the world: a

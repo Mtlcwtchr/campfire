@@ -173,7 +173,8 @@ float4 shadeModel(ModelOut i,bool front,bool depthAware,out float resultDepth) {
             n=normalize(normalize(t)*sign(det)*encoded.x+normalize(b)*sign(det)*encoded.y+n*encoded.z);
         if (!front) n=-n;
     }
-    const float3 pigment=landscapePigment(texel.rgb*i.colour.rgb*i.extra.z,i.flags.w);
+    const float3 crown=lerp(float3(1,1,1),landscapeCrownTint(i.extra.y*0.15915494,texel.rgb),saturate(i.flags.w));
+    const float3 pigment=landscapePigment(texel.rgb*i.colour.rgb*i.extra.z*crown,i.flags.w);
     const float shadow=proceduralShadow(i.world,n);
     float3 lit=pigment*landscapeDaylight(n,lookRootOcclusion(i.extra.x),shadow);
     const float transmission=pow(saturate(dot(-landscapeSun(),landscapeEye(i.world))),3.0);

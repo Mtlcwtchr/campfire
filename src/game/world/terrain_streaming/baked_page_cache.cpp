@@ -2,12 +2,16 @@
 
 #include <algorithm>
 #include <atomic>
+#include <bit>
 #include <chrono>
+#include <cstdio>
 #include <fstream>
 #include <stdexcept>
 #include <type_traits>
 #include "engine/core/hash.hpp"
+#include "engine/core/lane_hash.hpp"
 #include "game/generation/hybrid_terrain.hpp"
+#include "game/generation/terrain_foundation.hpp"
 #include "game/generation/world_map_gen.hpp"
 #include "game/world/terrain_streaming/cache_bytes.hpp"
 #include "game/world/terrain_streaming/hydrology_cache.hpp"
@@ -65,6 +69,8 @@ std::uint64_t fingerprint(const generation::WorldMapData& w, const HydrologyGrap
     field(w.soilDrainageField); field(w.soilOrganicPotentialField);
     field(w.primaryBiomeSuitabilityField); field(w.secondaryBiomeSuitabilityField);
     field(w.biomeTransitionField); field(w.materialSuitabilityField);
+    field(w.waterPaintField);
+    sum.add(std::uint64_t(std::lround(double(w.riverShare) * 1000.0)));
     // The graph's source hash alone does not cover edits to individual reaches.
     std::vector<std::uint8_t> bytes;
     if (const auto result = encodeHydrologyGraphPayload(graph, bytes); !result)
@@ -145,10 +151,15 @@ void BakedPageCache::prepare() {
     });
 }
 
-std::filesystem::path BakedPageCache::file(TileKey key) {
+std::filesystem::path BakedPageCache::file(TileKey key, std::uint64_t ground) {
     prepare();
-    return directory_ / ("h" + std::to_string(4 << key.level)) /
-        (std::to_string(key.x) + "_" + std::to_string(key.y) + ".bin");
+    std::string name = std::to_string(key.x) + "_" + std::to_string(key.y);
+    if (ground) {
+        char hex[20];
+        std::snprintf(hex, sizeof hex, "%016llx", static_cast<unsigned long long>(ground));
+        name += std::string("-g") + hex;
+    }
+    return directory_ / ("h" + std::to_string(4 << key.level)) / (name + ".bin");
 }
 
 bool BakedPageCache::layout(TileKey key, BakedPage& p) const {
@@ -168,7 +179,7 @@ bool BakedPageCache::layout(TileKey key, BakedPage& p) const {
     return true;
 }
 
-std::vector<std::uint8_t> BakedPageCache::prefix(TileKey key) const {
+std::vector<std::uint8_t> BakedPageCache::prefix(TileKey key, std::uint64_t ground) const {
     std::vector<std::uint8_t> bytes{'A','S','R','P','A','G','E','1'};
     writeUnsigned(bytes, kBakedPageCacheVersion);
     writeUnsigned(bytes, kBakedPageGenerationVersion);
@@ -177,21 +188,24 @@ std::vector<std::uint8_t> BakedPageCache::prefix(TileKey key) const {
     writeInteger(bytes, key.x); writeInteger(bytes, key.y); writeUnsigned(bytes, key.level);
     writeUnsigned(bytes, padding_);
     writeInteger(bytes, quantisation_.low.raw); writeInteger(bytes, quantisation_.high.raw);
+    // Only edited ground says so: the generator's own pages keep the prefix
+    // they have always had, and every cache already on disk stays good.
+    if (ground) { bytes.push_back('G'); writeUnsigned(bytes, ground); }
     return bytes;
 }
 
-CacheResult BakedPageCache::read(TileKey key, BakedPage& into) {
+CacheResult BakedPageCache::read(TileKey key, BakedPage& into, std::uint64_t ground) {
     try {
         BakedPage fresh;
         if (!layout(key, fresh)) return {CacheStatus::InvalidArgument, "not a supported persistent page"};
-        const auto path = file(key);
+        const auto path = file(key, ground);
         std::error_code ec;
         if (!std::filesystem::exists(path, ec))
             return {ec ? CacheStatus::IoError : CacheStatus::NotFound, ec ? ec.message() : "page absent"};
         std::ifstream in(path, std::ios::binary | std::ios::ate);
         if (!in) return {CacheStatus::IoError, "cannot open page cache"};
         const auto size = in.tellg();
-        const auto expected = prefix(key);
+        const auto expected = prefix(key, ground);
         if (size < static_cast<std::streamoff>(expected.size() + sizeof(std::uint64_t)) ||
             size > static_cast<std::streamoff>(kMaxPageBytes))
             return {CacheStatus::Corrupt, "page size out of bounds"};
@@ -225,6 +239,7 @@ CacheResult BakedPageCache::read(TileKey key, BakedPage& into) {
         });
         if (!ok || cursor != bytes.size()) return {CacheStatus::Corrupt, "invalid page channels"};
         fresh.world = &world_; fresh.graph = &graph_; // restore live provenance, never disk pointers
+        fresh.ground = ground;
         into = std::move(fresh);
         return CacheResult::ok();
     } catch (const std::exception& e) { return {CacheStatus::IoError, e.what()}; }
@@ -240,8 +255,8 @@ CacheResult BakedPageCache::write(const BakedPage& page) {
             page.water.elevationMax != quantisation_.high || page.materialWidth != expected.materialWidth ||
             page.materialMetres != expected.materialMetres || page.world != &world_ || page.graph != &graph_)
             return {CacheStatus::InvalidArgument, "incompatible baked page"};
-        const auto path = file(page.base.key);
-        auto bytes = prefix(page.base.key);
+        const auto path = file(page.base.key, page.ground);
+        auto bytes = prefix(page.base.key, page.ground);
         const bool ok = channels(page, [&](const auto& values, std::size_t count, bool optional) {
             using T = typename std::decay_t<decltype(values)>::value_type;
             if (values.size() != count && !(optional && values.empty())) return false;

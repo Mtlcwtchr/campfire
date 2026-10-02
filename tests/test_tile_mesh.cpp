@@ -1,15 +1,20 @@
 #include "framework.hpp"
 
+#include <algorithm>
+#include <array>
 #include <cmath>
 #include <map>
 #include <set>
 
 #include "game/generation/world_map_gen.hpp"
+#include "game/generation/world_compose.hpp"
+#include "game/generation/world_layout.hpp"
 #include "game/world/terrain_streaming/hydrology_builder.hpp"
 #include "game/world/terrain_streaming/page_store.hpp"
 #include "game/world/terrain_streaming/page_ground.hpp"
 #include "game/world/terrain_grid.hpp"
 #include "game/world/tile_mesh.hpp"
+#include "game/world/climate_field.hpp"
 
 namespace {
 using core::Fixed;
@@ -191,4 +196,63 @@ TEST(shared_grid_indices_match_every_tile_including_its_skirt) {
     CHECK_EQ(grid.indices.size(), tile.indices.size());
     for (std::size_t i = 0; i < grid.indices.size(); ++i)
         CHECK_EQ(static_cast<std::uint32_t>(grid.indices[i]), tile.indices[i]);
+}
+
+TEST(climate_chunks_hold_exactly_the_samples_the_dense_grid_held) {
+    // Every sample is the quantised surfaceClimateAt at its lattice point:
+    // what the dense grid stored. Chunks shared between places must not move
+    // a single byte.
+    const auto& world = country();
+    world::HeightField field(&world, world.seed);
+    world::ClimateField climate;
+    climate.raise(world, field);
+    CHECK(climate.ready());
+    std::array<std::vector<std::uint8_t>, world::ClimateField::kPlanes> planes;
+    for (int p = 0; p < world::ClimateField::kPlanes; ++p) planes[std::size_t(p)] = climate.plane(p);
+    std::size_t checked = 0;
+    for (std::int32_t row = 0; row < climate.high(); row += 3)
+        for (std::int32_t column = 0; column < climate.wide(); column += 3) {
+            const core::WorldPos at{Fixed::fromInt(std::int64_t(column) * climate.metres()),
+                                    Fixed::fromInt(std::int64_t(row) * climate.metres())};
+            const auto c = field.surfaceClimateAt(at);
+            const Fixed units[11]{c.foliage[0], c.foliage[1], c.foliage[2], c.foliage[3], c.desert,
+                                  c.environment[0], c.environment[1], c.environment[2], c.environment[3],
+                                  c.environment[4], c.environment[5]};
+            for (std::size_t slot = 0; slot < 11; ++slot) {
+                const Fixed stored = slot == 8 || slot == 9 ? units[slot] / Fixed::fromInt(4) + Fixed::ratio(1, 2)
+                                                            : units[slot];
+                const auto expected = static_cast<std::uint8_t>(
+                        std::clamp<std::int64_t>((stored * Fixed::fromInt(255)).roundToInt(), 0, 255));
+                const auto texel = (static_cast<std::size_t>(row) * climate.wide() + column) * 4 + slot % 4;
+                CHECK_EQ(planes[slot / 4][texel], expected);
+                ++checked;
+            }
+        }
+    CHECK(checked > 1000);
+}
+
+TEST(climate_of_open_sea_is_held_once_per_band_of_latitude) {
+    // A world of nothing but sea, made the way the client makes one: the
+    // sea's climate varies with latitude alone, so across a row every chunk
+    // is the same bytes and is held once.
+    auto layout = generation::emptyLayout(2, 3, 5);
+    const auto sea = generation::generateLayoutWorld(layout);
+    world::HeightField field(&sea, sea.seed);
+    world::ClimateField climate;
+    climate.raise(sea, field);
+    const std::size_t chunks = std::size_t((climate.wide() + 31) / 32) * std::size_t((climate.high() + 31) / 32);
+    CHECK(climate.chunksHeld() * 4 < chunks);
+    CHECK(climate.bytes() < std::size_t(climate.wide()) * climate.high() * 13 / 4);
+    // And it reads as the dense grid would, every sample the quantised
+    // surfaceClimateAt at its lattice point.
+    const auto plane = climate.plane(1);
+    for (std::int32_t row = 0; row < climate.high(); row += 7)
+        for (std::int32_t column = 0; column < climate.wide(); column += 11) {
+            const core::WorldPos at{Fixed::fromInt(std::int64_t(column) * climate.metres()),
+                                    Fixed::fromInt(std::int64_t(row) * climate.metres())};
+            const auto temperature = field.surfaceClimateAt(at).environment[0];
+            CHECK_EQ(plane[(static_cast<std::size_t>(row) * climate.wide() + column) * 4 + 1],
+                     static_cast<std::uint8_t>(std::clamp<std::int64_t>(
+                             (temperature * Fixed::fromInt(255)).roundToInt(), 0, 255)));
+        }
 }

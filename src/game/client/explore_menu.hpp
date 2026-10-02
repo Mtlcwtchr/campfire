@@ -27,6 +27,9 @@
 #include <vector>
 
 #include "game/client/graphics_panel.hpp"
+#include "game/client/world_editor.hpp"
+#include "engine/ui/canvas.hpp"
+#include "engine/ui/font.hpp"
 #include "game/generation/world_map_gen.hpp"
 #include "game/content/ground_materials.hpp"
 #include "game/world/environment.hpp"
@@ -157,6 +160,15 @@ public:
     GraphicsPanel& panel() { return panel_; }
     bool panelVisible() const { return panelOpen_; }
     void togglePanel() { panelOpen_ = !panelOpen_; panelDirty_ = true; dirty_ = true; }
+    // Explore / Edit: the world editor (` or the Edit button on the strip).
+    WorldEditor& editor() { return editor_; }
+    const WorldEditor& editor() const { return editor_; }
+    void toggleEditor() {
+        editor_.toggle();
+        // The world menu and the editor would sit on the same corner.
+        if (editor_.active()) open_ = false;
+        dirty_ = true;
+    }
     // The pointer in panel pixels, filled by the explorer each frame; MenuPass
     // repaints the panel when it changed or something else did.
     ui::Input& panelInput() { return panelInput_; }
@@ -170,6 +182,7 @@ public:
     static constexpr float kTrackLeft = 10, kTrackRight = 450, kTrackY = 94;
     // Toolbar buttons on the status strip (top right of it).
     static constexpr float kButtonY = 6, kButtonW = 108, kGraphicsButtonX = 226, kSceneButtonX = 340;
+    static constexpr float kEditButtonX = 340, kEditButtonY = 24;
     static double distanceAt(float x);
     static float trackAt(double metres);
 
@@ -177,6 +190,26 @@ public:
     static constexpr int kWide = 460;
     static constexpr int kHigh = 404;
     static constexpr int kStatusHigh = 104;
+
+    // How the explorer's pieces are put on the screen. The explorer keeps the
+    // defaults. The game client hides the developer's strip and the terrain
+    // progress panel, lays its own whole-window interface under everything
+    // (`canvas`), and shows the two windows - graphics, world editor - where
+    // its layout wants them, at its interface's scale and in its face.
+    struct Presentation {
+        bool developer = true;                  // the status strip and the progress panel
+        const ui::Canvas* canvas = nullptr;     // under the windows, the size of the view
+        float panelScale = 1.0f;                // screen pixels per window pixel
+        float graphicsX = -1, graphicsY = -1;   // top left, screen pixels; negative: the explorer's place
+        float editorX = -1, editorY = -1;
+        // How tall the two windows may be, in window points: less than their
+        // full height, and what does not fit scrolls. Negative: all of it.
+        float graphicsHigh = -1, editorHigh = -1;
+        std::shared_ptr<ui::FontFace> font, bold;
+        float fontPoints = 11.0f;
+    };
+    Presentation& presentation() { return presentation_; }
+    const Presentation& presentation() const { return presentation_; }
 
 private:
     void applyPreset(std::size_t index);
@@ -219,10 +252,12 @@ private:
     std::string note_;
     game::GraphicsSettings graphics_;
     GraphicsPanel panel_;
+    WorldEditor editor_;
     ui::Input panelInput_;
     bool panelOpen_ = false, panelDirty_ = true;
     bool pointerWasDown_ = false;
     bool dragging_ = false;
+    Presentation presentation_;
 };
 
 } // namespace client

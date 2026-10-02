@@ -45,14 +45,24 @@ struct TerrainDetail::Impl {
     std::map<SampleKey,CachedSample> feature;
     struct Mask { std::shared_ptr<const streaming::BakedPage> page; };
     mutable std::map<std::pair<int,int>,Mask> masks;
+    std::uint64_t groundRevision=0;
     Impl(const generation::WorldMapData& w,const streaming::PageStore& p,int cells,std::array<int,kGeometryLevels> metres)
         :world(w),pages(p),chunkCells(cells),chunkMetres(metres) {}
     std::int64_t metres(TileId tile) const {
         return chunkMetres[0]?chunkMetres[tile.lod]:tileMetresAt(tile.lod,chunkCells);
     }
+    // Everything here is sampled from the ground; after a dig none of it is
+    // trusted. Coarse, and this is the CPU comparison path, not the runtime one.
+    bool observeGround() {
+        const auto* edits=pages.edits();
+        if (!edits || edits->revision()==groundRevision) return false;
+        groundRevision=edits->revision();
+        feature.clear(); ages.clear(); masks.clear(); local.reset();
+        return true;
+    }
     Pair direct(int x,int y,bool medium) {
         using core::Fixed;
-        if (!field) field=std::make_unique<HeightField>(&world,world.seed);
+        if (!field) { field=std::make_unique<HeightField>(&world,world.seed); field->edits(pages.edits()); }
         const int px=int(floorDiv(x,512)),py=int(floorDiv(y,512));
         if (!carver || px!=carverX || py!=carverY) {
             carver=std::make_unique<streaming::GraphCarver>(pages.graph(),
@@ -93,10 +103,11 @@ TerrainDetail::~TerrainDetail()=default;
 bool TerrainDetail::updateLocal(bool enabled,double x,double y,double seconds,double morphSeconds) {
     auto& s=*impl_;
     const double previous=s.amount;
+    bool changed=s.observeGround();
     s.target=enabled?1:0;
     const double change=morphSeconds>0?std::max(0.0,seconds)/morphSeconds:1.0;
     s.amount=enabled?std::min(1.0,s.amount+change):std::max(0.0,s.amount-change);
-    bool changed=previous!=s.amount;
+    changed=changed || previous!=s.amount;
     if (enabled) {
         const int ox=int(std::floor(x/16))*16-100,oy=int(std::floor(y/16))*16-100;
         if (!s.local || s.local->x!=ox || s.local->y!=oy) {

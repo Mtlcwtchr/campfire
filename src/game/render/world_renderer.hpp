@@ -1,4 +1,6 @@
 #pragma once
+#include <chrono>
+#include <filesystem>
 
 #include <functional>
 #include "engine/pipeline/runner.hpp"
@@ -9,6 +11,8 @@
 #include "game/render/calc/sprite_queue.hpp"
 #include "game/render/climate_textures.hpp"
 #include "game/render/graphics_settings.hpp"
+#include "game/render/passes/sketch_pass.hpp"
+#include "game/render/passes/highlight_pass.hpp"
 #include "game/world/environment.hpp"
 #include "game/world/weather.hpp"
 #include "game/world/world_system.hpp"
@@ -44,6 +48,10 @@ struct WorldRenderSettings {
     // is made from. Null: the drawing camera. Set by the scene view to inspect
     // a frozen frame from elsewhere without recomputing it.
     const client::Camera* cull = nullptr;
+    // The world editor's overlay (region grid, selection, brush), laid on the
+    // terrain and the water as-is: see assets/shaders/editor_overlay.hlsli for
+    // what each number means. All zero draws nothing.
+    std::array<std::array<float, 4>, engine::kSceneEditorVectors> editor{};
 };
 
 // A presentation consumer, not a world generator. All passes share one runner,
@@ -62,9 +70,23 @@ public:
     bool screenshot(const std::string& path);
     void holdTime(double seconds);
     void forgetTheWorld();
+    // The world editor's coast sketch (SketchPass); null draws none. Kept
+    // across worlds: a sketch is the person's, not the world's.
+    void sketch(std::shared_ptr<const generation::SketchMesh> mesh) {
+        sketch_.mesh = std::move(mesh);
+        ++sketch_.revision;
+    }
+    // What the editor has picked out, as line segments (HighlightPass): pairs
+    // of points, x y z. Null or empty draws nothing.
+    void highlight(std::shared_ptr<const std::vector<float>> lines) {
+        highlight_.lines = std::move(lines);
+        ++highlight_.revision;
+    }
     std::vector<content::GroundMaterial>& ground() { return ground_; }
     SpriteQueue& sprites() { return spriteQueue_; }
     bool settled() const;
+    // A picture of the world before is on the screen while the new one comes in.
+    bool holding() const { return bool(held_); }
     const GpuTerrain& terrain() const;
     const std::string& error() const { return device_.error(); }
     const engine::Runner& runner() const { return *runner_; }
@@ -86,6 +108,13 @@ public:
 #endif
 private:
     bool synchronize();
+    // The terrain categories' config, watched (engine/biomes): numbers go
+    // to the table live, a new structure rebuilds the shaders once.
+    void pollBiomes();
+    std::chrono::steady_clock::time_point biomesPolled_{};
+    std::filesystem::file_time_type biomesWritten_{};
+    bool rebuildShaders_ = false;
+    bool restoredShaders_ = false;
     world::WorldSystem* source_ = nullptr; // requests/leases, never worker callbacks
     world::WorldBuilder::Snapshot world_;
     std::shared_ptr<world::WorldPreparation> preparation_;
@@ -115,5 +144,20 @@ private:
     bool builtHalfTextures_ = false, wantedHalfTextures_ = false;
     std::array<float, 3> skyHorizon_{0.68f, 0.71f, 0.70f}, skyZenith_{0.43f, 0.55f, 0.66f};
     bool skyMeasured_ = false, skyAvailable_ = false;
+    // The replaced world's last picture (HoldPass), while the new one's ground
+    // is on its way; empty otherwise. Owned here: it outlives the pipeline
+    // that drew it and the one that draws it now.
+    engine::Texture held_;
+    int heldFrames_ = 0;
+    SketchSource sketch_;
+    HighlightSource highlight_;
+    // Where the camera was when the picture was held: a picture of another
+    // view is not the world, and it goes the moment the camera moves.
+    std::array<double, 6> heldView_{}, drawnView_{};   // the held picture's view; the last frame's
+    std::array<double, 6> viewOf(const client::Camera& camera) const {
+        return {camera.centreX, camera.centreY, camera.yaw, camera.pitch, camera.pixelsPerTile, camera.focusHeight};
+    }
+    bool graded_ = false;   // the last frame drew the grade, so its copy was taken
+    void holdThePicture();
 };
 } // namespace game

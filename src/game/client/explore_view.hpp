@@ -1,4 +1,6 @@
 #pragma once
+#include <array>
+#include <optional>
 // Client controls/menu adapter. World ownership and rendering live in game subsystems.
 
 #include <SDL3/SDL.h>
@@ -51,6 +53,33 @@ struct ExploreViewOptions {
     int benchFrames = 0;
     int benchLoadFrames = 900;
     std::string benchJson;
+    // --world-file FILE: open a world made in the editor (its regions, not the
+    // seed and size above). --edit: start in Edit mode. --edit-layer NAME: on
+    // that layer ("continents", "ranges", "hills", "sea", "weathering",
+    // "rain"; "regions" is the default).
+    std::string worldFile;
+    bool editing = false;
+    std::string editLayer;
+    // --dig X,Y[,RADIUS[,METRES]]: once the ground has settled, dig (negative
+    // metres, the default -12) or raise it there through the world delta,
+    // exactly as a tool would, and let a shot wait for the ground to settle
+    // again. A probe of the live path: nothing is saved in a session that digs.
+    std::string dig;
+    // --eye X,Y,ABOVE: a free camera standing exactly there, ABOVE metres over
+    // the ground under it (yaw and pitch as given). For shots a person would
+    // take on foot, which the orbit placement cannot aim.
+    std::string eye;
+    // --graphics-file FILE: shots and benches use these settings instead of
+    // the defaults (the saved graphics.json is ASR_SHOT_USER_GRAPHICS=1).
+    std::string graphicsFile;
+    // --shot-list FILE: several pictures from one launch, one per line:
+    //   PATH eye X Y ABOVE YAW PITCH     on foot, ABOVE metres over the ground
+    //   PATH orbit X Y ZOOM YAW PITCH    third person round X,Y
+    // Each waits for the streaming to settle after the camera moves. One world
+    // raised and one renderer built instead of one per picture.
+    std::string shotList;
+    // --clean: no developer strip or progress panel, the picture only.
+    bool clean = false;
 };
 
 class ExploreView {
@@ -62,14 +91,25 @@ public:
     void fog(bool on) { settings_.fog = on; }
     // Scene view: decisions from `frozen`, pixels from the camera draw() gets.
     void cull(const Camera* frozen) { settings_.cull = frozen; }
+    // The marks laid on the ground (editor_overlay.hlsli): the world editor's
+    // unless somebody else's are given - the game client's brushes.
+    using EditorMarks = std::array<std::array<float, 4>, engine::kSceneEditorVectors>;
+    void marks(std::optional<EditorMarks> marks) { marks_ = marks; }
+    // The weather drawn at all: rain and snow in the air, wet and snowed-on
+    // ground, the season's tint. Off, the world is shown in plain daylight -
+    // what the editor wants, where rain across the view is only in the way.
+    void weather(bool on) { weather_ = on; }
 #if ASR_ENABLE_PROFILING
     bool compareGrassCulling(const Camera& camera, const std::string& path);
 #endif
 private:
     game::WorldRenderer& renderer_;
+    std::uint64_t sketchShown_ = 0;   // the editor's sketch revision on the card, 0 none
     ExploreMenu* menu_ = nullptr;
     const world::WorldSystem* source_ = nullptr;
     game::WorldRenderSettings settings_;
+    std::optional<EditorMarks> marks_;
+    bool weather_ = true;
 };
 
 // Opens the world, shows it, and returns when the window is closed. With

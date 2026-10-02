@@ -43,6 +43,7 @@ struct FarTreeOut {
     float3 world : TEXCOORD1;
     float coverage : TEXCOORD2;
     float3 tint : TEXCOORD3;
+    float crown : TEXCOORD4;   // the tree's own number for landscapeCrownTint
 };
 
 float farHash(float2 cell, float salt)
@@ -168,6 +169,7 @@ FarTreeOut FarTreesVS(uint vertex : SV_VertexID, uint instance : SV_InstanceID)
     o.coverage = presence;
     // A little variation per tree, as the placed ones carry.
     o.tint = float3(1, 1, 1) * (0.88 + 0.20 * farHash(cellId, 7.0 + ring));
+    o.crown = yaw * 0.15915494;
     return o;
 }
 
@@ -182,7 +184,7 @@ float4 FarTreesPS(FarTreeOut input) : SV_Target0
     const float3 eyeDir = landscapeEye(input.world);
     const float3 normal = normalize(float3(0, 0, 0.75) + float3(eyeDir.xy, 0) * 0.45);
     const float shadow = proceduralShadow(input.world, normal);
-    const float3 pigment = landscapePigment(texel.rgb * input.tint, 1.0);
+    const float3 pigment = landscapePigment(texel.rgb * input.tint * landscapeCrownTint(input.crown, texel.rgb), 1.0);
     const float3 lit = pigment * landscapeDaylight(normal, 0.85, shadow);
     return float4(landscapeFinish(lit, input.world), sceneDepthAlpha(input.world));
 }

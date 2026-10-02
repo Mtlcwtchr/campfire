@@ -2,6 +2,7 @@
 #include "terrain.hlsl"
 #include "terrain_pages.hlsli"
 #include "terrain_page_detail.hlsli"
+#include "editor_overlay.hlsli"
 
 TerrainOut terrainPageSurfaceVertex(PageSurface s)
 {
@@ -50,13 +51,11 @@ float3 gridColour(float step)
     if (step <= 32.0) return float3(1.0, 0.45, 0.1);
     if (step <= 64.0) return float3(1.0, 0.25, 0.8);
     if (step <= 128.0) return float3(0.3, 0.5, 1.0);
-    return float3(0.7, 0.45, 1.0);
+    if (step <= 256.0) return float3(0.7, 0.45, 1.0);
+    return float3(0.95, 0.95, 0.95);
 }
 
-float dataStep(float dataset)
-{
-    return dataset < 0.5 ? 4.0 : dataset < 1.5 ? 8.0 : dataset < 2.5 ? 16.0 : 64.0;
-}
+float dataStep(float dataset) { return pageStepOf((int)(dataset + 0.5)); }
 
 float4 TerrainPagePS(TerrainOut input) : SV_Target0
 {
@@ -128,5 +127,8 @@ float4 TerrainPagePS(TerrainOut input) : SV_Target0
         }
         colour.rgb = lerp(colour.rgb, tint, ink * 0.9);
     }
+    // The world editor's region grid, selection and brush (editor_overlay.hlsli).
+    const float4 marks = editorMarks(input.worldXY, max(length(ddx(input.worldXY)), length(ddy(input.worldXY))));
+    colour.rgb = lerp(colour.rgb, marks.rgb, marks.a);
     return colour;
 }

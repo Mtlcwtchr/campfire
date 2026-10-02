@@ -29,6 +29,9 @@ public:
     FoliagePass(const engine::MeshCache& cache, std::vector<std::string> cards,
                 SDL_GPUTextureSamplerBinding shadow, GpuTerrain* pages = nullptr);
     void focus(double x,double y) { x_=x;y_=y; }
+    // How far from the focus the far tier reaches, metres (GraphicsSettings::
+    // foliageDistance): its candidate budget is spread over that disc only.
+    void reach(double metres) { reach_=metres; }
     void reset() { roots_.clear();candidates_=0;ASR_DIAGNOSTIC(draws_=uploadBytes_=0); }
 #if ASR_ENABLE_DIAGNOSTICS
     std::string report() const;
@@ -57,6 +60,7 @@ private:
     };
     std::map<std::tuple<const world::terrain::AdaptiveMesh*,std::int64_t,std::int64_t,int>,Roots> roots_;
     double x_=0,y_=0;
+    double reach_=2000;
     int windowX_=std::numeric_limits<int>::min(),windowY_=windowX_;
     std::size_t candidates_=0,nearCandidates_=0,farCandidates_=0; // draw size and per-tier budgets
 #if ASR_ENABLE_DIAGNOSTICS
@@ -72,6 +76,11 @@ private:
     engine::Sampler sampler_;
     engine::Buffer quad_, quadIndices_;
     engine::PipelineSlot pipeline_ = 0;
+    // Pebbles (PebbleVS): a second draw over the same culled roots, an
+    // octahedron each; its 24 indices are the grass draw's, so the culler's
+    // one indirect argument serves both. Page terrain only.
+    engine::Buffer pebble_, pebbleIndices_;
+    engine::PipelineSlot pebblePipeline_ = 0;
     engine::BindingSet bindings_ = engine::kNoBindings;
 };
 

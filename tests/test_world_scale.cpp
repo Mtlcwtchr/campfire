@@ -31,8 +31,8 @@ TEST(world_scale_legacy_dimensions_roundtrip_without_rescaling_params) {
     for (const auto& size:kWorldSizes) {
         WorldMapParams p;p.width=size.cells;p.height=size.cells/2;p.seed=42;
         const auto d=WorldDomain::fromLegacy(p);
-        CHECK_EQ(d.widthMetres(),std::int64_t(size.cells)*540);
-        CHECK_EQ(d.heightMetres(),std::int64_t(size.cells)*270);
+        CHECK_EQ(d.widthMetres(),std::int64_t(size.cells)*kMetresPerCell);
+        CHECK_EQ(d.heightMetres(),std::int64_t(size.cells)*kMetresPerCell/2);
         const auto cells=d.legacyCells();CHECK(cells.has_value());
         CHECK_EQ((*cells)[0],p.width);CHECK_EQ((*cells)[1],p.height);
         CHECK_EQ(p.width,size.cells);CHECK_EQ(p.seed,42u);
@@ -58,7 +58,7 @@ TEST(world_scale_runtime_presets_are_the_physical_sizes_they_describe) {
         CHECK_EQ(runtime.widthMetres(),described.widthMetres());
         CHECK_EQ(runtime.areaSquareMetres(),described.areaSquareMetres());
     }
-    CHECK_EQ(scaleWorldPreset().widthMetres(),511920);   // "medium", 512 km
+    CHECK_EQ(scaleWorldPreset().widthMetres(),524288);   // "medium", 4 x 4 regions
     CHECK_EQ(scaleWorldPreset("med"),scaleWorldPreset("medium"));
     CHECK(rejects([]{scaleWorldPreset("invalid");}));
     // The player's default is one of the presets. What a bare WorldMapParams
@@ -68,7 +68,7 @@ TEST(world_scale_runtime_presets_are_the_physical_sizes_they_describe) {
     CHECK_EQ(kDefaultPlayerWorldCells,kWorldSizes[2].cells);   // "small", 128 km
     // Said as a distance, because the smallest preset is small now: what must
     // not happen is a bare params raising a world somebody has to wait for.
-    CHECK(std::int64_t(kDefaultWorldCells)*540 < 100000);
+    CHECK(std::int64_t(kDefaultWorldCells)*kMetresPerCell < 100000);
 }
 TEST(world_scale_absolute_world_relative_and_bounded_semi_relative_rules) {
     const ScaleRule absolute{ScaleClass::Absolute,8};

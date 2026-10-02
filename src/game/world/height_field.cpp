@@ -493,6 +493,12 @@ HeightField::HeightField(const generation::WorldMapData* coarse, std::uint64_t s
     macro_.attach(coarse);
 }
 
+HeightField::HeightField(const generation::WorldMapData* coarse, std::uint64_t seed,
+                         std::shared_ptr<const MacroWorld::Resolved> resolved)
+    : coarse_(coarse), seed_(seed) {
+    macro_.attach(coarse, std::move(resolved));
+}
+
 std::array<Fixed, 4> HeightField::foliageAt(WorldPos p) const {
     return surfaceClimateAt(p).foliage;
 }
@@ -581,7 +587,15 @@ HeightField::SurfaceClimate HeightField::surfaceClimateAt(WorldPos p) const {
         const Fixed top = a[i] + (b[i] - a[i]) * tx;
         out[i] = top + (c[i] + (d[i] - c[i]) * tx - top) * ty;
     }
-    if (coarse_->hybridTerrain) {
+    // Over open sea every channel the barren ground scales is nought already
+    // (a sea cell has no cover and no woodland), and the landform sample is
+    // the dearest thing here: seven samples in ten of a world's climate are
+    // taken over water.
+    const bool allSea = coarse_->at({static_cast<std::int32_t>(std::clamp<std::int64_t>(cx, 0, coarse_->width - 1)),
+                                     static_cast<std::int32_t>(std::clamp<std::int64_t>(cy, 0, coarse_->height - 1))}).sea &&
+                        out[0] == core::kZero && out[1] == core::kZero && out[2] == core::kZero &&
+                        out[3] == core::kZero && out[11] == core::kZero;
+    if (coarse_->hybridTerrain && !allSea) {
         const auto side = Fixed::fromInt(generation::kMetresPerCell);
         const auto barren = coarse_->hybridTerrain->sample(coarse_->terrainFoundation?p.x:(Fixed::fromInt(cx)+tx)*side,
                                                           coarse_->terrainFoundation?p.y:(Fixed::fromInt(cy)+ty)*side).barren;
@@ -1065,7 +1079,10 @@ HeightField::Pieces HeightField::piecesAt(Fixed x, Fixed y, std::int64_t strideM
         return {base,foundationDetail(seed_,foundation,stage,x,y,base),{},{}};
     }
     const Detail wanted = detailFor(strideMetres);
-    const Coarse country = coarseAt(x, y, wanted.lattice);
+    Coarse country = coarseAt(x, y, wanted.lattice);
+    // What anybody dug, added to the country as in the foundation path above:
+    // the level the water is measured against moves with the ground.
+    if (edits_ && !edits_->empty()) country.elevation += edits_->at(x, y);
 
     // How much detail this country wants: a flood plain takes a fraction of it,
     // a broken upland takes all of it. It scales the whole layer rather than any
@@ -1333,10 +1350,15 @@ MaterialWeights HeightField::materialsGiven(std::int64_t sx, std::int64_t sy, Fi
         const Fixed fineEdge=smoothNoise(seed_^0x2C10ull,worldX,worldY,23);
         const Fixed ragged=coarseEdge*Fixed::ratio(7,10)+fineEdge*Fixed::ratio(3,10);
         // A wall shows its bones; it is not a quarry. At full weight this put
-        // stone down every gully in the world and left nothing else visible.
+        // stone down every gully in the world and left nothing else visible -
+        // and even at a third it beat the grass on every mountainside, the
+        // walls of gentle gullies included: the mountains came out solid
+        // stone. Only a wall that is steep shows its rock (from about
+        // nineteen degrees, all of it by thirty-nine).
+        const Fixed steepWall=rampFixed(slope,Fixed::ratio(35,100),Fixed::ratio(8,10));
         out.add(Material::Rock,ease(core::saturate(gullyWall*Fixed::ratio(3,2)-ragged*
-                                                   Fixed::ratio(7,10)))*Fixed::ratio(35,100));
-        out.add(Material::Dirt,gullyWall*ragged*Fixed::ratio(2,5));
+                                                   Fixed::ratio(7,10)))*Fixed::ratio(35,100)*steepWall);
+        out.add(Material::Dirt,gullyWall*ragged*Fixed::ratio(1,5));
     }
     // Snow above the line, and the line is lower where the country is cold.
     const Fixed snowLine = Fixed::fromInt(400 + warmth * 6);
@@ -1345,7 +1367,9 @@ MaterialWeights HeightField::materialsGiven(std::int64_t sx, std::int64_t sy, Fi
     // Grass wants rain and gentle ground.
     // Grass keeps off a wet bank almost entirely; a dry gully it merely thins,
     // because a gully that has not run in years grows over.
-    out.add(Material::Grass, ramp(wet, 60, 150) * rampFixed(slope, cliffSlope(), core::kZero) *
+    // From a dry steppe up - the shader dries the grass where the climate is
+    // dry; sand is for a desert, not for every country a little short of rain.
+    out.add(Material::Grass, ramp(wet, 30, 110) * rampFixed(slope, cliffSlope(), core::kZero) *
                                      (core::kOne - wetBank * Fixed::ratio(9, 10) -
                                       dryBank * Fixed::ratio(2, 5)));
     // Sand where it is dry, and low: a desert, or a shore.
@@ -1359,7 +1383,7 @@ MaterialWeights HeightField::materialsGiven(std::int64_t sx, std::int64_t sy, Fi
     const Fixed beach = core::saturate(
         (smoothNoise(seed_ ^ 0x5A0Dull, worldX, worldY, 520) - Fixed::ratio(2, 5)) * Fixed::fromInt(3) +
         ramp(wet, 110, 40) * Fixed::ratio(1, 2));
-    out.add(Material::Sand, ramp(wet, 95, 30) + rampFixed(height, Fixed::fromInt(4), core::kZero) +
+    out.add(Material::Sand, ramp(wet, 55, 20) + rampFixed(height, Fixed::fromInt(4), core::kZero) +
                                     wetBank * (ramp(wet, 175, 90) + Fixed::ratio(1, 2)) * beach +
                                     dryBank * Fixed::ratio(6, 5));
     // The banks that are not sand are earth under the grass.

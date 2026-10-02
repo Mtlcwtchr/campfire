@@ -41,7 +41,7 @@ WsPlace wsPlaceVS(float2 p)
     s.bed = -60.0;
     s.cover = 1.0;
     bool found = false;
-    [unroll] for (int level = 0; level < 4; ++level) {
+    [unroll] for (int level = 0; level < kPageDatasets; ++level) {
         if (found) continue;
         const float4 at = pageAddress(p, level);
         if (at.z == 0.0) continue;
@@ -58,7 +58,7 @@ WsPlace wsPlaceVS(float2 p)
 }
 float wsBedVS(float2 p)
 {
-    [unroll] for (int level = 0; level < 4; ++level)
+    [unroll] for (int level = 0; level < kPageDatasets; ++level)
         if (pageAddress(p, level).z != 0.0) return pageHeight(p, level);
     return -60.0;
 }
@@ -69,14 +69,14 @@ WsPlace wsPlacePS(float2 p)
     WsPlace s = (WsPlace)0;
     s.bed = -60.0;
     s.cover = 1.0;
-    const float2 page = floor(p / 512.0);
     bool found = false;
-    [unroll] for (int level = 0; level < 4; ++level) {
+    [unroll] for (int level = 0; level < kPageDatasets; ++level) {
         if (found) continue;
-        const float4 entry = detailPageEntry(page, level);
+        float2 page;
+        const float4 entry = detailEntryAt(p, level, page);
         if (entry.z == 0.0) continue;
         found = true;
-        const float2 uv = entry.xy + (p - page * 512.0) * entry.zw;
+        const float2 uv = entry.xy + (p - page) * entry.zw;
         s.bed = detailBedInPage(p, level, page, entry);
         s.head = ringWindow.z + detailFields(uv, level, 0).z * ringWindow.w;
         s.cover = detailFields(uv, level, 2).z;
@@ -89,18 +89,22 @@ WsPlace wsPlacePS(float2 p)
 }
 float wsBedPS(float2 p)
 {
-    const float2 page = floor(p / 512.0);
-    [unroll] for (int level = 0; level < 4; ++level) {
-        const float4 entry = detailPageEntry(page, level);
+    [unroll] for (int level = 0; level < kPageDatasets; ++level) {
+        float2 page;
+        const float4 entry = detailEntryAt(p, level, page);
         if (entry.z != 0.0) return detailBedInPage(p, level, page, entry);
     }
     return -60.0;
 }
 
+// Whether any dataset holds ground over the 512 m square `page`.
 bool wsPageResident(float2 page)
 {
-    [unroll] for (int level = 0; level < 4; ++level)
-        if (detailPageEntry(page, level).z != 0.0) return true;
+    const float2 centre = (page + 0.5) * 512.0;
+    [unroll] for (int level = 0; level < kPageDatasets; ++level) {
+        float2 origin;
+        if (detailEntryAt(centre, level, origin).z != 0.0) return true;
+    }
     return false;
 }
 // Over the last 128 m of a page whose neighbour is missing the bed is faded to
@@ -312,7 +316,7 @@ float4 WaterSheetPS(WaterOut input) : SV_Target0
     input.ice = 0.0;
     float4 result = WaterScenePS(input);
     result.a *= owned;
-    return result;
+    return withEditorMarks(result, p, footprint);
 }
 #endif
 

@@ -23,6 +23,9 @@ class InstanceArena;
 // It is engine-shaped on purpose: a camera, a viewport, and one spare vector
 // the game fills with whatever its shaders need. Putting a game's ideas in here
 // would mean the engine could not draw anything else.
+// How many four-float vectors an editor's overlay has (Scene::editor).
+inline constexpr int kSceneEditorVectors = 35;
+
 struct Scene {
     // World metres to clip space, row by row. The one thing every shader that
     // draws anything in the world needs, and the only thing any of them needs to
@@ -89,6 +92,10 @@ struct Scene {
     float cullViewProjection[16]{};
     float cullCamera[4]{};
     float cullState[4]{};
+    // An editor's overlay on the world: game-defined payload like `parameters`
+    // (the game's world editor draws its region grid, selection and brush from
+    // it). All zero when nothing is being edited.
+    float editor[kSceneEditorVectors][4]{};
 };
 
 // What CPU culling/LOD code must read instead of the drawing camera.

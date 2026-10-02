@@ -1,9 +1,14 @@
 #include "game/generation/world_map_gen.hpp"
 #include "game/generation/hybrid_terrain.hpp"
+#include "game/generation/world_import.hpp"
+#include "game/generation/world_layout.hpp"
+#include "game/generation/world_noise.hpp"
 
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <chrono>
+#include <string>
 #include <fstream>
 #include <array>
 #include <cmath>
@@ -28,109 +33,6 @@ using core::TilePos;
 // is enough to give the water a direction and not enough to be terrain.
 constexpr std::int32_t kHeightScale = 64;
 
-// How much of a noise octave follows the size of the map, in percent. The
-// continental octave follows it entirely, so a wider world is a wider continent
-// rather than an archipelago of the old one; the fine octaves do not follow at
-// all, so the extra width is spent on more coastline instead of a bigger
-// version of the same coastline.
-std::int32_t octaveScale(std::int32_t base, std::int32_t width, std::int32_t follows) {
-    const std::int32_t grown = std::max(1, base * width / kReferenceWidth);
-    return std::max(2, base + (grown - base) * follows / 100);
-}
-
-// The same value noise the local map uses, at the scale of a country rather than
-// a field. Kept here rather than shared because the two are free to diverge: the
-// local one answers "where is the stone", this one answers "where is the sea".
-std::int32_t valueNoise(std::uint64_t seed, std::int32_t x, std::int32_t y) {
-    std::uint64_t h = seed;
-    h = core::splitmix64(h ^ (std::uint64_t(std::uint32_t(x)) * 0x9e3779b97f4a7c15ULL));
-    h = core::splitmix64(h ^ (std::uint64_t(std::uint32_t(y)) * 0xc2b2ae3d27d4eb4fULL));
-    return static_cast<std::int32_t>(h & 1023);
-}
-
-std::int32_t smoothNoise(std::uint64_t seed, std::int32_t x, std::int32_t y, std::int32_t scale) {
-    const std::int32_t cx = x / scale, cy = y / scale;
-    const std::int32_t fx = x % scale, fy = y % scale;
-    const std::int32_t v00 = valueNoise(seed, cx, cy);
-    const std::int32_t v10 = valueNoise(seed, cx + 1, cy);
-    const std::int32_t v01 = valueNoise(seed, cx, cy + 1);
-    const std::int32_t v11 = valueNoise(seed, cx + 1, cy + 1);
-    const std::int32_t top = v00 + (v10 - v00) * fx / scale;
-    const std::int32_t bottom = v01 + (v11 - v01) * fx / scale;
-    return top + (bottom - top) * fy / scale;
-}
-
-// Five octaves at continental scale: the big one decides where the land is, the
-// small ones give it a coastline. Two octaves drew a rounded rectangle.
-std::int32_t landNoise(std::uint64_t seed, std::int32_t x, std::int32_t y, std::int32_t width) {
-    return (smoothNoise(seed, x, y, octaveScale(90, width, 100)) * 8 +
-            smoothNoise(seed + 11, x, y, octaveScale(38, width, 60)) * 5 +
-            smoothNoise(seed + 101, x, y, octaveScale(17, width, 30)) * 3 +
-            smoothNoise(seed + 1009, x, y, octaveScale(7, width, 0)) * 2 +
-            smoothNoise(seed + 10007, x, y, octaveScale(3, width, 0))) /
-           19;
-}
-
-// The SHAPE of the land, as opposed to the texture on it.
-//
-// This exists because the shape was coming from somewhere it had no business
-// coming from. The crust step between an oceanic plate and a continental one is
-// four hundred and fifty units; the noise, after being scaled down everywhere
-// the ground is not being pushed up, was contributing under a hundred. So the
-// coastline was the plate diagram - Voronoi cells, warped and blurred, but
-// still cells, and what you see is exactly that: long straightish runs, sharp
-// corners, and squares. No amount of fraying an edge fixes a shape that is a
-// polygon underneath.
-//
-// Plates decide FEATURES - where a range stands, where a rift opens, where a
-// trench runs. They are very bad at deciding where a continent is, because a
-// continent is not a cell of anything. This is what decides that: five octaves
-// with the low ones carrying most of the amplitude, warped through itself so
-// that even the largest lobe is not an ellipse.
-std::int32_t continentNoise(std::uint64_t seed, std::int32_t x, std::int32_t y, std::int32_t width) {
-    // The longest wave has to FIT, and it did not.
-    //
-    // Scaled off the reference width the first octave came out at about a
-    // hundred kilometres, which on a two-hundred-kilometre map is two lobes
-    // across the whole world - so the world was one big land mass and one big
-    // island, every time, whatever the seed. A map wants four or five lobes in
-    // it before it has anything to offer: continents to be separate, seas
-    // between them, and the smaller octaves left over to break the edges into
-    // islands.
-    //
-    // A fifth of the map, then, and capped so that a very large world gains
-    // more continents rather than the same few drawn bigger.
-    const std::int32_t first = std::clamp(width / 5, 8, 150);
-    // Warped by a third of that: enough to pull a lobe into a peninsula and
-    // tear a strait through it, not so much that it is only the continent
-    // moving about.
-    const std::int32_t swing = std::max(3, first / 3);
-    const std::int32_t wx = x + (smoothNoise(seed ^ 0xC0A7F, x, y, first) - 512) * swing / 512;
-    const std::int32_t wy = y + (smoothNoise(seed ^ 0xC0A80, x, y, first) - 512) * swing / 512;
-    // Nothing below four cells, ever. This field is stored on the macro lattice
-    // and read back through a spline over it, so a wave of two or three cells is
-    // at that lattice's own frequency: it cannot be reconstructed, and what
-    // comes out instead is a crease on every cell line. The linter measures it
-    // directly, and measured it at seventy centimetres the moment these octaves
-    // were allowed down there.
-    const auto octave = [&](int divisor) { return std::max(4, first / divisor); };
-    return (smoothNoise(seed ^ 0x1A2D, wx, wy, first) * 13 +
-            smoothNoise(seed ^ 0x1A2E, wx, wy, octave(2)) * 8 +
-            smoothNoise(seed ^ 0x1A2F, wx, wy, octave(4)) * 5 +
-            smoothNoise(seed ^ 0x1A30, wx, wy, octave(8)) * 3 +
-            smoothNoise(seed ^ 0x1A31, wx, wy, octave(16)) * 2) /
-           31;
-}
-
-// Ridges, which is what makes mountains mountains rather than a dome: the noise
-// folded at its middle, so its peaks are creases and not bumps.
-std::int32_t ridgeNoise(std::uint64_t seed, std::int32_t x, std::int32_t y, std::int32_t width) {
-    const auto fold = [](std::int32_t v) { return 1023 - std::abs(2 * v - 1023); };
-    return (fold(smoothNoise(seed, x, y, octaveScale(60, width, 100))) * 5 +
-            fold(smoothNoise(seed + 7, x, y, octaveScale(26, width, 50))) * 3 +
-            fold(smoothNoise(seed + 71, x, y, octaveScale(11, width, 0))) * 2) /
-           10;
-}
 
 // Every settlement is named, and there are hundreds of them: two lists, because
 // a Sumerian city and an Achaean one are not the same people and the map should
@@ -366,6 +268,8 @@ bool saveWorldMapData(const WorldMapData& world, const std::filesystem::path& fi
             {"temperature_scale", world.constants.globalTemperatureScale},
             {"moisture_scale", world.constants.globalMoistureScale},
             {"rotation_sign", world.constants.planetRotationSign},
+            {"river_share", world.riverShare},
+            {"graph_river_flow", world.graphRiverFlow},
             {"season", {{"amplitude", world.constants.season.amplitude},
                         {"wet_bias", world.constants.season.wetSeasonBias},
                         {"cold_bias", world.constants.season.coldSeasonBias}}},
@@ -402,25 +306,25 @@ bool saveWorldMapData(const WorldMapData& world, const std::filesystem::path& fi
                 {"climate", static_cast<int>(s.climate)},
         });
 
-    const auto ints = [&](const char* key, const std::vector<std::int32_t>& v) { j[key] = v; };
-    const auto i8 = [&](const char* key, const std::vector<std::int8_t>& v) {
+    const auto ints = [&](const char* key, const auto& v) { j[key] = denseOf(v); };
+    const auto i8 = [&](const char* key, const auto& v) {
         j[key] = json::array();
         for (std::int8_t x : v) j[key].push_back(static_cast<int>(x));
     };
-    const auto u8 = [&](const char* key, const std::vector<std::uint8_t>& v) { j[key] = v; };
-    const auto vec2 = [&](const char* key, const std::vector<ClimateVector>& v) {
+    const auto u8 = [&](const char* key, const auto& v) { j[key] = denseOf(v); };
+    const auto vec2 = [&](const char* key, const auto& v) {
         j[key] = json::array();
         for (const ClimateVector& p : v) j[key].push_back({p.x, p.y});
     };
-    const auto rock = [&](const char* key, const std::vector<RockType>& v) {
+    const auto rock = [&](const char* key, const auto& v) {
         j[key] = json::array();
         for (RockType t : v) j[key].push_back(static_cast<int>(t));
     };
-    const auto soil = [&](const char* key, const std::vector<SoilType>& v) {
+    const auto soil = [&](const char* key, const auto& v) {
         j[key] = json::array();
         for (SoilType t : v) j[key].push_back(static_cast<int>(t));
     };
-    const auto m6 = [&](const char* key, const std::vector<std::array<std::uint8_t, 6>>& v) {
+    const auto m6 = [&](const char* key, const auto& v) {
         j[key] = json::array();
         for (const auto& a : v) j[key].push_back({a[0], a[1], a[2], a[3], a[4], a[5]});
     };
@@ -451,6 +355,7 @@ bool saveWorldMapData(const WorldMapData& world, const std::filesystem::path& fi
     ints("lake_depth", world.lakeDepthField);
     ints("province", world.provinceField);
     u8("waterfall", world.waterfallField);
+    u8("water_paint", world.waterPaintField);
     ints("sediment", world.sedimentPotentialField);
     ints("erosion", world.erosionField);
     ints("floodplain", world.floodplainPotentialField);
@@ -508,6 +413,8 @@ bool loadWorldMapData(const std::filesystem::path& file, WorldMapData& out) {
     out.constants.globalTemperatureScale = constants.value("temperature_scale", 100);
     out.constants.globalMoistureScale = constants.value("moisture_scale", 100);
     out.constants.planetRotationSign = constants.value("rotation_sign", 1);
+    out.riverShare = constants.value("river_share", 1.0f);
+    out.graphRiverFlow = constants.value("graph_river_flow", std::uint8_t(0));
     const json season = constants.value("season", json::object());
     out.constants.season.amplitude = season.value("amplitude", 20);
     out.constants.season.wetSeasonBias = season.value("wet_bias", 0);
@@ -548,32 +455,45 @@ bool loadWorldMapData(const std::filesystem::path& file, WorldMapData& out) {
         out.sites.push_back(std::move(site));
     }
 
-    const auto ints = [&](const char* key, std::vector<std::int32_t>& v) {
+    const auto ints = [&](const char* key, CellField<std::int32_t>& field) {
+        std::vector<std::int32_t> v;
         v = j.value(key, std::vector<std::int32_t>{});
+        field = v;
     };
-    const auto u8 = [&](const char* key, std::vector<std::uint8_t>& v) {
+    const auto u8 = [&](const char* key, CellField<std::uint8_t>& field) {
+        std::vector<std::uint8_t> v;
         v = j.value(key, std::vector<std::uint8_t>{});
+        field = v;
     };
-    const auto i8 = [&](const char* key, std::vector<std::int8_t>& v) {
+    const auto i8 = [&](const char* key, CellField<std::int8_t>& field) {
+        std::vector<std::int8_t> v;
         v.clear();
         for (const auto& e : j.value(key, json::array())) v.push_back(static_cast<std::int8_t>(e.get<int>()));
+        field = v;
     };
-    const auto vec2 = [&](const char* key, std::vector<ClimateVector>& v) {
+    const auto vec2 = [&](const char* key, CellField<ClimateVector>& field) {
+        std::vector<ClimateVector> v;
         v.clear();
         for (const auto& e : j.value(key, json::array()))
             if (e.is_array() && e.size() >= 2)
                 v.push_back({static_cast<std::int16_t>(e[0].get<int>()),
                              static_cast<std::int16_t>(e[1].get<int>())});
+        field = v;
     };
-    const auto rock = [&](const char* key, std::vector<RockType>& v) {
+    const auto rock = [&](const char* key, CellField<RockType>& field) {
+        std::vector<RockType> v;
         v.clear();
         for (const auto& e : j.value(key, json::array())) v.push_back(static_cast<RockType>(e.get<int>()));
+        field = v;
     };
-    const auto soil = [&](const char* key, std::vector<SoilType>& v) {
+    const auto soil = [&](const char* key, CellField<SoilType>& field) {
+        std::vector<SoilType> v;
         v.clear();
         for (const auto& e : j.value(key, json::array())) v.push_back(static_cast<SoilType>(e.get<int>()));
+        field = v;
     };
-    const auto m6 = [&](const char* key, std::vector<std::array<std::uint8_t, 6>>& v) {
+    const auto m6 = [&](const char* key, CellField<std::array<std::uint8_t, 6>>& field) {
+        std::vector<std::array<std::uint8_t, 6>> v;
         v.clear();
         for (const auto& e : j.value(key, json::array())) {
             if (!e.is_array() || e.size() < 6) continue;
@@ -584,6 +504,7 @@ bool loadWorldMapData(const std::filesystem::path& file, WorldMapData& out) {
                          static_cast<std::uint8_t>(e[4].get<int>()),
                          static_cast<std::uint8_t>(e[5].get<int>())});
         }
+        field = v;
     };
 
     ints("primary_height", out.primaryHeightField);
@@ -612,6 +533,8 @@ bool loadWorldMapData(const std::filesystem::path& file, WorldMapData& out) {
     ints("lake_depth", out.lakeDepthField);
     ints("province", out.provinceField);
     u8("waterfall", out.waterfallField);
+    u8("water_paint", out.waterPaintField);
+    if (out.waterPaintField.size() != out.cells.size()) out.waterPaintField.assign(out.cells.size(), 0);
     ints("sediment", out.sedimentPotentialField);
     ints("erosion", out.erosionField);
     ints("floodplain", out.floodplainPotentialField);
@@ -656,7 +579,127 @@ bool loadWorldMapData(const std::filesystem::path& file, WorldMapData& out) {
     return out.width > 0 && out.height > 0 && !out.cells.empty();
 }
 
+namespace {
+thread_local GenerationTimings* timingSink = nullptr;
+
+// Laps between the passes, when somebody asked for them: each call closes
+// the section begun by the one before it (the first opens "setup").
+struct GenerationClock {
+    std::chrono::steady_clock::time_point began = std::chrono::steady_clock::now();
+    std::string open = "setup";
+    void operator()(const char* next) {
+        if (!timingSink) return;
+        const auto now = std::chrono::steady_clock::now();
+        timingSink->passes.emplace_back(open, std::chrono::duration<double, std::milli>(now - began).count());
+        began = now;
+        open = next ? next : "";
+    }
+};
+
+// The paint of a region made by hand, torn around its shore (PASS G1 under
+// the staged pipeline). Two scales - bays and headlands, inlets and islets -
+// at full strength where the paint is at the shore value and fading out away
+// from it, so the noise moves the coast by kilometres and never raises land
+// far out at sea or drowns a hole in the middle of what was painted.
+std::int32_t raggedCoast(std::uint64_t seed, std::int32_t x, std::int32_t y, std::int32_t painted,
+                         const AuthoringDials& dials) {
+    if (!(dials.coast > 0.0f)) return 0;
+    const std::int32_t broadCells = std::max(4, std::int32_t(std::lround(dials.coastKm * 1000.0 / kMetresPerCell)));
+    const std::int32_t fineCells = std::max(2, broadCells / 5);
+    const double broad = continentShape(seed ^ 0xC0A57EA5ull, x, y, broadCells) - 512;
+    const double fine = continentShape(seed ^ 0x15E71E75ull, x, y, fineCells) - 512;
+    const double nearShore = std::clamp(1.0 - std::abs(painted - 512) / 600.0, 0.0, 1.0);
+    return static_cast<std::int32_t>(std::lround((broad * 0.9 + fine * 0.6) * nearShore * dials.coast));
+}
+
+// How far off its cell the paint of a region made by hand is read (in cells):
+// a wander as broad as the bays the dials ask for, and a finer one a fifth
+// of it on top, so the coast is broken at two scales.
+std::pair<std::int32_t, std::int32_t> coastWarp(std::uint64_t seed, std::int32_t x, std::int32_t y,
+                                                const AuthoringDials& dials) {
+    const std::int32_t broadCells = std::max(4, std::int32_t(std::lround(dials.coastKm * 1000.0 / kMetresPerCell)));
+    const std::int32_t fineCells = std::max(2, broadCells / 5);
+    const double reach = double(broadCells) * 0.35 * dials.coast, fine = double(fineCells) * 0.5 * dials.coast;
+    const auto at = [&](std::uint64_t salt, std::int32_t cells) {
+        return (smoothNoise(seed ^ salt, x, y, cells) - 511.5) / 511.5;
+    };
+    const double dx = at(0x5EA3A11Cull, broadCells) * reach + at(0x0B5E55EDull, fineCells) * fine;
+    const double dy = at(0xC0A5717Eull, broadCells) * reach + at(0x1A7E4A11ull, fineCells) * fine;
+    return {std::int32_t(std::lround(dx)), std::int32_t(std::lround(dy))};
+}
+
+// The primary stage's stand-in for everything it does not work out: a
+// neutral, bare country - no climate of its own, no water, no vegetation to
+// speak of and no peoples - so what is looked at is the ground's shape and
+// nothing else. Every field a later pass would fill keeps its fill.
+void bareGround(WorldMapData& world) {
+    const std::size_t count = world.cells.size();
+    for (std::size_t i = 0; i < count; ++i) {
+        WorldCell& c = world.cells[i];
+        c.river = false;
+        c.riverOut = -1;
+        c.riverSize = 0;
+        c.drainOut = -1;
+        c.drainSize = 0;
+        c.temperature = 150;
+        // Moist enough for the grass to hold the hillsides: at 110 it held a
+        // little over half of them and the bare ground read as stone.
+        c.moisture = 140;
+        c.fertility = 0;
+        // Alpine is the barest climate that is not ice: a little grass in
+        // the lee of the rocks, and no woodland at all.
+        c.climate = Climate::Alpine;
+        if (c.sea) continue;
+        world.materialSuitabilityField[i] = std::array<std::uint8_t, 6>{20, 160, 0, 75, 0, 0};
+        world.soilDrainageField[i] = 128;
+    }
+    world.sites.clear();
+}
+
+// The relief stage keeps what the water did to the ground and none of the
+// water: no rivers, no lakes, no drainage for the graph to draw.
+void withoutWater(WorldMapData& world) {
+    const std::size_t count = world.cells.size();
+    for (std::size_t i = 0; i < count; ++i) {
+        WorldCell& c = world.cells[i];
+        c.river = false;
+        c.riverOut = -1;
+        c.riverSize = 0;
+    }
+    world.flowDirectionField.assign(count, std::int8_t(-1));
+    world.riverDischargeField.assign(count, 0);
+    world.riverSourceField.assign(count, 0);
+    world.lakeRegionField.assign(count, -1);
+    world.lakeLevelField.assign(count, 0);
+    world.lakeDepthField.assign(count, 0);
+    world.waterfallField.assign(count, 0);
+    world.lakesKept = 0;
+    world.sites.clear();
+}
+} // namespace
+
+void setGenerationTimings(GenerationTimings* sink) { timingSink = sink; }
+
+Latitude legacyLatitude(std::int32_t widthCells, std::int32_t heightCells, std::uint64_t seed) {
+    // The same numbers PASS C0 takes under the old rule.
+    const std::int32_t span = std::clamp(230 * widthCells / 2048, 70, 230);
+    const std::int32_t centre = 150 + static_cast<std::int32_t>(core::splitmix64(seed ^ 0xC11Aull) % 61) - 30;
+    const std::int32_t from = std::clamp(centre - span / 2, 0, std::max(0, 230 - span));
+    const double top = 90.0 * (1.0 - double(from) / 230.0);
+    const double bottom = 90.0 * (1.0 - double(from + span) / 230.0);
+    const double km = double(std::max(1, heightCells - 1)) * kMetresPerCell / 1000.0;
+    Latitude l;
+    l.fixed = true;
+    l.northDegrees = top;
+    l.kmPerDegree = std::max(0.1, km / std::max(0.01, top - bottom));
+    l.legacyFrom = from;
+    l.legacySpan = span;
+    l.legacyRows = heightCells;
+    return l;
+}
+
 WorldMapData generateWorldMap(const WorldMapParams& params) {
+    GenerationClock lap;
     WorldMapData world;
     world.width = params.width;
     world.height = params.height;
@@ -670,6 +713,7 @@ WorldMapData generateWorldMap(const WorldMapParams& params) {
     world.constants.globalTemperatureScale = 100;
     world.constants.globalMoistureScale = std::clamp(params.rainfallPercent, 20, 250);
     world.constants.planetRotationSign = (core::splitmix64(params.seed ^ 0xA11CE55FULL) & 1ull) ? 1 : -1;
+    world.riverShare = params.authored ? std::clamp(params.authoring.rivers, 0.25f, 3.0f) : 1.0f;
     world.constants.season.amplitude = 16 + static_cast<std::int32_t>(core::splitmix64(params.seed ^ 0x5EA50FFull) % 21);
     world.constants.season.wetSeasonBias = static_cast<std::int32_t>(core::splitmix64(params.seed ^ 0xBEEFull) % 33) - 16;
     world.constants.season.coldSeasonBias = static_cast<std::int32_t>(core::splitmix64(params.seed ^ 0xC01Dull) % 25) - 12;
@@ -699,6 +743,7 @@ WorldMapData generateWorldMap(const WorldMapParams& params) {
     world.lakeDepthField.assign(count, 0);
     world.provinceField.assign(count, static_cast<std::int32_t>(Province::Highlands));
     world.waterfallField.assign(count, 0);
+    world.waterPaintField.assign(count, 0);
     world.sedimentPotentialField.assign(count, 0);
     world.erosionField.assign(count, 0);
     world.floodplainPotentialField.assign(count, 0);
@@ -733,22 +778,235 @@ WorldMapData generateWorldMap(const WorldMapParams& params) {
         return static_cast<std::size_t>(y) * params.width + x;
     };
 
+    lap("regions");
+    // --- regions ----------------------------------------------------------
+    //
+    // A world built region by region (world_layout.hpp): every cell is made of
+    // one region, or of two to four of them across a border band, and each of
+    // those regions brings its own seed and dials. Worked out once per cell and
+    // packed - the border is wavy noise and nobody wants it evaluated in every
+    // pass below.
+    //
+    // What follows the region: the shape of the land (its continental, relief,
+    // ridge and coast noise are seeded by the region), how much of it is sea,
+    // how long it has weathered, how wet it is, and whether there is any land at
+    // all. What does not: the plates, the climate and the drainage, which run
+    // across borders as if there were none.
+    const WorldLayout* layout = params.layout.get();
+    if (layout && (layout->widthCells() != params.width || layout->heightCells() != params.height))
+        throw std::invalid_argument("world layout and world size differ");
+    struct PackedMix {
+        std::array<std::uint8_t, 4> region{};
+        std::array<std::uint8_t, 4> weight{};
+        std::uint8_t count = 0;
+    };
+    std::vector<PackedMix> regionMix;
+    std::vector<float> regionLand;        // 0 = empty region (open sea), 1 = generated
+    if (layout) {
+        regionMix.resize(count);
+        regionLand.assign(count, 1.0f);
+        for (std::int32_t y = 0; y < params.height; ++y)
+            for (std::int32_t x = 0; x < params.width; ++x) {
+                const std::size_t i = indexOf(x, y);
+                const RegionMix mix = regionMixAt(*layout, x, y);
+                PackedMix& packed = regionMix[i];
+                float land = 0.0f, total = 0.0f;
+                for (int k = 0; k < mix.count; ++k) {
+                    const auto r = std::size_t(mix.region[std::size_t(k)]);
+                    const float w = mix.weight[std::size_t(k)];
+                    const auto q = static_cast<std::uint8_t>(std::clamp(std::lround(w * 255.0f), 0l, 255l));
+                    if (q == 0) continue;
+                    packed.region[packed.count] = static_cast<std::uint8_t>(r);
+                    packed.weight[packed.count] = q;
+                    ++packed.count;
+                    total += q;
+                    if (layout->regions[r].generated) land += q;
+                }
+                regionLand[i] = total > 0.0f ? land / total : 0.0f;
+            }
+    }
+    // A number made per region, blended as the cell is made of regions.
+    const auto regional = [&](std::size_t i, auto&& value) -> double {
+        const PackedMix& m = regionMix[i];
+        double sum = 0.0, total = 0.0;
+        for (int k = 0; k < m.count; ++k) {
+            const double w = m.weight[std::size_t(k)];
+            sum += w * double(value(layout->regions[m.region[std::size_t(k)]]));
+            total += w;
+        }
+        return total > 0.0 ? sum / total : 0.0;
+    };
+    // Noise seeded by the region: the world's own seed when there are no
+    // regions, and across a border band both regions' noise, blended - the
+    // land changes character through the band instead of at a line.
+    const auto seeded = [&](std::size_t i, auto&& noise) -> std::int32_t {
+        if (!layout) return noise(params.seed);
+        return static_cast<std::int32_t>(std::lround(regional(i, [&](const Region& r) {
+            return noise(r.settings.seed);
+        })));
+    };
+    // A region's own dials, blended the same way.
+    const auto regionRain = [&](std::size_t i) {
+        return layout ? regional(i, [](const Region& r) { return r.settings.rainfallPercent; })
+                      : double(params.rainfallPercent);
+    };
+    const auto regionErosion = [&](std::size_t i) {
+        return layout ? regional(i, [](const Region& r) { return r.settings.erosionPasses; })
+                      : double(params.erosionPasses);
+    };
+    // The level below which a share of a set of values lies: the region's own
+    // share of sea, read off its own ground, with the share fractional.
+    const auto levelAt = [](const std::vector<std::int32_t>& sorted, double percent) {
+        if (sorted.empty()) return 0.0;
+        const double at = std::clamp(percent, 0.0, 100.0) / 100.0 * double(sorted.size() - 1);
+        const auto low = static_cast<std::size_t>(std::floor(at));
+        const auto high = std::min(sorted.size() - 1, low + 1);
+        return double(sorted[low]) + (double(sorted[high]) - double(sorted[low])) * (at - double(low));
+    };
+
+    lap("layers");
+    // --- layers -----------------------------------------------------------
+    //
+    // What was painted over the regions (world_layers.hpp), read at every
+    // cell. Each layer feeds the pass that decides its thing, and is laid over
+    // what that pass makes: an override layer by its cover, a delta layer by
+    // adding. A layer with nothing painted on it costs nothing here, and a world
+    // with every layer empty comes out exactly as it did before there were any.
+    const auto layerAt = [&](LayerId id) {
+        return layout ? layerCells(layout->layer(id), params.width, params.height) : LayerCells{};
+    };
+    const LayerCells paintedContinents = layerAt(LayerId::Continents);
+    const LayerCells paintedRanges = layerAt(LayerId::Ranges);
+    const LayerCells paintedHills = layerAt(LayerId::Hills);
+    const LayerCells paintedSea = layerAt(LayerId::Sea);
+    const LayerCells paintedWeathering = layerAt(LayerId::Weathering);
+    const LayerCells paintedRain = layerAt(LayerId::Rain);
+    const LayerCells paintedWater = layerAt(LayerId::Water);
+    // The water layer, read once into a kind per cell (WaterPaint): what the
+    // ground is shaped for below and what the drainage pass keeps to.
+    if (paintedWater.any)
+        for (std::size_t i = 0; i < count; ++i) {
+            const float cover = paintedWater.coverAt(i);
+            if (cover <= 0.0f) continue;
+            const WaterPaint kind = waterPaintOf(paintedWater.paintedAt(i) / cover, cover);
+            world.waterPaintField.set(i, static_cast<std::uint8_t>(kind));
+        }
+    // And an imported region's lakes (world_import.hpp): water kept in the
+    // basins its skeleton has beds for, as if they had been painted.
+    const bool importedLakes = params.imported && !params.imported->lake.empty();
+    if (importedLakes)
+        for (std::int32_t y = 0; y < params.height; ++y)
+            for (std::int32_t x = 0; x < params.width; ++x) {
+                const std::size_t i = indexOf(x, y);
+                if (world.waterPaintField[i] != 0) continue;
+                const auto lake = params.imported->maskAt(params.imported->lake,
+                                                          std::int64_t(x) * kMetresPerCell + kMetresPerCell / 2,
+                                                          std::int64_t(y) * kMetresPerCell + kMetresPerCell / 2, 0);
+                if (lake >= 128) world.waterPaintField.set(i, static_cast<std::uint8_t>(WaterPaint::Lake));
+            }
+    const bool paintsWater = paintedWater.any || importedLakes;
+    const auto paintAt = [&](std::size_t i) {
+        return paintsWater ? static_cast<WaterPaint>(world.waterPaintField[i]) : WaterPaint::None;
+    };
+    // How far the paint moved the ground, as the relief pass builds it: the
+    // height with everything painted, less the height the passes alone would
+    // have made. The sea level is read off the ground without it (the level
+    // is a share of the ground, and a range painted into a region would
+    // otherwise drown the rest of that region to keep its share, and an island
+    // painted into the sea lift another one out somewhere else) - and then the
+    // painted ground stands where it was painted, over that level.
+    std::vector<std::int32_t> paintedRise;
+    if (paintedContinents.any || paintedRanges.any || paintedHills.any) paintedRise.assign(count, 0);
+    // A region's share of sea at a cell: its dial, or what the sea layer says
+    // over it.
+    const auto shareOf = [&](const Region& r, std::size_t i) {
+        return paintedSea.over(i, double(r.settings.seaPercent));
+    };
+    const auto regionIndex = [&](const Region& r) { return std::size_t(&r - layout->regions.data()); };
+    // Each region's own ground, sorted: a field over the cells that are mostly
+    // that region.
+    const auto regionSorted = [&](const std::vector<std::int32_t>& field) {
+        std::vector<std::vector<std::int32_t>> values(layout ? layout->regions.size() : 0);
+        if (!layout) return values;
+        for (std::size_t i = 0; i < count; ++i) {
+            const PackedMix& m = regionMix[i];
+            if (m.count == 0) continue;
+            std::size_t best = 0;
+            for (int k = 1; k < m.count; ++k)
+                if (m.weight[std::size_t(k)] > m.weight[best]) best = std::size_t(k);
+            values[m.region[best]].push_back(field[i]);
+        }
+        for (auto& v : values) std::sort(v.begin(), v.end());
+        return values;
+    };
+
+    lap("PASS G1: continental mask");
     // --- PASS G1: continental mask ----------------------------------------
+    // The first procedural brush (world_brush.hpp), run over the whole world
+    // with each region's seed; what was painted on the continents layer, with
+    // this same brush or by hand, is laid over it.
+    std::vector<std::int32_t> madeContinents;   // as the pass made it, under the paint
+    if (paintedContinents.any) madeContinents.assign(count, 0);
     for (std::int32_t y = 0; y < params.height; ++y)
-        for (std::int32_t x = 0; x < params.width; ++x)
-            world.continentalField[indexOf(x, y)] = continentNoise(params.seed, x, y, params.width);
+        for (std::int32_t x = 0; x < params.width; ++x) {
+            const std::size_t i = indexOf(x, y);
+            // A region made by hand has no continents of its own: its land is
+            // what the layer paints, and nothing else.
+            const std::int32_t made = layout
+                    ? static_cast<std::int32_t>(std::lround(regional(i, [&](const Region& r) {
+                          return r.settings.manual ? 0 : continentNoise(r.settings.seed, x, y, params.width);
+                      })))
+                    : seeded(i, [&](std::uint64_t seed) { return continentNoise(seed, x, y, params.width); });
+            world.continentalField[i] = made;
+            if (!paintedContinents.any) continue;
+            madeContinents[i] = made;
+            // On a region made by hand the paint is read a few kilometres off
+            // where it lies, the offset wandering with the coast's own noise:
+            // a smooth stroke's edge comes out in bays and headlands as wide as
+            // the dial says, straits where it was thin - the coast moved, not
+            // just roughened along the line it was painted on.
+            std::size_t from = i;
+            if (params.authored && params.authoring.coast > 0.0f) {
+                const auto [wx, wy] = coastWarp(params.seed, x, y, params.authoring);
+                from = indexOf(std::clamp(x + wx, 0, params.width - 1), std::clamp(y + wy, 0, params.height - 1));
+            }
+            world.continentalField[i] = static_cast<std::int32_t>(std::lround(
+                    made * (1.0 - double(paintedContinents.cover[from])) + double(paintedContinents.painted[from])));
+            // A coast painted with a two-kilometre brush is a smooth blob, and a
+            // real one is broken at every scale. On a region made by hand the
+            // paint is torn around its shore - bays and headlands at twenty
+            // kilometres, inlets and islets at a few - and left alone away from
+            // it: the noise fades out as the paint gets further from the shore
+            // value, so it never raises land far out at sea nor drowns a hole
+            // in the middle of what was painted.
+            if (params.authored)
+                world.continentalField[i] += raggedCoast(params.seed, x, y, world.continentalField[i], params.authoring);
+        }
     {
-        std::vector<std::int32_t> sorted = world.continentalField;
+        std::vector<std::int32_t> sorted = world.continentalField.dense();
         std::sort(sorted.begin(), sorted.end());
         const std::size_t cut = std::min(sorted.size() - 1,
                                          sorted.size() * static_cast<std::size_t>(params.seaPercent) / 100);
         const std::int32_t shore = sorted[cut];
+        // With regions, each has its own shore - its own share of sea read off
+        // its own ground as the pass made it, the paint not counted - and an
+        // empty region's is above anything, so it is all sea. Blended through
+        // the band like everything else, and the share is the sea layer's where
+        // that was painted.
+        const auto shores = regionSorted(paintedContinents.any ? madeContinents : std::vector<std::int32_t>(world.continentalField));
         std::deque<std::size_t> queue;
         std::vector<char> seen(count, 0);
         for (std::int32_t y = 0; y < params.height; ++y)
             for (std::int32_t x = 0; x < params.width; ++x) {
                 const std::size_t i = indexOf(x, y);
-                world.initialLandMask[i] = world.continentalField[i] > shore ? 1 : 0;
+                const double here = layout ? regional(i, [&](const Region& r) {
+                    const auto& own = shores[regionIndex(r)];
+                    // A region made by hand is land where its paint is more
+                    // than half-way up the continents' range.
+                    if (r.generated && r.settings.manual) return 512.0;
+                    return r.generated && !own.empty() ? levelAt(own, shareOf(r, i)) : 4096.0;
+                }) : double(shore);
+                world.initialLandMask[i] = world.continentalField[i] > here ? 1 : 0;
             }
         for (std::int32_t y = 0; y < params.height; ++y)
             for (std::int32_t x = 0; x < params.width; ++x) {
@@ -781,6 +1039,7 @@ WorldMapData generateWorldMap(const WorldMapParams& params) {
         }
     }
 
+    lap("the plates");
     // --- the plates -------------------------------------------------------
     // Where the land is at all is decided by tectonics rather than by noise
     // (GDD 4.2, stage 1). Noise alone answers "is this cell high" and has no
@@ -979,12 +1238,36 @@ WorldMapData generateWorldMap(const WorldMapParams& params) {
         for (std::size_t i = 0; i < count; ++i)
             world.geologyRegion[i] = static_cast<std::uint8_t>(plateOf[i] & 0xff);
     }
+    // A region made by hand has the mountains that were painted on it and no
+    // others: the plates still decide the crust under it, but raise no ranges,
+    // open no rifts and shear no faults of their own. What the person paints
+    // on the ranges layer (below) is then the whole of its uplift - crested by
+    // the relief pass into peaks and passes like any margin.
+    if (params.authored) {
+        std::fill(tectonic.begin(), tectonic.end(), 0);
+        world.upliftField.assign(count, 0);
+        world.riftField.assign(count, 0);
+        world.faultField.assign(count, 0);
+    }
+    // Ranges painted on the ranges layer: stress added to what the plates put
+    // there, before anything reads it. The relief pass crests a painted range
+    // exactly as it crests a margin - peaks and passes along it, from the
+    // region's own seed - and the geology gives it the hard rock of an uplift.
+    std::vector<std::int32_t> madeTectonic;     // the plates' own, under the paint
+    if (!paintedRise.empty()) madeTectonic = tectonic;
+    if (paintedRanges.any)
+        for (std::size_t i = 0; i < count; ++i) {
+            const auto lift = static_cast<std::int32_t>(std::lround(paintedRanges.painted[i]));
+            tectonic[i] += lift;
+            if (lift > 0) world.upliftField[i] = std::max(world.upliftField[i], lift);
+        }
 
+    lap("PASS G3: base macro height");
     // --- PASS G3: base macro height --------------------------------------
     // Plate first, boundary second, noise last: the crust decides whether this
     // is land at all, the margins decide where the mountains are, and the noise
     // only roughens what they produced. Noise on its own drew a blur.
-    std::vector<std::int32_t>& raw = world.macroHeightField;
+    auto& raw = world.macroHeightField;
     {
         // The crust is a step - light rock stands high, dense rock lies low -
         // and a step drawn straight off the plate map is a cliff along the
@@ -1037,6 +1320,7 @@ WorldMapData generateWorldMap(const WorldMapParams& params) {
         // flood fill on a square grid leaves diamond-shaped contours. One pass
         // is enough to lose the diamonds and keep the range.
         blur(tectonic);
+        if (!madeTectonic.empty()) blur(madeTectonic);
 
         // Peaks and passes ALONG a range, which the flood fill has no way to
         // produce. Its value falls linearly from the boundary, so the section
@@ -1059,15 +1343,15 @@ WorldMapData generateWorldMap(const WorldMapParams& params) {
         // measured on an unwarped grid comes out aligned to the grid, and the
         // eye finds that alignment immediately however good the shape is.
         const std::int32_t crestWarp = std::max(2, params.width / 14);
-        const auto crested = [&](std::int32_t x0, std::int32_t y0) {
-            const std::int32_t x = x0 + (smoothNoise(params.seed ^ 0xC12A, x0, y0,
+        const auto crested = [&](std::uint64_t seed, std::int32_t x0, std::int32_t y0) {
+            const std::int32_t x = x0 + (smoothNoise(seed ^ 0xC12A, x0, y0,
                                                      std::max(3, params.width / 5)) - 512) *
                                                 crestWarp / 512;
-            const std::int32_t y = y0 + (smoothNoise(params.seed ^ 0xC12B, x0, y0,
+            const std::int32_t y = y0 + (smoothNoise(seed ^ 0xC12B, x0, y0,
                                                      std::max(3, params.width / 5)) - 512) *
                                                 crestWarp / 512;
             const auto fold = [&](std::uint64_t key, std::int32_t scale) {
-                const std::int32_t n = smoothNoise(params.seed ^ key, x, y, scale) - 512;
+                const std::int32_t n = smoothNoise(seed ^ key, x, y, scale) - 512;
                 const std::int32_t q = 512 - std::abs(n);
                 return q * q / 512;                       // 0..512, creased at the fold
             };
@@ -1210,47 +1494,84 @@ WorldMapData generateWorldMap(const WorldMapParams& params) {
                         512;
                 const std::int32_t reach = std::max(3, margin + wander * margin * 7 / 5120);
                 const std::int32_t into = reach - toEdge;
-                const std::int32_t drown = into <= 0 ? 0 : 1000 * into * into / (reach * reach);
+                // Land painted on the continents layer is where it was painted,
+                // at the edge of the map too: the edge takes only the land
+                // nobody drew. That is how a world made of separate runs is
+                // joined by hand - a coast painted across the border of one
+                // run into the next (world_compose.hpp).
+                const float drawn = paintedContinents.coverAt(i);
+                const std::int32_t drownFull = into <= 0 ? 0 : 1000 * into * into / (reach * reach);
+                const std::int32_t drown = drawn <= 0.0f ? drownFull
+                                                         : static_cast<std::int32_t>(drownFull * (1.0f - drawn));
 
                 // An archipelago is not a continent with a higher sea level -
                 // it is land broken into small pieces, which is a finer grain
                 // of noise and not a lower one. So the grain knob mixes in an
                 // octave of its own rather than only scaling what is there.
-                // What decides where the land is. Full amplitude, never scaled
-                // down by how tectonic the ground is: a coast is a coast whether
-                // or not anything is pushing it up.
-                const std::int32_t shore =
-                        (world.continentalField[i] - 512) * 3 / 2;
-                const std::int32_t coarse = landNoise(params.seed, x, y, params.width) - 512;
-                const std::int32_t fine =
-                        smoothNoise(params.seed ^ 0x15AD, x, y,
-                                    std::max(2, octaveScale(9, params.width, 0))) - 512;
-                const std::int32_t detail = grain <= 1024
-                        ? coarse * grain / 1024
-                        : coarse + (fine - coarse) * (grain - 1024) / 1024;
-                // Fine noise belongs where there is country to vary, not on a
-                // plain. Laid flat over everything it is tens of metres of
-                // ripple on ground that should be smooth - and every ripple is
-                // a hollow for the water pass to stand in, and a direction for
-                // the erosion to follow. A quarter of it everywhere so a plain
-                // is not a table, all of it where the crust is being pushed up.
-                const std::int32_t country =
-                        std::clamp(256 + std::abs(tectonic[i]) / 2, 256, 1024);
-                const std::int32_t varied = detail * country / 1024;
-                world.primaryHeightField[i] = 400 + shore / 2 + detail * 3 / 4 - drown - sea / 2;
-                // Only the initial field is noisy. Ranges belong to plate
-                // compression; branching relief is produced by erosion below.
+                const std::int32_t fine = seeded(i, [&](std::uint64_t seed) {
+                    return smoothNoise(seed ^ 0x15AD, x, y, std::max(2, octaveScale(9, params.width, 0)));
+                }) - 512;
+                // The relief noise is a procedural brush too (Hills): the
+                // pass's own value, with whatever was painted on the hills
+                // layer laid over it.
+                // A region made by hand takes its relief at the strength the
+                // Coast & relief stage asked for.
+                const std::int32_t madeHills = [&] {
+                    const std::int32_t made = seeded(i, [&](std::uint64_t seed) { return landNoise(seed, x, y, params.width); });
+                    return params.authored && params.authoring.relief != 1.0f
+                            ? 512 + static_cast<std::int32_t>(std::lround((made - 512) * params.authoring.relief))
+                            : made;
+                }();
+                const std::int32_t hills = paintedHills.any
+                        ? static_cast<std::int32_t>(std::lround(paintedHills.over(i, madeHills)))
+                        : madeHills;
                 // Uplift is shaped along its length; a trench or a rift is not,
                 // because neither has a crest to put summits on.
-                const std::int32_t shaped =
-                        (tectonic[i] > 0 ? tectonic[i] * crested(x, y) / 922 : tectonic[i]) *
-                        rugged / 1024;
-                raw[i] = crust[i] + shore + shaped + varied * 3 / 4 + world.faultField[i] / 3 -
-                         world.riftField[i] / 2 - drown - sea;
+                const bool crestedHere = tectonic[i] > 0 || (!paintedRise.empty() && madeTectonic[i] > 0);
+                const std::int32_t crest = crestedHere ? seeded(i, [&](std::uint64_t seed) {
+                    return crested(seed, x, y);
+                }) : 922;
+                const auto detailOf = [&](std::int32_t relief) {
+                    const std::int32_t coarse = relief - 512;
+                    return grain <= 1024 ? coarse * grain / 1024
+                                         : coarse + (fine - coarse) * (grain - 1024) / 1024;
+                };
+                const auto heightOf = [&](std::int32_t continental, std::int32_t relief, std::int32_t stress) {
+                    // What decides where the land is. Full amplitude, never
+                    // scaled down by how tectonic the ground is: a coast is a
+                    // coast whether or not anything is pushing it up.
+                    const std::int32_t shore = (continental - 512) * 3 / 2;
+                    // Fine noise belongs where there is country to vary, not on
+                    // a plain. Laid flat over everything it is tens of metres
+                    // of ripple on ground that should be smooth - and every
+                    // ripple is a hollow for the water pass to stand in, and a
+                    // direction for the erosion to follow. A quarter of it
+                    // everywhere so a plain is not a table, all of it where the
+                    // crust is being pushed up.
+                    const std::int32_t country = std::clamp(256 + std::abs(stress) / 2, 256, 1024);
+                    const std::int32_t varied = detailOf(relief) * country / 1024;
+                    // Only the initial field is noisy. Ranges belong to plate
+                    // compression; branching relief is produced by erosion below.
+                    const std::int32_t shaped = (stress > 0 ? stress * crest / 922 : stress) * rugged / 1024;
+                    return crust[i] + shore + shaped + varied * 3 / 4 + world.faultField[i] / 3 -
+                           world.riftField[i] / 2 - drown - sea;
+                };
+                const std::int32_t shore = (world.continentalField[i] - 512) * 3 / 2;
+                world.primaryHeightField[i] = 400 + shore / 2 + detailOf(hills) * 3 / 4 - drown - sea / 2;
+                raw[i] = heightOf(world.continentalField[i], hills, tectonic[i]);
+                // And the ground as the passes alone would have made it, to
+                // know how far the paint moved it.
+                // The edge the paint kept above water is the paint's doing too.
+                if (!paintedRise.empty())
+                    paintedRise[i] = raw[i] - heightOf(paintedContinents.any ? madeContinents[i]
+                                                                             : world.continentalField[i],
+                                                       madeHills, madeTectonic[i]) +
+                                     (drownFull - drown);
             }
         }
     }
 
+    lap("PASS G4: geology");
     // --- PASS G4: geology -------------------------------------------------
     for (std::size_t i = 0; i < count; ++i) {
         const bool uplifted = world.upliftField[i] > 180;
@@ -1305,9 +1626,10 @@ WorldMapData generateWorldMap(const WorldMapParams& params) {
         }
     }
 
+    lap("PASS G5: thermal erosion");
     // --- PASS G5: thermal erosion ----------------------------------------
     world.thermallyRelaxedHeightField = world.macroHeightField;
-    std::vector<std::int32_t>& thermal = world.thermallyRelaxedHeightField;
+    auto& thermal = world.thermallyRelaxedHeightField;
     // Weather on the rock. Two passes of thermal erosion: ground steeper than
     // the angle loose material can stand at sheds it to the low side. It is the
     // cheapest erosion there is and it does the one thing the eye checks for -
@@ -1316,12 +1638,25 @@ WorldMapData generateWorldMap(const WorldMapParams& params) {
     {
         const std::int32_t talus = 26;
         std::vector<std::int32_t> moved(count, 0);
-        const std::int32_t passes = std::clamp(params.erosionPasses, 0, 24);
+        std::int32_t passes = std::clamp(params.erosionPasses, 0, 24);
+        // How many of those passes each cell takes part in: its region's own
+        // number, fractional across a border band so older and younger country
+        // meet without a step - or what was painted on the weathering layer.
+        std::vector<float> share;
+        if (layout) {
+            share.resize(count);
+            for (std::size_t i = 0; i < count; ++i) {
+                share[i] = float(paintedWeathering.over(i, regionErosion(i)));
+                passes = std::max(passes, std::min(24, static_cast<std::int32_t>(std::ceil(share[i]))));
+            }
+        }
         for (int pass = 0; pass < passes; ++pass) {
             std::fill(moved.begin(), moved.end(), 0);
             for (std::int32_t y = 0; y < params.height; ++y)
                 for (std::int32_t x = 0; x < params.width; ++x) {
                     const std::size_t i = indexOf(x, y);
+                    const float takes = share.empty() ? 1.0f : std::clamp(share[i] - float(pass), 0.0f, 1.0f);
+                    if (takes <= 0.0f) continue;
                     std::int32_t lowest = thermal[i];
                     std::size_t sink = i;
                     for (int dir : core::kCardinalDirections) {
@@ -1334,7 +1669,7 @@ WorldMapData generateWorldMap(const WorldMapParams& params) {
                     const std::int32_t localTalus = talus + resistance / 18;
                     const std::int32_t drop = thermal[i] - lowest;
                     if (sink == i || drop <= localTalus) continue;
-                    const std::int32_t slide = (drop - localTalus) / 2;
+                    const std::int32_t slide = static_cast<std::int32_t>((drop - localTalus) / 2 * takes);
                     moved[i] -= slide;
                     moved[sink] += slide;
                 }
@@ -1345,13 +1680,145 @@ WorldMapData generateWorldMap(const WorldMapParams& params) {
     // Sea level is chosen so that the asked-for share of the map is water,
     // whatever the noise happened to produce: a world that is nine tenths ocean
     // on one seed and none on the next is not a world, it is a coin.
-    std::vector<std::int32_t> sorted = thermal;
+    //
+    // Read off the ground as the passes made it - without what the paint
+    // raised or sank (`paintedRise`) - so a painted range or a painted sea
+    // stands where it was painted and the rest of the world keeps its share.
+    std::vector<std::int32_t> ground = denseOf(thermal);
+    if (!paintedRise.empty())
+        for (std::size_t i = 0; i < count; ++i) ground[i] -= paintedRise[i];
+    std::vector<std::int32_t> sorted = ground;
     std::sort(sorted.begin(), sorted.end());
     const std::size_t cut = std::min(sorted.size() - 1,
                                      sorted.size() * static_cast<std::size_t>(params.seaPercent) / 100);
     const std::int32_t seaLevel = sorted[cut];
-    const std::int32_t highest = sorted.back();
+    std::int32_t highest = *std::max_element(thermal.begin(), thermal.end());
     world.constants.seaLevel = seaLevel;
+
+    // Regions: one sea level for the world - the sea is one sea - and each
+    // region's ground raised or lowered to it by as much as puts its own share
+    // under water. Across a band the two shifts blend, so a wet region and a
+    // dry one meet as a coast that swings, not a step. An empty region is open
+    // sea: its ground is sunk to a shelf well under the water, easing in over
+    // the band, so the land a generated region ends in is a coast rather than
+    // a cliff at the border.
+    //
+    // The share is read at each cell, so a sea layer painted over part of a
+    // region floods that part and not the rest.
+    //
+    // Applied to every height the passes downstream read - the eroded field,
+    // the raw macro field and the primary one the foundation (H64) is built
+    // from - so the runtime surface is the same shape as this one.
+    // A region made by hand under the staged pipeline has the sea its paint
+    // says - as much of it under water as the (torn) paint left sea - not a
+    // share dialled for a generated one: seven tenths of whatever the noise
+    // made outside the strokes would otherwise have come up as land.
+    double authoredSea = 0.0;
+    if (params.authored && count > 0) {
+        std::size_t land = 0;
+        for (std::size_t i = 0; i < count; ++i) land += world.initialLandMask[i] != 0;
+        authoredSea = 100.0 * double(count - land) / double(count);
+    }
+    if (layout) {
+        // Read off the ground with its paint, for a region made by hand: the
+        // paint is the whole of what it is, not something laid over a share.
+        const auto own = regionSorted(params.authored ? std::vector<std::int32_t>(thermal) : ground);
+        const std::int32_t shelf = seaLevel - 220;
+        const auto sink = [&](std::int32_t h, float land) {
+            const float eased = land * land * (3.0f - 2.0f * land);
+            const float floor = float(std::min(h, shelf));
+            return static_cast<std::int32_t>(std::lround(floor + (float(h) - floor) * eased));
+        };
+        for (std::size_t i = 0; i < count; ++i) {
+            const auto shift = static_cast<std::int32_t>(std::lround(regional(i, [&](const Region& r) {
+                const auto& mine = own[regionIndex(r)];
+                if (!r.generated || mine.empty()) return 0.0;
+                return double(seaLevel) - levelAt(mine, params.authored ? authoredSea : shareOf(r, i));
+            })));
+            const float land = regionLand[i];
+            thermal[i] = sink(thermal[i] + shift, land);
+            world.macroHeightField[i] = sink(world.macroHeightField[i] + shift, land);
+            world.primaryHeightField[i] = sink(world.primaryHeightField[i] + shift, land);
+        }
+        highest = std::max(seaLevel + 1, *std::max_element(thermal.begin(), thermal.end()));
+    }
+    // And on a region made by hand the land is where the (torn) paint says,
+    // not wherever the ground came out highest. The level above was a share
+    // of the region's cells, which is the right amount of land in the wrong
+    // places: the relief under the open sea rose through it in blobs tens of
+    // kilometres from any stroke, and as much of the painted land went under
+    // to pay for them. Painted land is held a step over the water and the sea
+    // a step under it, deepening off the coast, so the coast is the paint's
+    // and its own fretting below is all that moves it.
+    if (params.authored && layout) {
+        for (std::size_t i = 0; i < count; ++i) {
+            if (regionLand[i] <= 0.0f) continue;
+            const bool painted = world.initialLandMask[i] != 0;
+            const auto hold = [&](std::int32_t& h) {
+                if (painted) h = std::max(h, seaLevel + 1);
+                else h = std::min(h, seaLevel - 1 - std::min<std::int32_t>(world.distanceToCoast[i], 40) * 4);
+            };
+            hold(thermal[i]);
+            hold(world.macroHeightField[i]);
+            hold(world.primaryHeightField[i]);
+        }
+        highest = std::max(seaLevel + 1, *std::max_element(thermal.begin(), thermal.end()));
+    }
+
+    // An imported region: the skeleton is the ground (world_import.hpp). Its
+    // heights go in, in the generator's own units - the foundation's authored
+    // calibration read backwards, 2400 units to 2295 m - over whatever paint
+    // and noise made here, and its coast is its own: land is where it stands
+    // above the water, and nothing below frets it or raises a volcano on it.
+    // The foundation takes the skeleton itself, at its own resolution; these
+    // cells are what sea level, climate and drainage read.
+    if (params.imported) {
+        const ImportedGround& g = *params.imported;
+        constexpr std::int64_t kSpanDm = 22950, kAuthoredSpan = 2400;
+        for (std::int32_t y = 0; y < params.height; ++y)
+            for (std::int32_t x = 0; x < params.width; ++x) {
+                const std::size_t i = indexOf(x, y);
+                const std::int64_t dm = g.heightAt(std::int64_t(x) * kMetresPerCell, std::int64_t(y) * kMetresPerCell);
+                const std::int64_t units = std::max<std::int64_t>(1, std::abs(dm) * kAuthoredSpan / kSpanDm);
+                const auto h = static_cast<std::int32_t>(dm > 0 ? seaLevel + units : seaLevel - units);
+                thermal[i] = h;
+                world.macroHeightField[i] = h;
+                world.primaryHeightField[i] = h;
+                world.initialLandMask[i] = dm > 0 ? 1 : 0;
+            }
+        // How far each cell is from the coast the skeleton has.
+        std::deque<std::size_t> queue;
+        std::vector<char> seen(count, 0);
+        for (std::int32_t y = 0; y < params.height; ++y)
+            for (std::int32_t x = 0; x < params.width; ++x) {
+                const std::size_t i = indexOf(x, y);
+                const bool land = world.initialLandMask[i] != 0;
+                bool coast = false;
+                for (int dir = 0; dir < core::kNeighbourCount && !coast; ++dir) {
+                    const TilePos n = core::neighbour({x, y}, dir);
+                    coast = !world.inBounds(n) || (world.initialLandMask[indexOf(n.x, n.y)] != 0) != land;
+                }
+                if (!coast) continue;
+                seen[i] = 1;
+                world.distanceToCoast[i] = 0;
+                queue.push_back(i);
+            }
+        while (!queue.empty()) {
+            const std::size_t i = queue.front();
+            queue.pop_front();
+            const TilePos p{static_cast<std::int32_t>(i) % params.width, static_cast<std::int32_t>(i) / params.width};
+            for (int dir : core::kCardinalDirections) {
+                const TilePos n = core::neighbour(p, dir);
+                if (!world.inBounds(n)) continue;
+                const std::size_t j = indexOf(n.x, n.y);
+                if (seen[j]) continue;
+                seen[j] = 1;
+                world.distanceToCoast[j] = world.distanceToCoast[i] + 1;
+                queue.push_back(j);
+            }
+        }
+        highest = std::max(seaLevel + 1, *std::max_element(thermal.begin(), thermal.end()));
+    }
 
     // The coastline gets its own noise, and only near the water. A coast is the
     // most fractal line on a planet - fjords, spits, headlands, an archipelago
@@ -1362,7 +1829,7 @@ WorldMapData generateWorldMap(const WorldMapParams& params) {
     // It has to be applied here rather than with the heights, because "near the
     // water" is not knowable until the sea level has been chosen: done earlier
     // it roughened a contour somewhere up the hillside instead.
-    {
+    if (!params.imported) {
         const std::int32_t band = std::max(40, (highest - seaLevel) / 6);
         for (std::int32_t y = 0; y < params.height; ++y)
             for (std::int32_t x = 0; x < params.width; ++x) {
@@ -1370,12 +1837,62 @@ WorldMapData generateWorldMap(const WorldMapParams& params) {
                 const std::int32_t fromShore = std::abs(thermal[i] - seaLevel);
                 if (fromShore >= band) continue;
                 const std::int32_t bite = band - fromShore;          // strongest at the water
-                const std::int32_t fret =
-                        (smoothNoise(params.seed + 2213, x, y, octaveScale(13, params.width, 0)) - 512) * 3 / 4 +
-                        (smoothNoise(params.seed + 2221, x, y, octaveScale(6, params.width, 0)) - 512) / 2 +
-                        (smoothNoise(params.seed + 2237, x, y, octaveScale(3, params.width, 0)) - 512) / 3;
-                thermal[i] += fret * bite / band;
+                const std::int32_t fret = seeded(i, [&](std::uint64_t seed) {
+                    return (smoothNoise(seed + 2213, x, y, octaveScale(13, params.width, 0)) - 512) * 3 / 4 +
+                           (smoothNoise(seed + 2221, x, y, octaveScale(6, params.width, 0)) - 512) / 2 +
+                           (smoothNoise(seed + 2237, x, y, octaveScale(3, params.width, 0)) - 512) / 3;
+                });
+                // Nothing frets an empty region's open sea back up into land.
+                thermal[i] += static_cast<std::int32_t>(fret * bite / band * (layout ? regionLand[i] : 1.0f));
             }
+    }
+
+    // The water layer shapes the ground it needs, before anything reads the
+    // ground: the drainage below, and the foundation (H64) built from these
+    // same heights, so the basin and the trough are in the terrain itself and
+    // not only in the water's bookkeeping. A painted lake is a basin dug under
+    // the paint to below its lowest rim - the flood fills it and it holds -
+    // and a painted course a trough the water finds and follows.
+    if (paintsWater) {
+        const std::int32_t span = std::max(1, highest - seaLevel);
+        const std::int32_t lakeDepth = std::max(12, span / 20);
+        const std::int32_t trough = std::max(6, span / 60);
+        std::vector<std::int32_t> lowered(count, 0);
+        for (std::size_t i = 0; i < count; ++i)
+            if (paintAt(i) == WaterPaint::Course && thermal[i] > seaLevel + 1)
+                lowered[i] = std::min(trough, thermal[i] - seaLevel - 1);
+        std::vector<char> seen(count, 0);
+        for (std::size_t start = 0; start < count; ++start) {
+            if (seen[start] || paintAt(start) != WaterPaint::Lake || thermal[start] <= seaLevel) continue;
+            std::vector<std::size_t> members, pending{start};
+            seen[start] = 1;
+            std::int32_t rim = std::numeric_limits<std::int32_t>::max();
+            while (!pending.empty()) {
+                const std::size_t i = pending.back();
+                pending.pop_back();
+                members.push_back(i);
+                const TilePos p{static_cast<std::int32_t>(i % std::size_t(params.width)),
+                                static_cast<std::int32_t>(i / std::size_t(params.width))};
+                for (int dir : core::kCardinalDirections) {
+                    const TilePos n = core::neighbour(p, dir);
+                    if (!world.inBounds(n)) continue;
+                    const std::size_t j = indexOf(n.x, n.y);
+                    if (paintAt(j) == WaterPaint::Lake && thermal[j] > seaLevel) {
+                        if (!seen[j]) { seen[j] = 1; pending.push_back(j); }
+                    } else {
+                        rim = std::min(rim, thermal[j]);
+                    }
+                }
+            }
+            const std::int32_t floor = std::max(seaLevel + 1, rim - lakeDepth);
+            for (const std::size_t i : members) lowered[i] = std::max(lowered[i], thermal[i] - floor);
+        }
+        for (std::size_t i = 0; i < count; ++i) {
+            if (lowered[i] <= 0) continue;
+            thermal[i] -= lowered[i];
+            world.macroHeightField[i] = world.macroHeightField[i] - lowered[i];
+            world.primaryHeightField[i] = world.primaryHeightField[i] - lowered[i];
+        }
     }
 
     for (std::int32_t y = 0; y < params.height; ++y) {
@@ -1392,19 +1909,48 @@ WorldMapData generateWorldMap(const WorldMapParams& params) {
         }
     }
 
+    lap("hybrid landforms");
     // Real landforms and complete volcanic edifices enter BEFORE climate and
     // drainage. Their macro component is carried by the cells; HeightField
     // restores only the missing sub-cell component, not a second mountain.
-    generateHybridTerrain(world, params);
+    // Not on pinned ground that has no mountains painted yet: the primary
+    // stage is the bare shape, and massifs are what the ranges ask for.
+    if (params.stage != GenerationStage::Primary && !params.imported) generateHybridTerrain(world, params);
     // H64 is the geometry authority. Macro thermal/coast fields above establish
     // sea-level calibration and volcano placement, not a second runtime surface.
+    lap("H64 terrain foundation");
     if (params.stagedTerrain && params.hybridTerrain) {
         world.terrainFoundation = params.foundationSnapshot ? params.foundationSnapshot :
             buildTerrainFoundation(world, params, seaLevel, highest);
         world.terrainFoundation->applyTo(world);
+        if (params.imported) world.terrainFoundation->applyLowestTo(world);
+    }
+    // Pinned and no further: the primary ground and its slopes are all there
+    // is to it. No climate is worked out, no water and no peoples - the ground
+    // is bare material under a neutral stand-in climate until the person asks
+    // for more.
+    if (params.stage == GenerationStage::Primary) {
+        lap("bare ground (primary stage)");
+        bareGround(world);
+        lap(nullptr);
+        return world;
     }
 
+    lap("PASS C0: base temperature");
     // --- PASS C0: base temperature ---------------------------------------
+    // Degrees at a row of this map (fractional rows allowed), when fixed.
+    const auto latitudeOfRow = [&](double row) {
+        return params.latitude.at((double(params.originY) + row + 0.5) * kMetresPerCell);
+    };
+    // Where a row is between the poles, nought at the north one and one at
+    // the south: what the winds and the currents follow.
+    const Latitude& lat = params.latitude;
+    const bool frozenRule = lat.fixed && lat.legacyRows > 0;
+    const auto poleShare = [&](std::int32_t y) {
+        if (frozenRule) return std::clamp(double(params.originY + y) / std::max(1, lat.legacyRows - 1), 0.0, 1.0);
+        if (lat.fixed) return std::clamp((90.0 - latitudeOfRow(y)) / 180.0, 0.0, 1.0);
+        return params.height > 1 ? static_cast<double>(y) / (params.height - 1) : 0.5;
+    };
     const std::int32_t climateSpan = std::clamp(230 * params.width / 2048, 70, 230);
     const std::int32_t climateCentre =
             150 + static_cast<std::int32_t>(core::splitmix64(params.seed ^ 0xC11Aull) % 61) - 30;
@@ -1416,8 +1962,16 @@ WorldMapData generateWorldMap(const WorldMapParams& params) {
             const std::size_t i = indexOf(x, y);
             const WorldCell& c = world.cells[i];
             const std::int32_t wobble = (smoothNoise(params.seed + 9311, x, y, climateWarp) - 512) / 12;
-            const std::int32_t band = std::clamp(
-                    climateFrom + (y + wobble) * climateSpan / std::max(1, params.height - 1), 0, 230);
+            // Pole nought, equator two hundred and thirty: the latitude of the
+            // place when the world is fixed on its planet, the share of the
+            // world's height when it is not.
+            const std::int32_t band = frozenRule
+                    ? std::clamp(lat.legacyFrom + (params.originY + y + wobble) * lat.legacySpan /
+                                                         std::max(1, lat.legacyRows - 1), 0, 230)
+                    : lat.fixed
+                    ? std::clamp(static_cast<std::int32_t>(std::lround(
+                              230.0 * (1.0 - std::min(90.0, std::abs(latitudeOfRow(y + wobble))) / 90.0))), 0, 230)
+                    : std::clamp(climateFrom + (y + wobble) * climateSpan / std::max(1, params.height - 1), 0, 230);
             const std::int32_t latitudeTemperature = 25 + band;
             const std::int32_t altitudeChill = c.sea ? 0 : c.elevation * 3 / 10;
             const std::int32_t maritime = std::clamp(18 - world.distanceToCoast[i] * 2, 0, 18);
@@ -1426,6 +1980,7 @@ WorldMapData generateWorldMap(const WorldMapParams& params) {
                     std::clamp(latitudeTemperature - altitudeChill + coastalModeration, 0, 255);
         }
 
+    lap("PASS C1/C2/C3/C5: climate transport, currents, rainfall");
     // --- PASS C1/C2/C3/C5: climate transport, currents, rainfall ----------
     // Rain is carried, not scattered. A noise field for moisture put deserts and
     // marshes down at random and had no answer to the question the map most
@@ -1448,7 +2003,7 @@ WorldMapData generateWorldMap(const WorldMapParams& params) {
         for (std::int32_t y = 0; y < params.height; ++y)
             for (std::int32_t x = 0; x < params.width; ++x) {
                 const std::size_t i = indexOf(x, y);
-                const double latitude = params.height > 1 ? static_cast<double>(y) / (params.height - 1) : 0.5;
+                const double latitude = poleShare(y);
                 const bool tropical = latitude > 0.33 && latitude < 0.66;
                 const bool polar = latitude < 0.12 || latitude > 0.88;
                 ClimateVector wind;
@@ -1527,7 +2082,7 @@ WorldMapData generateWorldMap(const WorldMapParams& params) {
             for (std::int32_t x = 0; x < params.width; ++x) {
                 const std::size_t i = indexOf(x, y);
                 if (!world.cells[i].sea) continue;
-                const double latitude = params.height > 1 ? static_cast<double>(y) / (params.height - 1) : 0.5;
+                const double latitude = poleShare(y);
                 ClimateVector current;
                 current.x = static_cast<std::int16_t>((latitude > 0.33 && latitude < 0.66 ? 70 : -55) *
                                                       world.constants.planetRotationSign);
@@ -1594,8 +2149,23 @@ WorldMapData generateWorldMap(const WorldMapParams& params) {
                 // next all desert, and the dial then says which way the whole
                 // world leans.
                 const std::int32_t ranked = below[bucket] * 255 / std::max(1, landCells);
+                // And each region leans its own way: the rain is carried across
+                // borders by the one wind, but how wet a region's country is
+                // meant to be is the region's dial - or the rain layer's, where
+                // that was painted.
+                std::int32_t wetness = layout
+                        ? static_cast<std::int32_t>(std::lround(paintedRain.over(i, regionRain(i))))
+                        : params.rainfallPercent;
+                // An imported moisture mask leans it from half as wet (0) to
+                // half as wet again (1); at rest (0.5) it is the dial's.
+                if (params.imported)
+                    wetness = wetness *
+                              (128 + params.imported->maskAt(params.imported->moisture,
+                                                             std::int64_t(i % std::size_t(params.width)) * kMetresPerCell,
+                                                             std::int64_t(i / std::size_t(params.width)) * kMetresPerCell, 128)) /
+                              256;
                 const std::int32_t annual =
-                        std::clamp(ranked * std::clamp(params.rainfallPercent, 20, 250) / 100, 0, 255);
+                        std::clamp(ranked * std::clamp(wetness, 20, 250) / 100, 0, 255);
                 world.annualRainfallField[i] = annual;
                 world.humidityField[i] = std::clamp((annual * 3 + world.airMoistureField[i]) / 4, 0, 255);
                 world.seasonalityField[i] = std::clamp(
@@ -1611,6 +2181,7 @@ WorldMapData generateWorldMap(const WorldMapParams& params) {
         }
     }
 
+    lap("PASS G6: hydraulic / fluvial erosion");
     // --- PASS G6: hydraulic / fluvial erosion ----------------------------
     // From the high ground to the sea, one step at a time downhill. A river that
     // cannot get lower stops: that is a lake in everything but name, and the
@@ -1629,7 +2200,7 @@ WorldMapData generateWorldMap(const WorldMapParams& params) {
     // cells and is not at a million, and which stopped before it converged on
     // the wide basins a big map has, leaving exactly the hollows it was there to
     // remove.
-    std::vector<std::int32_t>& filled = world.hydrologicallyCorrectedHeightField;
+    auto& filled = world.hydrologicallyCorrectedHeightField;
     {
         struct Front {
             std::int32_t level;
@@ -1775,7 +2346,19 @@ WorldMapData generateWorldMap(const WorldMapParams& params) {
             // that the valley is dry: a floor, not a lake.
             std::int32_t needed = 20 + (255 - std::clamp(wet, 0, 255)) * 60 / 255;
             needed = needed * 100 / (100 + static_cast<std::int32_t>(std::min<std::size_t>(members.size(), 80)));
-            if (deepest < needed) {
+            // A region made by hand says how readily its basins hold water.
+            if (params.authored)
+                needed = params.authoring.lakes <= 0.01f
+                        ? std::numeric_limits<std::int32_t>::max()
+                        : static_cast<std::int32_t>(std::lround(needed / std::max(0.05f, params.authoring.lakes)));
+            // And the water layer overrules both: a basin with a lake painted
+            // in it holds one, a basin painted dry holds none.
+            bool paintedLake = false, paintedDry = false;
+            for (const std::size_t i : members) {
+                paintedLake |= paintAt(i) == WaterPaint::Lake;
+                paintedDry |= paintAt(i) == WaterPaint::Dry;
+            }
+            if (paintedDry || (!paintedLake && deepest < needed)) {
                 for (const std::size_t i : members) world.lakeDepthField[i] = 0;
                 ++lakesDried;
                 continue;
@@ -1904,6 +2487,8 @@ WorldMapData generateWorldMap(const WorldMapParams& params) {
 
         // What counts as a river here, now that the water has been added up.
         riverFlow = riverFlowThresholdFrom(params, flow, world.cells);
+        if (params.authored)
+            riverFlow = std::max(2, static_cast<std::int32_t>(std::lround(riverFlow / std::clamp(params.authoring.rivers, 0.25f, 3.0f))));
         world.flowAccumulationField = flow;
         for (std::int32_t y = 0; y < params.height; ++y)
             for (std::int32_t x = 0; x < params.width; ++x) {
@@ -1918,7 +2503,10 @@ WorldMapData generateWorldMap(const WorldMapParams& params) {
                     for (std::int32_t f = flow[i]; f > 1 && drain < 15; f /= 2) ++drain;
                     c.drainSize = drain;
                 }
-                if (flow[i] < riverFlow) continue;
+                // Painted dry: the valley stays, the water does not. Painted a
+                // course: a river however little has gathered there yet.
+                if (paintAt(i) == WaterPaint::Dry) continue;
+                if (flow[i] < riverFlow && !(paintAt(i) == WaterPaint::Course && downhill[i] >= 0)) continue;
                 c.river = true;
                 c.riverOut = static_cast<std::int8_t>(downhill[i]);
                 // Kept as a power of two: flow spans four orders of magnitude
@@ -2071,6 +2659,7 @@ WorldMapData generateWorldMap(const WorldMapParams& params) {
         }
     }
 
+    lap("PASS C4: final temperature");
     // --- PASS C4: final temperature ---------------------------------------
     {
         for (std::size_t i = 0; i < count; ++i) {
@@ -2255,6 +2844,7 @@ WorldMapData generateWorldMap(const WorldMapParams& params) {
         }
     }
 
+    lap("where people live");
     // --- where people live -------------------------------------------------
     // Best ground first, and never two settlements within sight of one another:
     // a site is a whole local map, and two of them in adjoining cells would be
@@ -2508,6 +3098,14 @@ WorldMapData generateWorldMap(const WorldMapParams& params) {
                              std::clamp(world.playedCell.y - half, 0,
                                         std::max(0, params.height - kCellsPerLocalMap))};
     }
+    // The relief stage: the drainage has cut the valleys and the weather has
+    // worked the slopes, and the water itself is not decided yet - that is
+    // the next stage, and the person's.
+    if (params.stage == GenerationStage::Relief) {
+        lap("no water yet (relief stage)");
+        withoutWater(world);
+    }
+    lap(nullptr);
     return world;
 }
 

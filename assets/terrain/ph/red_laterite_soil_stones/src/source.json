@@ -1,0 +1,23 @@
+{
+  "site": "polyhaven",
+  "asset_id": "red_laterite_soil_stones",
+  "asset_url": "https://polyhaven.com/a/red_laterite_soil_stones",
+  "license": "CC0",
+  "authors": [
+    "Amal Kumar"
+  ],
+  "attribution_required": false,
+  "original_physical_metres": [
+    2.0,
+    2.0
+  ],
+  "runtime_world_scale": 2.0,
+  "resolution": "2k",
+  "files": {
+    "diffuse": "ph_red_laterite_soil_stones_diffuse.png",
+    "normal": "ph_red_laterite_soil_stones_normal.png",
+    "displacement": "ph_red_laterite_soil_stones_displacement.png",
+    "rough": "ph_red_laterite_soil_stones_rough.png",
+    "ao": "ph_red_laterite_soil_stones_ao.png"
+  }
+}

@@ -104,7 +104,36 @@ def debug_executable(source, output, runner=run_command):
     return copy
 
 
+# Metal and System traces of an unthrottled renderer grow by gigabytes a
+# second, in memory and on disk: longer than this is refused.
+HEAVY_MODES = {"gpu": 20, "system": 20}
+# What Instruments leaves in TMPDIR while it records, and does not always
+# take away (a finished trace holds its own copy).
+SCRATCH_PATTERNS = ("instruments*.ktrace", "xrgpu_aps_*")
+
+
+def instruments_scratch():
+    folder = Path(os.environ.get("TMPDIR", "/tmp"))
+    found = set()
+    for pattern in SCRATCH_PATTERNS:
+        found.update(folder.glob(pattern))
+    return found
+
+
+def remove_scratch(before):
+    for item in instruments_scratch() - before:
+        if item.is_dir():
+            shutil.rmtree(item, ignore_errors=True)
+        else:
+            try:
+                item.unlink()
+            except OSError:
+                pass
+
+
 def record(mode, seconds, output, pid=None, launch=None, arguments=(), runner=run_command, debug_copy=False):
+    if mode in HEAVY_MODES and seconds > HEAVY_MODES[mode]:
+        raise ValueError(f"--mode {mode} is limited to {HEAVY_MODES[mode]} s: its trace grows by gigabytes a second")
     if debug_copy and launch is None:
         raise ValueError("--debug-copy requires --launch; attached processes are never modified")
     output = Path(output).absolute()
@@ -119,12 +148,15 @@ def record(mode, seconds, output, pid=None, launch=None, arguments=(), runner=ru
     status_file = output / "recording.json"
     status_file.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     started = time.monotonic()
+    scratch = instruments_scratch()
     try:
         if debug_copy:
             executable = debug_executable(launch, output, runner)
             metadata["target"]["profiled_executable"] = str(executable)
             command = recording_command(mode, seconds, trace, launch=executable, arguments=arguments)
-        rc = runner(command, output / "record.log", seconds + 90)
+        # Metal and system traces take minutes to finalize after the target
+        # stops; cutting them off leaves an unreadable trace.
+        rc = runner(command, output / "record.log", seconds + (900 if mode in ("gpu", "system") else 90))
         metadata["profiler_exit_code"] = rc
         log_path = output / "record.log"
         completed = log_path.exists() and "Recording completed." in log_path.read_text(encoding="utf-8", errors="replace")
@@ -138,6 +170,7 @@ def record(mode, seconds, output, pid=None, launch=None, arguments=(), runner=ru
         metadata["error"] = str(error) or type(error).__name__
         raise
     finally:
+        remove_scratch(scratch)
         metadata["elapsed_wall_seconds"] = round(time.monotonic() - started, 3)
         status_file.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     return trace
@@ -156,11 +189,30 @@ def report_html(summary):
             f"<p>{summary['samples']} samples; {summary['sampled_cpu_ms']} ms summed across threads.</p>"
             "<p>Statistical CPU samples, not exact function duration, GPU time or hardware cycles. "
             "Inclusive rows overlap and must not be added. Open capture.trace in Instruments for the full timeline/flame graph.</p>"
-            + table("Self time", summary["self"]) + table("Inclusive time", summary["inclusive"])
+            + spikes_html(summary.get("spikes", []))
+            + table("Self time", summary["self"]) + callers_html(summary.get("callers", []))
+            + table("Inclusive time", summary["inclusive"])
             + table("Threads", summary["threads"]))
 
 
-def cpu_report(capture, runner=run_command):
+def spikes_html(spikes):
+    rows = "".join("<tr><td>" + str(s["at_seconds"]) + " s</td><td>" + str(s["ms"]) + " ms</td><td>" +
+                   html.escape(s["function"]) + "<br><small>" +
+                   " &rarr; ".join(html.escape(n[:90]) for n in s["stack"]) + "</small></td></tr>"
+                   for s in spikes)
+    return ("<h2>Main-thread spikes</h2><p>Unbroken stretches of the main thread inside one function, "
+            "longest first; the deepest function covering the stretch.</p>"
+            f"<table><tr><th>When</th><th>Length</th><th>Function / stack</th></tr>{rows}</table>")
+
+
+def callers_html(callers):
+    rows = "".join("<tr><td>" + html.escape(c["name"][:120]) + "</td><td>" + str(c["sampled_ms"]) + "</td><td>" +
+                   "<br>".join(str(ch["sampled_ms"]) + " ms: " + " &larr; ".join(html.escape(n[:80]) for n in ch["via"])
+                               for ch in c["chains"]) + "</td></tr>" for c in callers)
+    return f"<h2>Who calls the hottest</h2><table><tr><th>Function</th><th>Self ms</th><th>Called via</th></tr>{rows}</table>"
+
+
+def cpu_report(capture, runner=run_command, spike_ms=25.0):
     capture = Path(capture).resolve()
     trace = capture / "capture.trace" if capture.is_dir() and capture.suffix != ".trace" else capture
     if not trace.exists():
@@ -176,7 +228,7 @@ def cpu_report(capture, runner=run_command):
                '/trace-toc/run[@number="1"]/data/table[@schema="time-profile"]', "--output", str(xml)]
     if runner(command, folder / "export.log", 90) != 0:
         raise RuntimeError("xctrace export failed; see export.log")
-    summary = summarize(xml)
+    summary = summarize(xml, spike_ms)
     if not summary["samples"]:
         raise RuntimeError("No CPU samples in capture; an empty recording is not a successful profile")
     (folder / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
@@ -203,6 +255,8 @@ def parser():
     capture.add_argument("arguments", nargs=argparse.REMAINDER, help="arguments after -- for the launched program")
     summary = sub.add_parser("report", help="export a CPU capture to local HTML and JSON")
     summary.add_argument("capture", type=Path)
+    summary.add_argument("--spike-ms", type=float, default=25.0,
+                         help="shortest unbroken main-thread stretch reported as a spike")
     return ap
 
 
@@ -217,7 +271,7 @@ def main(argv=None):
         elif args.action == "templates":
             subprocess.run(["xcrun", "xctrace", "list", "templates"], check=True, timeout=30)
         elif args.action == "report":
-            print(cpu_report(args.capture))
+            print(cpu_report(args.capture, spike_ms=args.spike_ms))
         else:
             arguments = args.arguments[1:] if args.arguments[:1] == ["--"] else args.arguments
             if args.pid:

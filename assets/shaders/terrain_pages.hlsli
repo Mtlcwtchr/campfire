@@ -1,5 +1,6 @@
 #ifndef TERRAIN_PAGES_HLSLI
 #define TERRAIN_PAGES_HLSLI
+#include "page_levels.hlsli"
 // t0..2 are the shared climate field. H4/H8/H16/H64 are datasets.
 Texture2D<float> height4 : register(t3, space0);
 SamplerState height4Sampler : register(s3, space0);
@@ -44,13 +45,11 @@ struct PageSurface {
 
 float4 pageAddress(float2 p, int level)
 {
-    const float2 page = floor(p / 512.0);
-    const float2 index = page + 2.0;
-    if (any(index < 0.0) || any(index >= morphSettings.xy)) return 0.0;
+    float2 origin, page;
+    const float3 texel = pageTableTexel(p, level, morphSettings.xy, origin, page);
     // Point-sampled table; zero scale is an explicitly absent ocean page.
-    const float4 entry = heightTable.SampleLevel(heightTableSampler,
-        float3((index + 0.5) / morphSettings.xy, level), 0);
-    return float4(entry.xy + (p - page * 512.0) * entry.zw, entry.zw);
+    const float4 entry = pageEntryFrom(heightTable.SampleLevel(heightTableSampler, texel, 0), page, morphSettings.xy);
+    return float4(entry.xy + (p - origin) * entry.zw, entry.zw);
 }
 float4 pageFields(float2 uv, int level, int plane)
 {

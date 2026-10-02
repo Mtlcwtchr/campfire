@@ -723,6 +723,9 @@ engine::PassPlace SceneModelsPass::setup(engine::Device& device,engine::RenderPi
                 }
             bool gpuSetup=gather && gpuClusters_.setup(device,into,kGpuClusterCapacity,
                                                        kGpuClusterInstanceCapacity,gpuClusterBuckets_);
+            // The gather writes the dense survivors into gpuInstances_, which
+            // holds kGpuClusterCapacity of them; the prefix stops there.
+            gpuClusters_.outputCapacity(kGpuClusterCapacity);
             if (gpuSetup) {
                 gpuInstances_=device.makeBuffer(
                     SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE|SDL_GPU_BUFFERUSAGE_VERTEX,

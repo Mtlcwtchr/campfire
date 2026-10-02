@@ -1,5 +1,6 @@
 #include "game/world/scene_scatter.hpp"
 #include "engine/core/rng.hpp"
+#include "game/world/object_id.hpp"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -28,7 +29,24 @@ double noise(std::uint64_t seed,double x,double y,double wavelength) {
     return std::lerp(std::lerp(at(ix,iy),at(ix+1,iy),u),
                      std::lerp(at(ix,iy+1),at(ix+1,iy+1),u),v);
 }
+// The scene model a plant or a prop names; kModels.size() when none.
+std::uint32_t modelNamed(const std::string& name) {
+    for (std::uint32_t i=0;i<kModels.size();++i) if (name==kModels[i]) return i;
+    return std::uint32_t(kModels.size());
 }
+// One of a weighted list, by a number in [0, 1).
+const std::string* pickWeighted(const engine::biomes::Weighted& list,double t) {
+    double total=0;
+    for (const auto& [name,w]:list) total+=std::max(0.0,w);
+    if (!(total>0)) return nullptr;
+    t*=total;
+    for (const auto& [name,w]:list) if ((t-=std::max(0.0,w))<0) return &name;
+    return &list.back().first;
+}
+// A hectare's count to a candidate's chance: one candidate an 8 m cell.
+constexpr double kCellsPerHectare=10000.0/(kCell*kCell);
+}
+
 double forestDensity(std::uint64_t seed,double x,double y) {
     if (!std::isfinite(x) || !std::isfinite(y) || std::abs(x)>1e12 || std::abs(y)>1e12) return 0;
     const double mass=0.7*noise(seed^0x1741u,x,y,512)+0.3*noise(seed^0x294bu,x,y,192);
@@ -104,7 +122,15 @@ Scatter scatter(std::uint64_t seed,ScatterBounds bounds,double width,double heig
             if (!entry->second) continue; // no point-level height/water/biome work over proven ocean
             auto hash=core::splitmix64(seed^core::splitmix64(std::uint64_t(gx))^
                                       core::splitmix64(std::uint64_t(gy)+0x7135u));
-            const auto id=hash;
+            // The name the delta knows it by: its page and its slot in the
+            // page, not where the jitter below happens to put it (object_id.hpp).
+            // The jitter keeps its own stream, so no object moved when the id
+            // stopped being that stream's first value.
+            constexpr std::int64_t perPage=kPlacementPageMetres/kCell;
+            static_assert(kPlacementPageMetres%kCell==0 && kPlacementPageMetres==kRegion);
+            const auto pageX=gx/perPage-(gx%perPage<0),pageY=gy/perPage-(gy%perPage<0);
+            const auto id=objectId(seed,PlacementStage::Decor,kDecorStableDomain,pageX,pageY,
+                std::uint32_t((gx-pageX*perPage)+(gy-pageY*perPage)*perPage));
             const auto random=[&]() { hash=core::splitmix64(hash);return double(hash>>11)*0x1p-53; };
             const double x=(gx+0.15+random()*0.7)*kCell,y=(gy+0.15+random()*0.7)*kCell;
             if (x>=width || y>=height || x<bounds.minX || x>=bounds.maxX ||
@@ -122,26 +148,114 @@ Scatter scatter(std::uint64_t seed,ScatterBounds bounds,double width,double heig
                 : 1.0;
             const double soil=site.hasEcology ? 0.25+0.75*smooth(0.12,0.55,site.ecology.fertility) : 1.0;
             const double habitat=forest*(1-smooth(0.45,0.95,site.slope))*(1-smooth(1800,2400,site.height));
-            const double trees=(site.hasEcology ? site.ecology.canopy*0.94*(1-smooth(0.45,0.95,site.slope))
+            double trees=(site.hasEcology ? site.ecology.canopy*0.94*(1-smooth(0.45,0.95,site.slope))
                                                 : habitat*0.94*density)*bare*soil;
             const double scrub=noise(seed^0x529du,x,y,40);
             // Favor the transition belt, not the empty centre of a clearing.
             // The independent scrub field still breaks that belt into patches.
             const double edge=smooth(0.04,0.2,density)*(1-smooth(0.45,0.8,density));
-            const double bushes=(site.hasEcology ? site.ecology.shrubs*0.28 : habitat*(0.018+0.23*edge))
+            double bushes=(site.hasEcology ? site.ecology.shrubs*0.28 : habitat*(0.018+0.23*edge))
                 *smooth(0.25,0.75,scrub)*(0.35+0.65*bare);
-            const double mushrooms=(site.hasEcology ? site.ecology.canopy*site.ecology.moisture*
+            double mushrooms=(site.hasEcology ? site.ecology.canopy*site.ecology.moisture*
                 (0.01+site.ecology.deadwood*0.08) : habitat*density*0.028)*(1-smooth(0.25,0.5,site.slope))*bare;
             const double outcrop=noise(seed^0xe157u,x,y,112);
-            const double rocks=(0.004+0.05*smooth(0.45,0.8,outcrop))*(1-0.7*trees)*
+            // Stones lie in heaps and spills, not salted evenly: a tighter
+            // field gathers the outcrop's share into clusters.
+            const double heap=0.25+1.6*smooth(0.45,0.72,noise(seed^0x3a9fu,x,y,24));
+            double rocks=heap*(0.004+0.05*smooth(0.45,0.8,outcrop))*(1-0.7*trees)*
                 (site.hasEcology ? (1-site.ecology.fertility*0.8)*(1+std::min(site.slope,1.0)*4) : 1)*
                 (site.hasMaterials ? 1+3*smooth(0.30,0.70,site.rock) : 1);
             // Deadwood fills existing candidates, never adds another world
             // traversal or changes a site's stable ID. Keep logs off cliffs.
-            const double deadwood=(site.hasEcology ? site.ecology.deadwood*0.2 : habitat*density*0.055)
+            double deadwood=(site.hasEcology ? site.ecology.deadwood*0.2 : habitat*density*0.055)
                 *(1-smooth(0.10,0.30,site.slope))*bare;
             std::uint32_t model;
-            if (choice<trees)
+            float sizeBy=1,tintBy=1;
+            if (site.detailDensity!=1.0) {
+                // The hand's density brush over whatever would grow here.
+                const double k=std::max(0.0,site.detailDensity);
+                trees=std::min(1.0,trees*k);
+                bushes*=k; mushrooms*=k; rocks*=k; deadwood*=k;
+            }
+            if (site.forestBiome || site.decorBiome) {
+                // The terrain category's biomes (engine/biomes): which trees,
+                // shrubs and props, and how many. Only here - a candidate
+                // with no biome takes the engine's own branch below, the same
+                // numbers in the same order.
+                const auto* f=site.forestBiome;
+                double woods=trees,shrubs=bushes;
+                if (f) {
+                    // The engine's own wood is a fertility of 0.8 at forest_bias 0.5.
+                    double k=f->fertility/0.8;
+                    if (!f->density.points.empty())
+                        k*=f->density.at(site.forestBias)/std::max(1e-3,f->density.at(0.5));
+                    if (f->clearings && f->clearingShare>0) {
+                        const double open=noise(seed^0x6c1eu,x,y,std::max(8.0,f->clearings->metres));
+                        k*=smooth(f->clearingShare-0.06,f->clearingShare+0.06,open);
+                    }
+                    woods=std::clamp(trees*k,0.0,1.0);
+                    shrubs=f->shrubs.empty()?0.0:bushes*f->shrubDensity/0.3*(woods>0||trees<=0?1.0:0.4);
+                    // The mantle: a wood's edge is where the shrubs are, where
+                    // light reaches the ground beside the trees.
+                    shrubs*=1.0+2.2*smooth(0.06,0.28,woods)*(1-smooth(0.45,0.8,woods));
+                }
+                // Props a hectare: the forest's follow its trees, the decor's lie anywhere.
+                double forestProps=0,decorProps=0;
+                if (f) for (const auto& [n,c]:f->props) forestProps+=std::max(0.0,c);
+                if (site.decorBiome) for (const auto& [n,c]:site.decorBiome->props) decorProps+=std::max(0.0,c);
+                forestProps*=std::min(1.0,woods*1.6)/kCellsPerHectare*(1-smooth(0.10,0.30,site.slope))*bare;
+                decorProps*=1.0/kCellsPerHectare*(1-smooth(0.25,0.6,site.slope));
+                const auto* registry=site.registry;
+                // Which species: mostly the grove's, a field ~50 m across,
+                // with some strays - a wood of one tree in stands, not a
+                // shuffle of every kind a tree apart.
+                const double grove=smooth(0.22,0.78,noise(seed^0x9d31u,x,y,48));
+                const auto plantModel=[&](const engine::biomes::Weighted& list,std::uint32_t fallback) {
+                    const double stray=random();
+                    const double pick=stray<0.22?random():std::clamp(grove+(random()-0.5)*0.12,0.0,0.999);
+                    const auto* name=pickWeighted(list,pick);
+                    const auto i=name&&registry?registry->plantIndex(*name):std::nullopt;
+                    if (!i) return fallback;
+                    const auto& p=registry->plants()[*i];
+                    const auto m=modelNamed(p.model);
+                    if (m>=kModels.size()) return fallback;
+                    sizeBy=float(std::lerp(p.heightMin,p.heightMax,random()));
+                    tintBy=float((p.tint[0]+p.tint[1]+p.tint[2])/3.0);
+                    return m;
+                };
+                const auto propModel=[&](const engine::biomes::Weighted& list) {
+                    const auto* name=pickWeighted(list,random());
+                    const auto i=name&&registry?registry->propIndex(*name):std::nullopt;
+                    if (!i) return std::uint32_t(kModels.size());
+                    const auto& p=registry->props()[*i];
+                    sizeBy=float(std::lerp(p.scaleMin,p.scaleMax,random()));
+                    return modelNamed(p.model);
+                };
+                if (choice<woods)
+                    model=f&&!f->trees.empty()?plantModel(f->trees,random()<std::clamp(site.boreal+0.18,0.0,1.0)?1u:0u)
+                                             :(random()<std::clamp(site.boreal+0.18,0.0,1.0)?1u:0u);
+                else if (choice<woods+shrubs) model=f&&!f->shrubs.empty()?plantModel(f->shrubs,2):2;
+                else if (choice<woods+shrubs+forestProps) model=propModel(f->props);
+                else if (choice<woods+shrubs+forestProps+decorProps) model=propModel(site.decorBiome->props);
+                else if (choice<woods+shrubs+forestProps+decorProps+rocks) model=3;
+                else if (!f && choice<woods+shrubs+decorProps+rocks+mushrooms+deadwood) {
+                    const double kind=(choice-woods-shrubs-decorProps-rocks)/(mushrooms+deadwood);
+                    model=kind<mushrooms/(mushrooms+deadwood)?4:(kind<0.6?5:(kind<0.8?6:7));
+                }
+                else if (f && woods>0.25) {
+                    // The floor of a closed wood: fallen logs, stumps and
+                    // branches, and fungi on the damp ones - what a forest
+                    // biome's own props list leaves out.
+                    const double base=woods+shrubs+forestProps+decorProps+rocks;
+                    const double floor=(mushrooms+deadwood)*smooth(0.25,0.6,woods);
+                    if (!(floor>0) || choice>=base+floor) continue;
+                    const double kind=(choice-base)/floor;
+                    model=kind<mushrooms/(mushrooms+deadwood)?4:(kind<0.6?5:(kind<0.8?6:7));
+                }
+                else continue;
+                if (model>=kModels.size()) continue;
+            }
+            else if (choice<trees)
                 model=random()<std::clamp(site.boreal+0.18,0.0,1.0)?1:0;
             else if (choice<trees+bushes) model=2;
             else if (choice<trees+bushes+mushrooms) model=4;
@@ -163,9 +277,11 @@ Scatter scatter(std::uint64_t seed,ScatterBounds bounds,double width,double heig
                     wet(x+r*0.7,y+r*0.7) || wet(x-r*0.7,y-r*0.7)) continue;
             }
             ++result.populations[model];
-            result.objects.push_back({id,x,y,site.height-(model==3?0.25:0.08),
-                float(0.75+random()*0.65),float(random()*2*std::acos(-1.0)),
-                float(random()*2*std::acos(-1.0)),float(0.88+random()*0.20),model});
+            const float scale=float(0.75+random()*0.65)*sizeBy;
+            const float yaw=float(random()*2*std::acos(-1.0));
+            const float phase=float(random()*2*std::acos(-1.0));
+            const float tint=float(0.88+random()*0.20)*tintBy;
+            result.objects.push_back({id,x,y,site.height-(model==3?0.25:0.08),scale,yaw,phase,tint,model});
         }
     return result;
 }

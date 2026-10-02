@@ -41,6 +41,29 @@ public:
     const std::vector<TileId>& activeParents() const { return activeParents_; }
     bool needsUpdate() const { return needsUpdate_; }
     void clear() { nodes_.clear(); drawing_.clear(); coverage_.clear(); activeParents_.clear(); needsUpdate_ = false; }
+    // Folds the subtree under `tile` back into `tile` itself: its transition
+    // starts again from Parent and every descendant's is forgotten. The rest of
+    // the cut keeps its state. For pages that are gone - the square that stood
+    // on them falls back to its nearest ancestor that still can be drawn, and
+    // nothing else moves. Returns the number of descendant states dropped.
+    std::size_t collapse(TileId tile, const Family& family = {}) {
+        if (family) family_ = family;
+        std::size_t dropped = 0;
+        std::vector<TileId> stack{tile};
+        while (!stack.empty()) {
+            const auto at = stack.back();
+            stack.pop_back();
+            for (const auto child : descendants(at)) {
+                if (nodes_.erase(tileKeyOf(child))) {
+                    ++dropped;
+                    stack.push_back(child);
+                }
+            }
+        }
+        nodes_[tileKeyOf(tile)] = RefinementTransition(morphSeconds_);
+        needsUpdate_ = true;
+        return dropped;
+    }
 
     static std::array<TileId, 4> children(TileId tile) {
         return {{{tile.x * 2, tile.y * 2, tile.lod - 1},

@@ -46,7 +46,7 @@ engine::PassPlace GradePass::setup(engine::Device& device, engine::RenderPipelin
 }
 
 bool GradePass::anything(const engine::Frame& frame) const {
-    return frame.grab != nullptr && frame.scene.quality[2] > 0.0f;
+    return frame.grab != nullptr && (frame.scene.quality[2] > 0.0f || frame.scene.quality[3] > 0.0f);
 }
 
 void GradePass::collect(const engine::Frame& frame, engine::DrawQueue& queue) {
@@ -61,12 +61,13 @@ void GradePass::collect(const engine::Frame& frame, engine::DrawQueue& queue) {
     // The look itself: strength, bloom, vignette, grain. Then how many levels
     // the copy has, so the shader never asks for one beyond its end.
     item.own[0] = strength;
-    item.own[1] = 0.42f;
-    item.own[2] = 0.55f;
-    item.own[3] = 0.022f;
+    item.own[1] = 0.50f;   // bloom
+    item.own[2] = 0.45f;   // vignette
+    item.own[3] = 0.012f;  // grain
     float levels = 1.0f;
     for (Uint32 side = std::max(frame.width, frame.height); side > 1; side /= 2) levels += 1.0f;
     item.own[4] = levels;
+    item.own[5] = frame.scene.quality[3] > 0.0f ? 1.0f : 0.0f;   // FXAA
     queue.push(item);
 }
 

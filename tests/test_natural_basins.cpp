@@ -189,7 +189,7 @@ TEST(natural_basin_spills_at_the_connected_sill_and_preserves_river_heads) {
 TEST(natural_basin_open_slope_holds_no_standing_water) {
     BasinWorld world;
     auto& plane = world.foundation->heightDm[static_cast<std::size_t>(generation::TerrainStage::Slopes)];
-    std::fill(plane.begin(), plane.end(), 200);
+    plane.assign(plane.size(), 200);
     const auto graph = buildHydrologyGraph(world.map);
     const auto& lake = graph.waterBodies.at(1);
     CHECK_EQ(lake.level, Fixed::fromInt(20));
@@ -300,8 +300,9 @@ namespace {
 // hillside has, and deeper than the shore stands.
 struct GulliedShore : BasinWorld {
     GulliedShore() {
-        for (auto& h : foundation->heightDm[static_cast<std::size_t>(generation::TerrainStage::Slopes)])
-            if (h == 900) h = 500;
+        auto& slopes = foundation->heightDm[static_cast<std::size_t>(generation::TerrainStage::Slopes)];
+        for (std::size_t i = 0; i < slopes.size(); ++i)
+            if (slopes[i] == 900) slopes.set(i, 500);
     }
     CarvedSample at(const GraphCarver& carver, int x, int y) const {
         const core::WorldPos p{Fixed::fromInt(x), Fixed::fromInt(y)};

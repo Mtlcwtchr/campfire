@@ -68,6 +68,17 @@ public:
         slots_[*at].lastUsed = frame;
         return true;
     }
+    // A pin that does not count as a use. For pages held only so that a plan
+    // being built against them finds them there when it is published: the
+    // whole resident set is held for that, and refreshing every page's age
+    // with it would make the recency order meaningless - the next page let go
+    // would be one beside the eye instead of the oldest.
+    bool hold(std::int64_t key) {
+        const auto at = find(key);
+        if (!at) return false;
+        ++slots_[*at].pins;
+        return true;
+    }
     bool unpin(std::int64_t key) {
         const auto at = find(key);
         if (!at || slots_[*at].pins == 0) return false;

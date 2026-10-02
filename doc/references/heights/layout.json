@@ -1,0 +1,759 @@
+{
+ "size": [
+  4096,
+  8704
+ ],
+ "low_m": -200,
+ "high_m": 3200,
+ "out": "assembled",
+ "guide": {
+  "file": "../maps/FCAPCgRUFrZjmM2JBRFlhprXPdL8S01mjgfvuv33KZhaZyIB76aKOTrsU9yEp01TIF4ED3Z1lIGdhHSzQj-NODtZ.jpg",
+  "ignore": [
+   [
+    280,
+    0,
+    440,
+    60
+   ]
+  ],
+  "continent_km": 1000,
+  "fill": false
+ },
+ "sheets": [
+  {
+   "name": "Кагар",
+   "file": "image-gen-1(20260930-212724).png",
+   "segment": [
+    560,
+    0,
+    790,
+    250
+   ],
+   "peak_m": 3000,
+   "water": [
+    28,
+    66
+   ],
+   "rotate": -6.0,
+   "w": 900,
+   "h": 1078,
+   "x": 2124,
+   "y": 267,
+   "relief": {
+    "scale": 0.3,
+    "grain": 0.55,
+    "smooth_px": 10,
+    "keep": [
+     [
+      640,
+      610,
+      250,
+      330,
+      0
+     ]
+    ]
+   },
+   "controls": {
+    "map": "../maps/6XD_rHKaQXjxOcprYDZ42nl-AtHAcj_K_HC3EJRE7ykqtUzlUSgszpGnavsp9_DL1RLn2_OFD5N4ETTD8gKMnigB.jpg",
+    "crop": [
+     36,
+     44,
+     944,
+     1000
+    ],
+    "classes": [
+     [
+      176,
+      173,
+      115,
+      "rough"
+     ],
+     [
+      153,
+      138,
+      78,
+      "sparse"
+     ],
+     [
+      173,
+      182,
+      166,
+      "swamp"
+     ],
+     [
+      152,
+      185,
+      74,
+      "fertile"
+     ],
+     [
+      148,
+      147,
+      133,
+      "rock"
+     ],
+     [
+      197,
+      198,
+      189,
+      "rock"
+     ]
+    ],
+    "values": {
+     "rough": [
+      0.5,
+      0.25,
+      0.55
+     ],
+     "sparse": [
+      0.62,
+      0.45,
+      0.48
+     ],
+     "fertile": [
+      0.64,
+      0.88,
+      0.45
+     ],
+     "swamp": [
+      0.92,
+      0.45,
+      0.32
+     ]
+    },
+    "fit": [
+     -14.1875,
+     61.6171875,
+     0.7385645933014354,
+     0.8385964912280699,
+     -1.25
+    ],
+    "ground": {
+     "fertile": "kagar_fertile"
+    }
+   }
+  },
+  {
+   "name": "Топи",
+   "file": "image-gen-2(20260930-212727).png",
+   "segment": [
+    470,
+    200,
+    745,
+    440
+   ],
+   "peak_m": 2200,
+   "water": [
+    14,
+    33
+   ],
+   "turn": [
+    -10,
+    10
+   ],
+   "stretch": 1.0,
+   "rotate": -10,
+   "w": 1208,
+   "h": 1208,
+   "x": 2009,
+   "y": 971,
+   "controls": {
+    "map": "../maps/RHoDEnbldsZRsOEJ48UJpc-O5L0xJFOwU128AW8AOUMPXm3tY3Q5PDR-EYBypTCZJjZayuM5zJzGCRrjwerZ3KIu.jpg",
+    "crop": [
+     16,
+     30,
+     944,
+     1040
+    ],
+    "classes": [
+     [
+      195,
+      194,
+      174,
+      "swamp"
+     ],
+     [
+      190,
+      185,
+      148,
+      "swamp"
+     ],
+     [
+      150,
+      147,
+      120,
+      "swamp"
+     ],
+     [
+      163,
+      167,
+      139,
+      "swamp"
+     ],
+     [
+      168,
+      179,
+      163,
+      "swamp"
+     ]
+    ],
+    "values": {
+     "swamp": [
+      0.97,
+      0.78,
+      0.28
+     ]
+    },
+    "fit": [
+     -30.8125,
+     15.78125,
+     0.7955342902711322,
+     0.837639553429027,
+     -1.75
+    ],
+    "water_type": {
+     "lake": "bog"
+    }
+   }
+  },
+  {
+   "name": "Атрод",
+   "file": "image-gen-3(4).png",
+   "segment": [
+    325,
+    330,
+    610,
+    720
+   ],
+   "peak_m": 3000,
+   "rotate": -30,
+   "w": 1290,
+   "h": 2124,
+   "x": 1108,
+   "y": 1301,
+   "controls": {
+    "map": "../maps/gTQYIZncBWfDBATZKyGXZLkDK8eEx5m3ecrFlbAhd-wT8THfQQwI2595ncZTR3UXU_aX16xB2qhfpikIMCNMASoA.jpg",
+    "crop": [
+     105,
+     34,
+     881,
+     852
+    ],
+    "classes": [
+     [
+      169,
+      163,
+      146,
+      "rough"
+     ],
+     [
+      194,
+      195,
+      189,
+      "rock"
+     ],
+     [
+      153,
+      170,
+      103,
+      "fertile"
+     ],
+     [
+      184,
+      186,
+      159,
+      "rock"
+     ],
+     [
+      173,
+      186,
+      126,
+      "fertile"
+     ]
+    ],
+    "values": {
+     "fertile": [
+      0.56,
+      0.38,
+      0.45
+     ],
+     "rough": [
+      0.46,
+      0.22,
+      0.55
+     ]
+    },
+    "zones": [
+     [
+      780,
+      1010,
+      260,
+      110,
+      0,
+      "jagged",
+      {
+       "erosion": 0.3
+      }
+     ]
+    ],
+    "fit": [
+     -6.0625,
+     57.515625,
+     0.5847846889952153,
+     0.629481658692185,
+     11.5
+    ],
+    "ground": {
+     "fertile": "atrod_valley",
+     "rock": "atrod_rock"
+    },
+    "forest": {
+     "rough": "shrubland"
+    }
+   }
+  },
+  {
+   "name": "Пустоши",
+   "file": "image-gen-4(4).png",
+   "segment": [
+    300,
+    640,
+    580,
+    900
+   ],
+   "peak_m": 2600,
+   "rotate": 10,
+   "w": 2092,
+   "h": 1111,
+   "x": 811,
+   "y": 2582,
+   "controls": {
+    "map": "../maps/SyyStweUdBOHTD-PjaxyJN2xm8xgoaldJZUzIThz94RSnFeJOZd8F7X8VmW4iDDwSZGcgmvKxcj08oJ5i_p5-Sm9.jpg",
+    "crop": [
+     20,
+     40,
+     940,
+     1040
+    ],
+    "classes": [
+     [
+      168,
+      135,
+      100,
+      "wastes"
+     ],
+     [
+      187,
+      183,
+      167,
+      "wastes"
+     ],
+     [
+      190,
+      166,
+      137,
+      "wastes"
+     ],
+     [
+      153,
+      112,
+      76,
+      "wastes"
+     ],
+     [
+      179,
+      152,
+      120,
+      "wastes"
+     ]
+    ],
+    "zones": [
+     [
+      760,
+      110,
+      200,
+      140,
+      0,
+      "charred",
+      {
+       "forest": 0.1
+      }
+     ]
+    ],
+    "fit": [
+     -37.734375,
+     29.296875,
+     0.7850079744816586,
+     0.8373205741626795,
+     -2.0
+    ],
+    "water_type": {
+     "lake": "rotten_green"
+    }
+   }
+  },
+  {
+   "name": "Эльнор",
+   "file": "image-gen-5(2).png",
+   "segment": [
+    30,
+    800,
+    400,
+    1065
+   ],
+   "peak_m": 2800,
+   "rotate": -10,
+   "w": 1510,
+   "h": 1151,
+   "x": 46,
+   "y": 3180,
+   "relief": {
+    "scale": 0.3,
+    "grain": 0.5,
+    "smooth_px": 10,
+    "keep": [
+     [
+      395,
+      370,
+      60,
+      190,
+      -15
+     ],
+     [
+      835,
+      465,
+      80,
+      60,
+      -30
+     ]
+    ]
+   },
+   "lakes": [
+    [
+     906,
+     510,
+     38,
+     32
+    ]
+   ],
+   "controls": {
+    "map": "../maps/VHLYacmaUwjDcRWhqakFG6zbpS3bqryksCULnpMLGawE_gbUnm-_3ZCll3Ga4FrQxplDPStGbIN2SJB5Z_L6zfD8.jpg",
+    "crop": [
+     20,
+     40,
+     940,
+     1024
+    ],
+    "classes": [
+     [
+      165,
+      183,
+      98,
+      "fertile"
+     ],
+     [
+      182,
+      193,
+      123,
+      "fertile"
+     ],
+     [
+      196,
+      199,
+      187,
+      "rock"
+     ],
+     [
+      189,
+      180,
+      159,
+      "sparse"
+     ],
+     [
+      190,
+      108,
+      108,
+      "none"
+     ],
+     [
+      186,
+      160,
+      129,
+      "sparse"
+     ],
+     [
+      195,
+      200,
+      145,
+      "fertile"
+     ]
+    ],
+    "values": {
+     "fertile": [
+      0.62,
+      0.85,
+      0.45
+     ],
+     "sparse": [
+      0.54,
+      0.52,
+      0.5
+     ]
+    },
+    "zones": [
+     [
+      527,
+      871,
+      56,
+      163,
+      0,
+      "conifer",
+      {
+       "forest": 0.82
+      }
+     ],
+     [
+      821,
+      815,
+      63,
+      63,
+      0,
+      "conifer",
+      {
+       "forest": 0.82
+      }
+     ],
+     [
+      878,
+      665,
+      213,
+      69,
+      0,
+      "old_oak",
+      {
+       "forest": 0.62,
+       "moisture": 0.45
+      }
+     ],
+     [
+      564,
+      235,
+      88,
+      204,
+      0,
+      "eerie",
+      {
+       "forest": 0.5
+      }
+     ]
+    ],
+    "fit": [
+     1.796875,
+     23.0625,
+     0.751993620414673,
+     0.8043062200956937,
+     -1.0
+    ],
+    "ground": {
+     "fertile": "elnor_fertile"
+    }
+   }
+  },
+  {
+   "name": "Пламенные острова",
+   "file": "flame_islands_height.png",
+   "peak_m": 2200,
+   "sea_below": 14,
+   "rotate": 0,
+   "x": 2105,
+   "y": 4797,
+   "w": 1563,
+   "h": 1563,
+   "controls": {
+    "map": "../maps/sgfsA0SAynKwSSyNY8v-viaxRWvyNqHC5H-5DIxPY0SXYzKB7EUUKmCr0orfC7wwCShZbX4Ytt3sxa6_N2e4l5yQ-HhHpQ.jpg",
+    "crop": [
+     0,
+     0,
+     510,
+     511
+    ],
+    "classes": [
+     [
+      0,
+      150,
+      225,
+      "none"
+     ],
+     [
+      24,
+      144,
+      192,
+      "none"
+     ],
+     [
+      120,
+      120,
+      120,
+      "rock"
+     ],
+     [
+      30,
+      175,
+      75,
+      "tropical_forest"
+     ],
+     [
+      50,
+      145,
+      72,
+      "tropical_forest"
+     ],
+     [
+      172,
+      125,
+      85,
+      "tropical_soil"
+     ],
+     [
+      160,
+      100,
+      70,
+      "tropical_soil"
+     ],
+     [
+      140,
+      120,
+      96,
+      "tropical_soil"
+     ]
+    ],
+    "coast": {
+     "from": [
+      "tropical_soil",
+      "tropical_forest"
+     ],
+     "to": "beach",
+     "px": 14
+    },
+    "marks": [
+     [
+      "flame_islands_height.png.pits.npy",
+      "crater"
+     ]
+    ],
+    "zones": [
+     [
+      803,
+      454,
+      160,
+      132,
+      0,
+      "scarlet",
+      {
+       "forest": 0.35
+      }
+     ],
+     [
+      940,
+      932,
+      177,
+      153,
+      0,
+      "scarlet",
+      {
+       "forest": 0.3
+      }
+     ]
+    ],
+    "ground": {
+     "rock": "volcanic_rock"
+    },
+    "water_type": {
+     "lake": "tropical"
+    }
+   },
+   "gamma": 1.25,
+   "cut": [
+    "left",
+    "top"
+   ]
+  },
+  {
+   "name": "Ксаиринис",
+   "file": "xairinis_height.png",
+   "peak_m": 2600,
+   "sea_below": 14,
+   "gamma": 1.25,
+   "rotate": 0,
+   "x": 340,
+   "y": 7371,
+   "w": 1016,
+   "h": 1016,
+   "controls": {
+    "map": "../maps/lfsnYtzLzvenn74Ycwh3Ez6Oj1okARih_l32FuEPmD57VFKMS18GbbAXvs-Bqo5GfN5gLBWYSnEV4FVEgZRim1fF.jpg",
+    "crop": [
+     0,
+     0,
+     508,
+     511
+    ],
+    "classes": [
+     [
+      0,
+      150,
+      225,
+      "none"
+     ],
+     [
+      240,
+      240,
+      150,
+      "dunes"
+     ],
+     [
+      240,
+      240,
+      185,
+      "dunes"
+     ],
+     [
+      205,
+      225,
+      100,
+      "savanna"
+     ],
+     [
+      216,
+      240,
+      120,
+      "savanna"
+     ],
+     [
+      216,
+      216,
+      96,
+      "savanna"
+     ],
+     [
+      168,
+      216,
+      72,
+      "savanna_wood"
+     ],
+     [
+      120,
+      120,
+      120,
+      "rock"
+     ]
+    ],
+    "ground": {
+     "rock": "warm_rock"
+    },
+    "water_type": {
+     "lake": "shallow_clear"
+    }
+   }
+  }
+ ]
+}

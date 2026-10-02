@@ -98,6 +98,11 @@ public:
     // Input must have COMPUTE_STORAGE_READ usage and remain alive through run().
     void dispatchGpu(const Frame& frame, RenderPipeline& into, const ClusterSelection& selection,
                      SDL_GPUBuffer* input, std::size_t count, bool compactOutput = false);
+    // The size, in instances, of whatever a compacted stream is gathered into.
+    // The dense prefix is clamped to it (cluster_compact.hlsl): the per-bucket
+    // slices together hold far more than any gather buffer, and a frame whose
+    // survivors outnumbered it wrote past its end. 0 leaves it unbounded.
+    void outputCapacity(std::size_t instances) { outputCapacity_ = instances; }
 
     [[nodiscard]] SDL_GPUBuffer* visible() const { return visible_.get(); }
     [[nodiscard]] SDL_GPUBuffer* arguments() const { return arguments_.get(); }
@@ -114,7 +119,7 @@ private:
     Buffer clusters_, visible_, arguments_;
     Buffer hizFallback_;
     Buffer pageTable_, pageFeedback_;
-    std::size_t clusterCapacity_ = 0, bucketCapacity_ = 0, buckets_ = 0;
+    std::size_t clusterCapacity_ = 0, bucketCapacity_ = 0, buckets_ = 0, outputCapacity_ = 0;
     std::size_t submitted_ = 0, dropped_ = 0;
     std::vector<GeometryCluster> staged_;
     bool ready_ = false;

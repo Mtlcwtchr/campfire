@@ -1,0 +1,115 @@
+{
+ "_comment": "The ground texture array, in the order the shader and the renderer keep it (assets/terrain/ph/<name>/ph_<name>_*.png, packed by tools/pack_terrain.py). The first sixteen are the engine's own ground - the default category draws with them and nothing else - and must stay where they are. metres: ground one turn of the texture covers (the scan's physical size, from its packed.json). A soil or a rock names a layer by its name here. Changing this list changes the shader's constants (terrain_layers.gen.hlsli): one recompile.",
+ "layers": [
+  {
+   "name": "leafy_grass",
+   "metres": 2.0,
+   "role": "grass: meadow ground under the grass cards"
+  },
+  {
+   "name": "dirt_floor",
+   "metres": 2.07,
+   "role": "dirt: bare earth"
+  },
+  {
+   "name": "red_sand",
+   "metres": 3.0,
+   "role": "sand: dunes (orange), desert only"
+  },
+  {
+   "name": "rocks_ground_05",
+   "metres": 3.0,
+   "role": "rock: stony ground"
+  },
+  {
+   "name": "brown_mud_02",
+   "metres": 1.3,
+   "role": "marsh: wet mud"
+  },
+  {
+   "name": "snow_02",
+   "metres": 2.0,
+   "role": "snow"
+  },
+  {
+   "name": "withered_grass",
+   "metres": 2.0,
+   "role": "grass: dry"
+  },
+  {
+   "name": "forest_leaves_02",
+   "metres": 3.0,
+   "role": "forest floor"
+  },
+  {
+   "name": "coast_sand_04",
+   "metres": 3.94,
+   "role": "sand: beach"
+  },
+  {
+   "name": "damp_beach_sand",
+   "metres": 2.0,
+   "role": "sand: waterline"
+  },
+  {
+   "name": "sand_01",
+   "metres": 1.5,
+   "role": "sand: plain dry"
+  },
+  {
+   "name": "sandy_gravel_02",
+   "metres": 2.53,
+   "role": "sand: stony"
+  },
+  {
+   "name": "rock_face_03",
+   "metres": 2.7,
+   "role": "cliff: grey rock face"
+  },
+  {
+   "name": "mossy_rock",
+   "metres": 3.0,
+   "role": "cliff: mossy, wet climates"
+  },
+  {
+   "name": "cliff_side",
+   "metres": 1.83,
+   "role": "cliff: warm, arid"
+  },
+  {
+   "name": "mud_cracked_dry_riverbed_002",
+   "metres": 2.0,
+   "role": "marsh: dried and cracked"
+  },
+  {
+   "name": "moon_dusted_04",
+   "metres": 1.12,
+   "role": "wastes: grey dead powder (scan 0.56 m, laid at twice its size)"
+  },
+  {
+   "name": "rubble",
+   "metres": 2.0,
+   "role": "wastes: grey grit and broken stone"
+  },
+  {
+   "name": "mud_forest",
+   "metres": 2.35,
+   "role": "bog: dark peat"
+  },
+  {
+   "name": "brown_mud_leaves_01",
+   "metres": 1.3,
+   "role": "bog: mossy mud under the swamp forest"
+  },
+  {
+   "name": "burned_ground_01",
+   "metres": 1.0,
+   "role": "blight: craters dark with the black wind's power, charred ground"
+  },
+  {
+   "name": "red_laterite_soil_stones",
+   "metres": 2.0,
+   "role": "laterite: red savanna and tropical soil"
+  }
+ ]
+}

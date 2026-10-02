@@ -10,6 +10,16 @@
 #include "inspection.hlsli"
 #include "weather.hlsli"
 #include "climate_field.hlsli"
+// Terrain categories (engine/biomes): the page variant binds the category
+// plane and the biome table after its shadow (t13, t14). The mesh variant
+// binds neither and draws every id as the engine's own ground.
+#ifdef TERRAIN_PAGE_MATERIALS
+#define BIOME_PLANE_SLOT t13
+#define BIOME_PLANE_SAMPLER s13
+#define BIOME_TABLE_SLOT t14
+#define BIOME_TABLE_SAMPLER s14
+#endif
+#include "terrain_biomes.hlsli"
 
 // The six materials as layers of one array, so a pixel can pick the two it is
 // made of instead of sampling all six and throwing four away.
@@ -225,6 +235,11 @@ static float2 gWeightDX1 = 0, gWeightDY1 = 0;
 struct GroundContext {
     bool valid;
     float moisture, desert, forest, aboveWater, steepness;
+    // The terrain category here (engine/biomes): two ids and the share of
+    // the second, and the forest layer's biome. All nought: the engine's own.
+    int categoryA, categoryB;
+    float categoryShare;
+    int forestBiome;
 };
 GroundContext noGroundContext()
 {
@@ -272,7 +287,10 @@ GroundVariants groundVariants(int cls, GroundContext c, float2 xy)
     // a climate isoline.
     const float patch = organicNoise(xy / 53.0 + float(cls) * 7.3) * 0.7 +
                         organicNoise(xy / 19.0 + float(cls) * 3.1) * 0.3 - 0.5;
-    const float dry = saturate(max((0.5 - c.moisture) * 2.2, c.desert * 1.3) + patch * 0.7);
+    // Moisture here is the map's rank of it (half of every map is below
+    // 0.5), so dry from the drier third, not from the median: at 0.5 half of
+    // a temperate country was painted as parched grass.
+    const float dry = saturate(max((0.35 - c.moisture) * 2.6, c.desert * 1.3) + patch * 0.7);
     const float steep = smoothstep(0.22, 0.50, c.steepness);
     if (cls == 0) {
         v.first = LAYER_FOREST_FLOOR;
@@ -311,10 +329,11 @@ GroundVariants groundVariants(int cls, GroundContext c, float2 xy)
     return v;
 }
 
-MaterialSample sampleGroundClass(int cls, GroundContext c, float3 p, float3 normal,
-                                 float3 dx, float3 dy)
+#include "terrain_biomes_code.hlsli"
+
+MaterialSample sampleGroundVariants(GroundVariants v, int cls, float3 p, float3 normal,
+                                    float3 dx, float3 dy)
 {
-    const GroundVariants v = groundVariants(cls, c, p.xy);
     const float w1 = v.s1, w2 = v.s2 * (1.0 - v.s1);
     const float wb = 1.0 - w1 - w2;
     MaterialSample r = (MaterialSample)0;
@@ -338,6 +357,67 @@ MaterialSample sampleGroundClass(int cls, GroundContext c, float3 p, float3 norm
     r.colour *= k; r.properties *= k; r.borderHeight *= k;
     r.normal = normalize(r.normal);
     return r;
+}
+
+// The engine's variants of a class, with the forest layer's floor in place
+// of the engine's forest floor where its biome names one.
+GroundVariants engineVariants(int cls, GroundContext c, float2 xy)
+{
+    GroundVariants v = groundVariants(cls, c, xy);
+#ifdef BIOME_ANY_FLOOR
+    const int floorLayer = biomeForestFloor(c.forestBiome);
+    if (floorLayer >= 0 && v.first == LAYER_FOREST_FLOOR) v.first = floorLayer;
+#endif
+    return v;
+}
+
+// A class as one category draws it: its soils and slopes over the engine's
+// variants, then its tints and strata.
+MaterialSample sampleCategoryClass(int category, int cls, GroundContext c, float3 p, float3 normal,
+                                   float3 dx, float3 dy)
+{
+    GroundVariants v = engineVariants(cls, c, p.xy);
+    const float footprint = max(length(dx.xy), length(dy.xy));
+    const bool changed = biomeClassVariants(category, cls, c, p.xy, footprint, v);
+#ifdef BIOME_ANY_FLOOR
+    // The forest's floor under its canopy, over a category's own soil too.
+    if (changed && cls <= 1) {
+        const int floorLayer = biomeForestFloor(c.forestBiome);
+        if (floorLayer >= 0) {
+            const float patch = organicNoise(p.xy / 53.0 + float(cls) * 7.3) * 0.7 +
+                                organicNoise(p.xy / 19.0 + float(cls) * 3.1) * 0.3 - 0.5;
+            const float canopy = smoothstep(0.35, 0.75, c.forest + patch * 0.5) * (cls == 0 ? 0.85 : 1.0);
+            if (canopy > v.s2) { v.second = floorLayer; v.s2 = canopy; }
+        }
+    }
+#endif
+    MaterialSample s = sampleGroundVariants(v, cls, p, normal, dx, dy);
+    if (changed) biomeClassFinish(category, cls, c, p, s.colour);
+    return s;
+}
+
+MaterialSample sampleGroundClass(int cls, GroundContext c, float3 p, float3 normal,
+                                 float3 dx, float3 dy)
+{
+#ifdef BIOME_ANY_GROUND
+    [branch] if (biomeCategoryChangesGround(c.categoryA) ||
+                 (c.categoryShare > 0.004 && biomeCategoryChangesGround(c.categoryB))) {
+        // A category that changes nothing draws through the same code as the
+        // default, so the two sides of a border meet in one blend. One copy of
+        // the sampling, looped over the pair.
+        MaterialSample r = (MaterialSample)0;
+        [loop] for (int k = 0; k < 2; ++k) {
+            const float w = k == 0 ? 1.0 - c.categoryShare : c.categoryShare;
+            if (w <= 0.004) continue;
+            const MaterialSample s = sampleCategoryClass(k == 0 ? c.categoryA : c.categoryB, cls, c, p, normal, dx, dy);
+            r.colour += s.colour * w; r.properties += s.properties * w;
+            r.borderHeight += s.borderHeight * w; r.normal += s.normal * w;
+        }
+        r.normal = normalize(r.normal);
+        return r;
+    }
+#endif
+    return sampleGroundVariants(engineVariants(cls, c, p.xy), cls, p, normal, dx, dy);
 }
 
 Ground groundHereIn(float4 weights0, float2 weights1, float3 worldPos, float3 normal,
@@ -611,10 +691,45 @@ float4 terrainSurface(TerrainOut input)
     context.forest = saturate(input.forest);
     context.aboveWater = aboveWater;
     context.steepness = steepness;
+    // The terrain category and the layers' biomes here (engine/biomes).
+    const BiomeHere biome = biomeHereAt(input.worldXY, pixel);
+    context.categoryA = biome.groundA;
+    context.categoryB = biome.groundB;
+    context.categoryShare = biome.groundShare;
+    context.forestBiome = biome.forest;
     Ground ground = groundHereIn(shoreWeights0, shoreWeights1, worldPos, slopeNormal, context);
     float3 colour = ground.colour;
-    // Imported albedo owns the ground colour: no height/noise colour tint.
+#ifdef BIOMES_ENABLED
+    // The category's look: a tint and how far it is pulled to grey, blended
+    // across the border with the ground's own.
+    [branch] if (biome.any) {
+        const float4 lookA = biomeRow(BIOME_ROW_CATEGORY + biome.groundA, 0);
+        const float4 lookB = biomeRow(BIOME_ROW_CATEGORY + biome.groundB, 0);
+        const float4 look = lerp(lookA, lookB, biome.groundShare);
+        [branch] if (any(look != float4(1, 1, 1, 1))) {
+            const float grey = dot(colour, float3(0.30, 0.59, 0.11));
+            colour = lerp(float3(grey, grey, grey), colour, look.a) * look.rgb;
+        }
+    }
+#endif
+    // Imported albedo owns the ground colour: no height/noise colour tint -
+    // except the grass's season. The photographed blade carries its own, and
+    // on its own it read as one olive-brown over every country. A painted
+    // world's grass follows its climate: lush green where it is wet, gold
+    // where it is dry. Luma-preserving, and only as far as grass covers the
+    // ground, so the scan's own detail stays.
     const float grassCover = materialCoverage(0, ground.top, ground.under, ground.mix);
+    [branch] if (context.valid && grassCover > 0.001) {
+        // The scan under it is a brown-olive photograph (hue ~40): half a tint
+        // left the meadows of a temperate country orange in clear weather.
+        // Green over all but the driest ground, gold only there, and four
+        // fifths of the way to the climate's colour (the scan keeps its grain).
+        const float lush = saturate((context.moisture - 0.04) * 1.8) * (1.0 - context.desert);
+        const float3 season = lerp(float3(0.98, 0.86, 0.50), float3(0.58, 1.00, 0.36), lush);
+        const float blade = dot(colour, float3(0.30, 0.59, 0.11));
+        const float3 tinted = lerp(colour, blade * season * 1.22, 0.80);
+        colour = lerp(colour, tinted, grassCover);
+    }
     const float rockCover = materialCoverage(3, ground.top, ground.under, ground.mix);
 
     const float3 sun = landscapeSun();
@@ -751,6 +866,31 @@ float4 terrainSurface(TerrainOut input)
     }
     shadingNormal = reliefNormal(shadingNormal, worldPos, clutterHeight, 0.20);
 
+    // Decals of the category and the decor layer (engine/biomes): stored
+    // nowhere, each cell of each set hashing itself on the ground.
+    float decalGlow = 0.0, decalMetal = 0.0;
+    float decalRough = -1.0;
+#if defined(BIOMES_ENABLED) && defined(BIOME_ANY_DECALS)
+    [branch] if (biome.any) {
+        BiomeDecalIn decalIn;
+        decalIn.xy = input.worldXY;
+        decalIn.pixel = pixel;
+        decalIn.steepness = steepness;
+        decalIn.aboveWater = aboveWater;
+        decalIn.grass = grassCover;
+        decalIn.eye = length(worldPos - cameraPS.xyz);
+        decalIn.wind = windPS.xy;
+        BiomeDecalOut decals = noBiomeDecal();
+        biomeDecalsHere(biome, decalIn, decals);
+        [branch] if (decals.cover > 0.001) {
+            groundColour = lerp(groundColour, decals.colour, decals.cover);
+            decalGlow = decals.emissive;
+            decalMetal = decals.metal * decals.cover;
+            decalRough = lerp(-1.0, decals.rough, decals.cover);
+        }
+    }
+#endif
+
     // Vegetation density belongs to plants, not a painted biome palette.
     // Keep lighting, wetness and snow, without seasonal albedo recolouring.
     const float weatherWet=input.weather.y*input.weather.w;
@@ -777,8 +917,9 @@ float4 terrainSurface(TerrainOut input)
     // diffuse-first, so this modulates the small broad grain lobe below rather
     // than pretending to be a full metallic/BRDF path.
     const float roughNoise = filteredMaterialNoise(input.worldXY / 0.7, pixel / 0.7);
-    const float materialRoughness = clamp(surfaceProperties.g + (roughNoise - 0.5) * 0.06 -
-                                          wetness * 0.18, 0.38, 0.98);
+    float materialRoughness = clamp(surfaceProperties.g + (roughNoise - 0.5) * 0.06 -
+                                    wetness * 0.18, 0.38, 0.98);
+    if (decalRough >= 0.0) materialRoughness = lerp(materialRoughness, decalRough, saturate(decalRough + 1.0));
     // AO removes ambient light only. Do not multiply photographed albedo by
     // another black cavity layer or fade AO away with camera distance.
     const float skyVisibility = lerp(1.0, surfaceProperties.r, 0.38);
@@ -794,6 +935,9 @@ float4 terrainSurface(TerrainOut input)
         (1.0 - saturate(parametersPS[2].z * parametersPS[0].x) * 0.78);
     // Quiet dielectric highlight for every material, not just animated sand.
     lit += float3(1.0, 0.97, 0.90) * (0.045 * (1.0 - roughness) * lobe * sunVisibility);
+    // A metal fleck catches the sun in its own colour; a glowing one shines
+    // whatever the light.
+    lit += groundColour * (decalMetal * 0.6 * lobe * sunVisibility) + groundColour * decalGlow;
     float3 finished = landscapeFinish(lit, float3(input.worldXY, input.worldHeight));
     // The map goes on last, over finished ground rather than instead of it.
     //

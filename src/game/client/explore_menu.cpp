@@ -275,6 +275,12 @@ bool ExploreMenu::pointer(float x, float y, bool down) {
         if (x >= kGraphicsButtonX && x < kGraphicsButtonX + kButtonW) { togglePanel(); dirty_ = true; return true; }
         if (x >= kSceneButtonX && x < kSceneButtonX + kButtonW) { panel_.sceneViewToggled = true; dirty_ = true; return true; }
     }
+    // And the switch between looking at the world and making it.
+    if (pressed && y >= kEditButtonY && y < kEditButtonY + 14 &&
+        x >= kEditButtonX && x < kEditButtonX + kButtonW) {
+        toggleEditor();
+        return true;
+    }
     if (!down) { const bool was = dragging_; dragging_ = false; return was; }
     // Grabbed anywhere on the slider's row, then held until released even if
     // the pointer leaves it: a drag that drops when it strays is no slider.
@@ -300,7 +306,7 @@ void ExploreMenu::draw(SDL_Renderer* into, int width, int height) {
         generation::kTerrainStageNames[std::size_t(terrainStage_)] : "Final (legacy; stages unavailable)"),220,225,240);
     text(into,10,36,std::string("Display: ") + world::kMapTitles[std::size_t(mapView_)],190,210,230);
     text(into,10,52,"V view   M display   0 natural",150,150,160);
-    text(into,10,64,"Shift+1..8 stage   Tab world   O graphics   F scene view",150,150,160);
+    text(into,10,64,"Shift+1..8 stage  Tab world  ` edit  O gfx  F scene",150,150,160);
     {
         char said[64];
         std::snprintf(said, sizeof(said), "Draw distance / fog: %.1f km   , .", drawDistance() / 1000.0);
@@ -323,6 +329,13 @@ void ExploreMenu::draw(SDL_Renderer* into, int width, int height) {
         };
         button(kGraphicsButtonX, "Graphics  O", panelOpen_);
         button(kSceneButtonX, "Scene view F", panel_.sceneView);
+        {
+            const bool on = editor_.active();
+            const SDL_FRect box{kEditButtonX, kEditButtonY, kButtonW, 14};
+            SDL_SetRenderDrawColor(into, on ? 150 : 46, on ? 104 : 52, on ? 34 : 64, 255);
+            SDL_RenderFillRect(into, &box);
+            text(into, kEditButtonX + 6, kEditButtonY + 3, on ? "EDIT mode   `" : "Explore     `", 230, 232, 240);
+        }
     }
     if (!open_) return;
     float y = kStatusHigh + 4;

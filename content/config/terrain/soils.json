@@ -1,0 +1,359 @@
+{
+ "_comment": "A soil: one to three texture layers (layers.json) and the noise that mixes them; their shares sum to one. What a category puts behind a material class (categories.json soils). tint multiplies the result.",
+ "soils": [
+  {
+   "name": "grey_dust",
+   "layers": [
+    [
+     "moon_dusted_04",
+     0.8
+    ],
+    [
+     "rubble",
+     0.2
+    ]
+   ],
+   "noise": {
+    "kind": "fbm",
+    "metres": 14,
+    "contrast": 0.6,
+    "warp": 0.3
+   },
+   "tint": [
+    0.95,
+    0.95,
+    0.97
+   ]
+  },
+  {
+   "name": "grey_dust_rubble",
+   "layers": [
+    [
+     "rubble",
+     0.7
+    ],
+    [
+     "moon_dusted_04",
+     0.3
+    ]
+   ],
+   "noise": "cellular_6m",
+   "tint": [
+    0.93,
+    0.93,
+    0.95
+   ]
+  },
+  {
+   "name": "grey_sludge",
+   "layers": [
+    [
+     "mud_forest",
+     0.5
+    ],
+    [
+     "moon_dusted_04",
+     0.5
+    ]
+   ],
+   "noise": "fbm_8m",
+   "tint": [
+    0.82,
+    0.86,
+    0.8
+   ]
+  },
+  {
+   "name": "grey_rubble",
+   "layers": [
+    [
+     "rubble",
+     1.0
+    ]
+   ],
+   "noise": "fbm_8m",
+   "tint": [
+    0.92,
+    0.92,
+    0.94
+   ]
+  },
+  {
+   "name": "peat",
+   "layers": [
+    [
+     "mud_forest",
+     0.7
+    ],
+    [
+     "brown_mud_leaves_01",
+     0.3
+    ]
+   ],
+   "noise": {
+    "kind": "cellular",
+    "metres": 6,
+    "contrast": 0.8
+   }
+  },
+  {
+   "name": "mossy_mud",
+   "layers": [
+    [
+     "brown_mud_leaves_01",
+     0.6
+    ],
+    [
+     "brown_mud_02",
+     0.4
+    ]
+   ],
+   "noise": "fbm_8m"
+  },
+  {
+   "name": "swamp_grass",
+   "layers": [
+    [
+     "brown_mud_leaves_01",
+     0.55
+    ],
+    [
+     "leafy_grass",
+     0.45
+    ]
+   ],
+   "noise": "cellular_18m",
+   "tint": [
+    0.94,
+    0.98,
+    0.9
+   ]
+  },
+  {
+   "name": "rough_ground",
+   "layers": [
+    [
+     "rocks_ground_05",
+     0.6
+    ],
+    [
+     "sandy_gravel_02",
+     0.4
+    ]
+   ],
+   "noise": "cellular_18m",
+   "tint": [
+    0.95,
+    0.97,
+    1.0
+   ]
+  },
+  {
+   "name": "rough_grass",
+   "layers": [
+    [
+     "leafy_grass",
+     0.65
+    ],
+    [
+     "rocks_ground_05",
+     0.35
+    ]
+   ],
+   "noise": "fbm_14m",
+   "tint": [
+    0.96,
+    0.98,
+    1.0
+   ]
+  },
+  {
+   "name": "slate_rubble",
+   "layers": [
+    [
+     "rubble",
+     0.6
+    ],
+    [
+     "rocks_ground_05",
+     0.4
+    ]
+   ],
+   "noise": "cellular_6m",
+   "tint": [
+    0.9,
+    0.92,
+    0.96
+   ]
+  },
+  {
+   "name": "leaf_litter",
+   "layers": [
+    [
+     "forest_leaves_02",
+     0.8
+    ],
+    [
+     "dirt_floor",
+     0.2
+    ]
+   ],
+   "noise": "fbm_8m"
+  },
+  {
+   "name": "dark_oak_floor",
+   "layers": [
+    [
+     "mud_forest",
+     0.5
+    ],
+    [
+     "forest_leaves_02",
+     0.5
+    ]
+   ],
+   "noise": "cellular_18m",
+   "tint": [
+    0.85,
+    0.83,
+    0.8
+   ]
+  },
+  {
+   "name": "valley_grass",
+   "layers": [
+    [
+     "leafy_grass",
+     0.7
+    ],
+    [
+     "withered_grass",
+     0.3
+    ]
+   ],
+   "noise": "fbm_30m"
+  },
+  {
+   "name": "laterite",
+   "layers": [
+    [
+     "red_laterite_soil_stones",
+     0.7
+    ],
+    [
+     "coast_sand_04",
+     0.3
+    ]
+   ],
+   "noise": "fbm_14m"
+  },
+  {
+   "name": "laterite_dry",
+   "layers": [
+    [
+     "withered_grass",
+     0.55
+    ],
+    [
+     "red_laterite_soil_stones",
+     0.45
+    ]
+   ],
+   "noise": "fbm_14m"
+  },
+  {
+   "name": "tropical_grass",
+   "layers": [
+    [
+     "leafy_grass",
+     0.7
+    ],
+    [
+     "red_laterite_soil_stones",
+     0.3
+    ]
+   ],
+   "noise": "fbm_30m",
+   "tint": [
+    0.95,
+    1.05,
+    0.92
+   ]
+  },
+  {
+   "name": "savanna_sand",
+   "layers": [
+    [
+     "sand_01",
+     0.6
+    ],
+    [
+     "red_laterite_soil_stones",
+     0.4
+    ]
+   ],
+   "noise": "fbm_14m"
+  },
+  {
+   "name": "beach_sand",
+   "layers": [
+    [
+     "coast_sand_04",
+     0.7
+    ],
+    [
+     "damp_beach_sand",
+     0.3
+    ]
+   ],
+   "noise": "fbm_8m"
+  },
+  {
+   "name": "dune_sand",
+   "layers": [
+    [
+     "red_sand",
+     0.7
+    ],
+    [
+     "sand_01",
+     0.3
+    ]
+   ],
+   "noise": {
+    "kind": "streaks",
+    "metres": 12,
+    "contrast": 0.4,
+    "angle": 20
+   }
+  },
+  {
+   "name": "burned",
+   "layers": [
+    [
+     "burned_ground_01",
+     0.8
+    ],
+    [
+     "rubble",
+     0.2
+    ]
+   ],
+   "noise": "cellular_6m"
+  },
+  {
+   "name": "warm_scree",
+   "layers": [
+    [
+     "sandy_gravel_02",
+     0.6
+    ],
+    [
+     "red_laterite_soil_stones",
+     0.4
+    ]
+   ],
+   "noise": "cellular_6m"
+  }
+ ]
+}

@@ -129,7 +129,7 @@ engine::MeshUpload TerrainCollectPass::buildSea(double centreX, double centreY, 
     // carries each vertex's own spacing, which is what decides the shortest
     // wave it may carry.
     constexpr int kSide = 256;
-    constexpr double kCurve = 12.0;
+    constexpr double kCurve = 15.0;   // about half a metre at the centre at this span
     const double half = span * 0.5;
     const auto place = [&](int i) {
         const double u = double(i) / kSide * 2.0 - 1.0;

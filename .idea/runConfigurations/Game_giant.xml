@@ -1,7 +1,0 @@
-<component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Game: giant world (2049 km)" type="CMakeRunConfiguration" factoryName="Application" PROGRAM_PARAMS="--seed 11 --world giant" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" WORKING_DIR="$PROJECT_DIR$" PASS_PARENT_ENVS_2="true" PROJECT_NAME="campfire" TARGET_NAME="asr_client" CONFIG_NAME="RelWithDebInfo" RUN_TARGET_PROJECT_NAME="campfire" RUN_TARGET_NAME="asr_client">
-    <method v="2">
-      <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
-    </method>
-  </configuration>
-</component>

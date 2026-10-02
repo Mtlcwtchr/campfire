@@ -80,7 +80,10 @@ private:
     using Publication = engine::Publication<ScenePlacementSnapshot>;
     using Region = decor::ScatterBounds;
     using RegionHash=decor::ScatterBoundsHash;
-    struct Entry { std::shared_ptr<const decor::Scatter> scatter; std::uint64_t used=0; };
+    // `stale`: the ground under it has been dug since it was placed. It is
+    // still shown - trees a metre off for a moment beat trees gone - and is
+    // placed again as if it were missing.
+    struct Entry { std::shared_ptr<const decor::Scatter> scatter; std::uint64_t used=0; bool stale=false; };
     using Completed = std::vector<std::pair<Region,std::shared_ptr<const decor::Scatter>>>;
     struct Job {
         std::future<Completed> work;
@@ -93,6 +96,8 @@ private:
                       bool limited=false);
     void collectFinishedJobs();
     void startJobs();
+    // Whether nothing has been dug under a region since it was placed.
+    [[nodiscard]] bool groundCurrent(const Region& region, const decor::Scatter& scatter) const;
     WorldBuilder::Snapshot world_;
     Limits limits_;
     Stats stats_;
@@ -104,9 +109,12 @@ private:
     Region bounds_;
     bool enabled_=false, incremental_=false, dirty_=false, limited_=false;
     std::size_t missing_=0;
+    std::size_t stale_=0;   // wanted regions shown over ground dug since
     std::uint64_t clock_=0;
     std::uint64_t lastPublish_=0;
     std::uint64_t ecologyRevision_=0;
+    std::uint64_t biomesGeneration_ = 0;
+    std::uint64_t groundRevision_=0;
     std::vector<Job> jobs_;
     std::string error_;
 };

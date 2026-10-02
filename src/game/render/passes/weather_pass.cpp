@@ -20,8 +20,11 @@ engine::PassPlace WeatherPass::setup(engine::Device& device,engine::RenderPipeli
             static_cast<engine::PassOrder>(240)};
 }
 bool WeatherPass::anything(const engine::Frame& frame) const {
+    // Rain is drawn from under the clouds: from five kilometres up the eye is
+    // above the weather, and the streaks over a whole continent were a screen
+    // of white dashes in front of it.
     return frame.scene.extra[3]<0.5f && frame.scene.parameters[0][0]>0.5f &&
-           frame.scene.parameters[2][1]>0.005f;
+           frame.scene.parameters[2][1]>0.005f && frame.scene.camera[2] < 5000.0f;
 }
 void WeatherPass::collect(const engine::Frame&,engine::DrawQueue& queue) {
     engine::DrawItem item;

@@ -1,7 +1,12 @@
 #include "game/generation/terrain_foundation.hpp"
 #include "game/generation/world_map_gen.hpp"
+#include "game/generation/world_import.hpp"
+#include "game/generation/world_layout.hpp"
 #include "game/generation/hybrid_terrain.hpp"
+#include "engine/core/lane_hash.hpp"
 #include <algorithm>
+#include <array>
+#include <cstdlib>
 #include <chrono>
 #include <limits>
 #include <queue>
@@ -32,6 +37,52 @@ template<class F> void rows(int count, F apply) {
         for (int y=count*w/n;y<count*(w+1)/n;++y) apply(y);
     });
 } // joining is the barrier between passes
+
+// The lowest and highest height in each square of the lattice, so a pass can
+// tell - without looking at a sample - that nothing in a square can move.
+//
+// Both slope passes below only ever act where two samples within their reach
+// differ by more than the angle of repose, and most of any world is open sea
+// floor and plain where nothing does: seven samples in ten of a region are
+// under water. A square whose neighbourhood spans less than that is copied as
+// it is, which is exactly what the pass would have written there.
+struct Quiet {
+    static constexpr int kTile = 32;
+    int columns = 0, rows = 0, tilesX = 0, tilesY = 0;
+    std::vector<std::int32_t> low, high;
+    std::vector<std::uint8_t> still;   // per tile, for the pass at hand
+    Quiet(int c, int r) : columns(c), rows(r), tilesX((c + kTile - 1) / kTile), tilesY((r + kTile - 1) / kTile),
+        low(std::size_t(tilesX) * tilesY), high(low.size()), still(low.size()) {}
+    void measure(const std::vector<std::int32_t>& field) {
+        ::generation::rows(tilesY, [&](int ty) { for (int tx = 0; tx < tilesX; ++tx) {
+            std::int32_t lo = std::numeric_limits<std::int32_t>::max(), hi = std::numeric_limits<std::int32_t>::min();
+            for (int y = ty * kTile; y < std::min(rows, (ty + 1) * kTile); ++y)
+                for (int x = tx * kTile; x < std::min(columns, (tx + 1) * kTile); ++x) {
+                    const auto v = field[std::size_t(y) * columns + x];
+                    lo = std::min(lo, v); hi = std::max(hi, v);
+                }
+            low[std::size_t(ty) * tilesX + tx] = lo; high[std::size_t(ty) * tilesX + tx] = hi;
+        }});
+    }
+    // The lowest of the square and the eight around it: every sample within
+    // a reach shorter than a square is in there (lower still, if anything,
+    // which only makes the test stricter).
+    std::int32_t lowAround(int tx, int ty) const {
+        std::int32_t lo = std::numeric_limits<std::int32_t>::max();
+        for (int j = std::max(0, ty - 1); j <= std::min(tilesY - 1, ty + 1); ++j)
+            for (int i = std::max(0, tx - 1); i <= std::min(tilesX - 1, tx + 1); ++i)
+                lo = std::min(lo, low[std::size_t(j) * tilesX + i]);
+        return lo;
+    }
+    std::int32_t highAround(int tx, int ty) const {
+        std::int32_t hi = std::numeric_limits<std::int32_t>::min();
+        for (int j = std::max(0, ty - 1); j <= std::min(tilesY - 1, ty + 1); ++j)
+            for (int i = std::max(0, tx - 1); i <= std::min(tilesX - 1, tx + 1); ++i)
+                hi = std::max(hi, high[std::size_t(j) * tilesX + i]);
+        return hi;
+    }
+    bool at(int x, int y) const { return still[std::size_t(y / kTile) * tilesX + x / kTile] != 0; }
+};
 template<class F> std::int64_t interpolateProfile(int count,std::int64_t position,F value) {
     if (count==1) return value(0);
     constexpr std::int64_t span=kMetresPerCell,span2=span*span,span3=span2*span;
@@ -140,6 +191,18 @@ core::Fixed TerrainFoundation::sample(Fixed x,Fixed y,TerrainStage stage) const 
                         : sampleShifted<-1>(*this,x,y,stage);
 }
 
+std::pair<std::int32_t,std::int32_t> TerrainFoundation::heightRange() const {
+    std::pair<std::int32_t,std::int32_t> r{0,0};
+    bool any=false;
+    for (const auto& plane:heightDm) {
+        if (plane.empty()) continue;
+        const auto [low,high]=plane.range();
+        r=any?std::pair{std::min(r.first,low),std::max(r.second,high)}:std::pair{low,high};
+        any=true;
+    }
+    return r;
+}
+
 bool TerrainFoundation::needsDetail(int minX,int minY,int maxX,int maxY) const {
     for (int y=std::max(0,minY/512);y<=std::min(pageRows-1,maxY/512);++y)
         for (int x=std::max(0,minX/512);x<=std::min(pageColumns-1,maxX/512);++x)
@@ -158,14 +221,19 @@ std::shared_ptr<const TerrainFoundation> buildTerrainFoundation(
     // two-thousand-kilometre one a billion, and the answer to both was that the
     // world could not be made. A coarser authority over a big world is worth
     // having; refusing to build one is not.
-    f->step=foundationStepFor(std::int64_t(world.width)*kMetresPerCell,
-                              std::int64_t(world.height)*kMetresPerCell);
+    f->step=params.foundationStep>0 ? std::max(kFinestFoundationStep,int(params.foundationStep)) :
+        foundationStepFor(std::int64_t(world.width)*kMetresPerCell,std::int64_t(world.height)*kMetresPerCell);
     const int step=f->step;
     f->stepShift=0;
     while ((1 << f->stepShift) < step) ++f->stepShift;
     f->columns=int((std::int64_t(world.width)*kMetresPerCell+step-1)/step+1);
     f->rows=int((std::int64_t(world.height)*kMetresPerCell+step-1)/step+1);
     const auto count=std::size_t(f->columns)*f->rows;
+    // Worked out densely - a run is bounded by the budget - and kept
+    // sparsely at the end, where only land and its shore are held.
+    std::array<std::vector<std::int32_t>,5> planes;
+    std::vector<std::int32_t> receiverOf;
+    std::vector<std::uint32_t> accumulationOf;
     auto start=std::chrono::steady_clock::now();
     const auto finish=[&](int stage) {
         const auto now=std::chrono::steady_clock::now();
@@ -173,12 +241,18 @@ std::shared_ptr<const TerrainFoundation> buildTerrainFoundation(
     };
     // Calibrate against the un-eroded peak, not the lower thermal peak: clipping
     // to the latter flattened the very summits that erosion needs to dissect.
-    const int peak=std::max({highest,*std::max_element(world.macroHeightField.begin(),world.macroHeightField.end()),
+    // A region made by hand is not stretched to the world's tallest peak: its
+    // highest point is whatever it was made to be, on a fixed scale - a
+    // pinned coast with no mountains painted comes out as low country, and
+    // what the painted ranges raise stands as high as they raise it.
+    constexpr int kAuthoredReliefSpan=2400;
+    const int peak=params.authored ? seaLevel+kAuthoredReliefSpan :
+        std::max({highest,*std::max_element(world.macroHeightField.begin(),world.macroHeightField.end()),
         *std::max_element(world.primaryHeightField.begin(),world.primaryHeightField.end())});
     constexpr std::int64_t referencePeakDm=255*kMetresPerElevationStep*10;
     constexpr std::int64_t foothillDm=3000;
     for (int stage=0;stage<2;++stage) {
-        auto& out=f->heightDm[stage]; out.resize(count);
+        auto& out=planes[stage]; out.resize(count);
         std::vector<std::int32_t> macro(world.cells.size());
         const auto& source=stage==0?world.primaryHeightField:world.macroHeightField;
         for (std::size_t i=0;i<macro.size();++i) {
@@ -203,14 +277,64 @@ std::shared_ptr<const TerrainFoundation> buildTerrainFoundation(
                 [&](int row){return horizontal[std::size_t(row)*f->columns+x];})/256); });
         finish(stage);
     }
+    // An imported region (world_import.hpp): its ground is the skeleton, read
+    // at the lattice itself rather than through the macro cells, which hold
+    // it only at half its resolution.
+    if (params.imported) {
+        const ImportedGround& g=*params.imported;
+        rows(f->rows,[&](int y) { for (int x=0;x<f->columns;++x) {
+            const auto i=std::size_t(y)*f->columns+x;
+            planes[0][i]=planes[1][i]=g.heightAt(std::int64_t(x)*step,std::int64_t(y)*step);
+        }});
+    }
     // Symmetric eight-neighbour flux. Each undirected transfer is evaluated
     // identically at both ends; Jacobi updates conserve mass and cannot race.
-    auto& thermal=f->heightDm[2]; thermal=f->heightDm[1];
+    auto& thermal=planes[2]; thermal=planes[1];
     const auto before=thermal;
     std::vector<std::int32_t> next(count);
-    for (int pass=0;pass<std::clamp(params.erosionPasses,0,24);++pass) {
+    // How long each place has weathered, when the world is built region by
+    // region (world_layout.hpp): the passes below run as many times as the
+    // most weathered place asks, and a place takes part in as many of them
+    // as its own region does - fractionally across a border band - or as the
+    // weathering layer says where that was painted.
+    std::vector<float> weathering;
+    int passes=std::clamp(params.erosionPasses,0,24);
+    if (params.layout) {
+        const std::vector<float> perCell=dialCells(*params.layout,LayerId::Weathering);
+        weathering.resize(count);
+        for (std::size_t i=0;i<count;++i) {
+            const int mx=std::min(world.width-1,int(std::int64_t(i%f->columns)*step/kMetresPerCell));
+            const int my=std::min(world.height-1,int(std::int64_t(i/f->columns)*step/kMetresPerCell));
+            weathering[i]=perCell[std::size_t(my)*world.width+mx];
+            passes=std::max(passes,std::min(24,int(std::ceil(weathering[i]))));
+        }
+    }
+    // And an imported erosion mask says how much of that each place takes:
+    // at rest (0.5) what the dials give, none at 0, twice as much at 1.
+    if (params.imported && !params.imported->erosion.empty()) {
+        if (weathering.empty()) weathering.assign(count,float(passes));
+        passes=0;
+        for (std::size_t i=0;i<count;++i) {
+            const auto share=params.imported->maskAt(params.imported->erosion,
+                std::int64_t(i%f->columns)*step,std::int64_t(i/f->columns)*step,128);
+            weathering[i]=std::min(24.0f,weathering[i]*float(share)/127.5f);
+            passes=std::max(passes,int(std::ceil(weathering[i])));
+        }
+    }
+    const auto takes=[&](std::size_t i,int pass) {
+        return weathering.empty() ? 1.0f : std::clamp(weathering[i]-float(pass),0.0f,1.0f);
+    };
+    Quiet quiet(f->columns,f->rows);
+    // The smallest difference between neighbours that moves anything: the
+    // orthogonal threshold below (the diagonal one is larger).
+    const int flatEnough=int(step*6.745+0.5);
+    for (int pass=0;pass<passes;++pass) {
+        quiet.measure(thermal);
+        for (int ty=0;ty<quiet.tilesY;++ty) for (int tx=0;tx<quiet.tilesX;++tx)
+            quiet.still[std::size_t(ty)*quiet.tilesX+tx]=quiet.highAround(tx,ty)-quiet.lowAround(tx,ty)<=flatEnough;
         rows(f->rows,[&](int y) { for (int x=0;x<f->columns;++x) {
             const auto i=std::size_t(y)*f->columns+x; int change=0;
+            if (quiet.at(x,y)) { next[i]=thermal[i]; continue; }
             for (int d=0;d<8;++d) {
                 const int nx=x+dx[d],ny=y+dy[d];
                 if (nx<0 || ny<0 || nx>=f->columns || ny>=f->rows) continue;
@@ -229,7 +353,8 @@ std::shared_ptr<const TerrainFoundation> buildTerrainFoundation(
                 // the diagonal is longer by root two.
                 const int span=dx[d] && dy[d]?int(step*6.745*1.41421356+0.5)
                                              :int(step*6.745+0.5);
-                const int flux=std::max(0,std::abs(difference)-span)/16;
+                const int flux=int(float(std::max(0,std::abs(difference)-span)/16)*
+                                   std::min(takes(i,pass),takes(j,pass)));
                 change+=difference>0?flux:-flux;
             }
             next[i]=thermal[i]+change;
@@ -242,20 +367,36 @@ std::shared_ptr<const TerrainFoundation> buildTerrainFoundation(
     // gullies, no scree and no shape.
     const auto layBack=[&](std::vector<std::int32_t>& field) {
         constexpr int kRings=6;
+        static_assert(kRings<Quiet::kTile, "the quiet test reads one square around");
         const int span=int(step*6.745+0.5);   // tan(34 deg), decimetres
-        for (int pass=0;pass<std::clamp(params.erosionPasses,0,24);++pass) {
+        // How far each ring reaches, worked out once rather than a square
+        // root per neighbour per sample per pass.
+        std::array<int,(2*kRings+1)*(2*kRings+1)> reaches{};
+        for (int j=-kRings;j<=kRings;++j) for (int k=-kRings;k<=kRings;++k)
+            reaches[std::size_t((j+kRings)*(2*kRings+1)+(k+kRings))]=int(std::sqrt(double(j*j+k*k))*span+0.5);
+        for (int pass=0;pass<passes;++pass) {
             bool moved=false;
+            // A sample is cut back only to a neighbour lower than it by more
+            // than the reach between them, and no reach is shorter than one
+            // span: a square no higher than the lowest ground around it plus
+            // a span stays as it is.
+            quiet.measure(field);
+            for (int ty=0;ty<quiet.tilesY;++ty) for (int tx=0;tx<quiet.tilesX;++tx)
+                quiet.still[std::size_t(ty)*quiet.tilesX+tx]=
+                    quiet.high[std::size_t(ty)*quiet.tilesX+tx]<=quiet.lowAround(tx,ty)+span;
             rows(f->rows,[&](int y) { for (int x=0;x<f->columns;++x) {
                 const auto i=std::size_t(y)*f->columns+x;
+                if (quiet.at(x,y)) { next[i]=field[i]; continue; }
                 int limit=field[i];
                 for (int j=-kRings;j<=kRings;++j) for (int k=-kRings;k<=kRings;++k) {
                     if (!j && !k) continue;
                     const int nx=x+k,ny=y+j;
                     if (nx<0 || ny<0 || nx>=f->columns || ny>=f->rows) continue;
-                    const int reach=int(std::sqrt(double(j*j+k*k))*span+0.5);
+                    const int reach=reaches[std::size_t((j+kRings)*(2*kRings+1)+(k+kRings))];
                     limit=std::min(limit,field[std::size_t(ny)*f->columns+nx]+reach);
                 }
-                next[i]=limit;
+                const float share=takes(i,pass);
+                next[i]=share>=1.0f ? limit : field[i]+int(float(limit-field[i])*share);
             }});
             for (std::size_t i=0;i<count;++i) moved=moved || next[i]!=field[i];
             field.swap(next);
@@ -296,7 +437,7 @@ std::shared_ptr<const TerrainFoundation> buildTerrainFoundation(
         if (moved>10) { ++f->thermalCells; f->thermalMetres+=moved/10.0; }
     }
     finish(2);
-    auto& volcanoes=f->heightDm[3]; volcanoes=thermal;
+    auto& volcanoes=planes[3]; volcanoes=thermal;
     // The legacy object now supplies only complete analytic volcanic edifices.
     // Its macro contribution is NOT added again from the already changed cells.
     if (world.hybridTerrain) rows(f->rows,[&](int y) { for (int x=0;x<f->columns;++x) {
@@ -308,7 +449,7 @@ std::shared_ptr<const TerrainFoundation> buildTerrainFoundation(
     // smooth even cone, which is what every one of them was.
     layBack(volcanoes);
     finish(3);
-    auto& slopes=f->heightDm[4]; slopes=volcanoes;
+    auto& slopes=planes[4]; slopes=volcanoes;
 
     // Drain the hollows that nothing meant to make.
     //
@@ -334,7 +475,7 @@ std::shared_ptr<const TerrainFoundation> buildTerrainFoundation(
     // anything having been done to them. A fill that ran anyway would be a
     // hidden pass, which is the one thing the staged foundation exists not to
     // have.
-    if (params.erosionPasses>0) {
+    if (passes>0) {
         // Sixty metres, not twenty-five.
         //
         // This is the bar for "a hollow nothing meant to make", and it was set
@@ -369,10 +510,18 @@ std::shared_ptr<const TerrainFoundation> buildTerrainFoundation(
                 rim.push({filled[j],std::uint32_t(j)});
             }
         }
+        // Except where a lake was painted (the water layer, WaterPaint::Lake):
+        // that hollow is exactly one somebody meant to make.
+        const auto paintedLake=[&](std::size_t i) {
+            if (world.waterPaintField.size()!=world.cells.size()) return false;
+            const int mx=std::min(world.width-1,int(std::int64_t(i%f->columns)*step/kMetresPerCell));
+            const int my=std::min(world.height-1,int(std::int64_t(i/f->columns)*step/kMetresPerCell));
+            return world.waterPaintField[std::size_t(my)*world.width+mx]==std::uint8_t(WaterPaint::Lake);
+        };
         for (std::size_t i=0;i<count;++i)
-            if (filled[i]-slopes[i]<=kFillLimitDm) slopes[i]=filled[i];
+            if (filled[i]-slopes[i]<=kFillLimitDm && !paintedLake(i)) slopes[i]=filled[i];
     }
-    f->receiver.resize(count); f->accumulation.resize(count);
+    receiverOf.resize(count); accumulationOf.resize(count);
     std::vector<std::uint8_t> incoming(count);
     std::vector<std::uint32_t> order; order.reserve(count);
     const auto route=[&] {
@@ -386,44 +535,80 @@ std::shared_ptr<const TerrainFoundation> buildTerrainFoundation(
                           distance=dx[d] && dy[d]?int(step*1.41421356+0.5):step;
                 if (drop>0 && drop*length>best*distance) { best=drop; length=distance; sink=int(j); }
             }
-            f->receiver[i]=sink;
+            receiverOf[i]=sink;
         }});
         std::fill(incoming.begin(),incoming.end(),0);
-        std::fill(f->accumulation.begin(),f->accumulation.end(),1);
-        for (auto sink:f->receiver) if (sink>=0) ++incoming[std::size_t(sink)];
+        std::fill(accumulationOf.begin(),accumulationOf.end(),1);
+        for (auto sink:receiverOf) if (sink>=0) ++incoming[std::size_t(sink)];
         order.clear();
         for (std::size_t i=0;i<count;++i) if (!incoming[i]) order.push_back(std::uint32_t(i));
         // Topological accumulation is O(N), not a global height sort. It is
         // deliberately ordered, while independent stencil passes use 6 workers.
         for (std::size_t n=0;n<order.size();++n) {
-            const auto i=order[n]; const int sink=f->receiver[i];
+            const auto i=order[n]; const int sink=receiverOf[i];
             if (sink<0) continue;
-            f->accumulation[std::size_t(sink)]+=f->accumulation[i];
+            accumulationOf[std::size_t(sink)]+=accumulationOf[i];
             if (--incoming[std::size_t(sink)]==0) order.push_back(std::uint32_t(sink));
         }
     };
     // Re-route after each incision, rather than stamping independent fractals.
     // Dissolved/suspended material reaches the actual sink, making aprons in
     // closed depressions. Ocean sinks export it beyond this height field.
-    const int erosionPasses=std::clamp(params.erosionPasses,0,8);
+    const int erosionPasses=std::min(passes,8);
     for (int pass=0;pass<erosionPasses;++pass) {
         route(); next=slopes;
         std::vector<std::int64_t> sediment(count,0);
         for (auto i:order) {
-            const int sink=f->receiver[i];
+            const int sink=receiverOf[i];
             if (slopes[i]<=0) continue;
             if (sink<0) { next[i]+=int(std::min<std::int64_t>(sediment[i],200)); continue; }
             const int drop=std::max(0,slopes[i]-slopes[std::size_t(sink)]);
             const int mx=std::min(world.width-1,int(std::int64_t(i%f->columns)*step/kMetresPerCell));
             const int my=std::min(world.height-1,int(std::int64_t(i/f->columns)*step/kMetresPerCell));
             const int resistance=world.erosionResistanceField[std::size_t(my)*world.width+mx];
-            const auto root=integerRoot(std::uint64_t(f->accumulation[i])<<16);
-            const int removed=std::min({drop/4,250,int(root*drop*
-                (280-std::clamp(resistance,0,255))/(256*18000))});
+            const auto root=integerRoot(std::uint64_t(accumulationOf[i])<<16);
+            const int removed=int(float(std::min({drop/4,250,int(root*drop*
+                (280-std::clamp(resistance,0,255))/(256*18000))}))*takes(i,pass));
             next[i]-=removed;
             sediment[std::size_t(sink)]+=sediment[i]+removed;
         }
         slopes.swap(next);
+    }
+    // Land painted by hand stays land at the height it was promised: the
+    // relief and the torn coast may shape it, not drown it (the Coast &
+    // relief stage's floor). Wherever the painted mask says land, no stage
+    // of the ground ends lower.
+    // Neither holds for an imported region: its coast is the skeleton's.
+    if (params.authored && !params.imported && params.authoring.minLandMetres > 0) {
+        const int floor = int(std::lround(params.authoring.minLandMetres * 10.0));
+        for (int y = 0; y < f->rows; ++y)
+            for (int x = 0; x < f->columns; ++x) {
+                const int mx = std::min(world.width - 1, int(std::int64_t(x) * step / kMetresPerCell));
+                const int my = std::min(world.height - 1, int(std::int64_t(y) * step / kMetresPerCell));
+                if (world.initialLandMask[std::size_t(my) * world.width + mx] == 0) continue;
+                const auto i = std::size_t(y) * f->columns + x;
+                for (int stage = 2; stage < 5; ++stage) planes[stage][i] = std::max(planes[stage][i], floor);
+            }
+    }
+    // And the sea painted by hand stays sea: the lattice's own relief under it
+    // came up through the water in flat plates of land at the floor above,
+    // kilometres from any stroke, where the macro map and every page say sea.
+    // Held under the water at every stage, and down to the open sea's sixty
+    // metres within a kilometre of the coast: that is what the ground reads
+    // where no page is (a page is kept only within half a kilometre of land),
+    // and a shelf wider than that is cut off where the pages stop, in steps.
+    if (params.authored && !params.imported) {
+        for (int y = 0; y < f->rows; ++y)
+            for (int x = 0; x < f->columns; ++x) {
+                const int mx = std::min(world.width - 1, int(std::int64_t(x) * step / kMetresPerCell));
+                const int my = std::min(world.height - 1, int(std::int64_t(y) * step / kMetresPerCell));
+                const auto cell = std::size_t(my) * world.width + mx;
+                if (world.initialLandMask[cell] != 0) continue;
+                const int away = world.distanceToCoast.size() > cell ? world.distanceToCoast[cell] : 40;
+                const int ceiling = -std::min(600, 20 + away * 300);
+                const auto i = std::size_t(y) * f->columns + x;
+                for (auto& plane : planes) if (i < plane.size()) plane[i] = std::min(plane[i], ceiling);
+            }
     }
     route(); // published graph describes the eroded surface, not its predecessor
     f->pageColumns=(world.width*kMetresPerCell+511)/512;
@@ -431,7 +616,7 @@ std::shared_ptr<const TerrainFoundation> buildTerrainFoundation(
     f->detailPages.assign(std::size_t(f->pageColumns)*f->pageRows,0);
     std::vector<std::uint32_t> basin(count);
     for (auto it=order.rbegin();it!=order.rend();++it)
-        basin[*it]=f->receiver[*it]<0?*it:basin[std::size_t(f->receiver[*it])];
+        basin[*it]=receiverOf[*it]<0?*it:basin[std::size_t(receiverOf[*it])];
     for (int y=0;y<f->rows;++y) for (int x=0;x<f->columns;++x) {
         const auto i=std::size_t(y)*f->columns+x;
         if (slopes[i]<=0) continue;
@@ -457,9 +642,15 @@ std::shared_ptr<const TerrainFoundation> buildTerrainFoundation(
             if (slopes[j]>0 && basin[i]!=basin[j]) f->divides.push_back({std::uint32_t(i),std::uint32_t(j)});
         }
     }
+    for (std::size_t stage=0;stage<planes.size();++stage)
+        f->heightDm[stage]=TerrainFoundation::Plane::sparse(planes[stage],kFoundationSeaFloorDm);
+    for (std::size_t stage=0;stage+1<planes.size();++stage) f->heightDm[stage].shareEqualChunks(f->heightDm[4]);
+    f->receiver=CellField<std::int32_t>::sparse(receiverOf,-1);
+    f->accumulation=CellField<std::uint32_t>::sparse(accumulationOf,1);
     // Climate, standing water and the persistent river graph must see the
     // post-erosion base. Macro cells are a summary, never the H64 height source.
     f->applyTo(world);
+    if (params.imported) f->applyLowestTo(world);
     finish(4);
     return f;
 }
@@ -473,7 +664,82 @@ void TerrainFoundation::applyTo(WorldMapData& world) const {
     }
 }
 
+void TerrainFoundation::applyLowestTo(WorldMapData& world) const {
+    // An imported skeleton carries valleys narrower than a macro cell, and a
+    // cell read at one corner cuts such a valley into a string of closed
+    // hollows - every one a lake to the drainage (8885 of them on one
+    // continent). The drainage wants the lowest ground in the cell, so a land
+    // cell is the lowest land of the lattice inside it; which cells are sea
+    // stays the corner's.
+    const int per=std::max(1,kMetresPerCell/step);
+    const auto& slopePlane=heightDm[4];
+    for (int y=0;y<world.height;++y) for (int x=0;x<world.width;++x) {
+        auto& cell=world.at({x,y});
+        if (cell.sea) continue;
+        std::int32_t lowest=std::numeric_limits<std::int32_t>::max();
+        for (int j=0;j<per;++j) for (int i=0;i<per;++i) {
+            const int px=std::min(columns-1,x*per+i),py=std::min(rows-1,y*per+j);
+            const auto h=slopePlane[std::size_t(py)*columns+px];
+            if (h>0) lowest=std::min(lowest,h);
+        }
+        if (lowest==std::numeric_limits<std::int32_t>::max()) continue;
+        cell.elevation=std::uint8_t(std::clamp<std::int64_t>(
+            (std::int64_t(lowest)+kMetresPerElevationStep*5)/(kMetresPerElevationStep*10),1,255));
+    }
+}
+
 std::uint64_t TerrainFoundation::fingerprint() const {
+    if (!sealed_) return computeFingerprint();
+    if (canonical_.ready.load(std::memory_order_acquire)) return canonical_.value.load(std::memory_order_relaxed);
+    // Two threads asking at once both work it out and store the same number.
+    const auto value = computeFingerprint();
+    canonical_.value.store(value, std::memory_order_relaxed);
+    canonical_.ready.store(true, std::memory_order_release);
+    return value;
+}
+
+std::uint64_t TerrainFoundation::contentKey() const {
+    return sealed_ ? contentKey_ : computeContentKey();
+}
+
+void TerrainFoundation::seal() {
+    sealed_ = false;
+    canonical_.ready.store(false);
+    contentKey_ = computeContentKey();
+    sealed_ = true;
+}
+
+std::uint64_t TerrainFoundation::computeContentKey() const {
+    // Four independent multiply-xor lanes over whole values, folded at the end:
+    // the multiplies overlap instead of queueing behind one another byte by
+    // byte, as FNV's must.
+    constexpr std::uint64_t prime = 0x9e3779b97f4a7c15ull;
+    std::uint64_t lane[4]{0x243f6a8885a308d3ull, 0x13198a2e03707344ull, 0xa4093822299f31d0ull, 0x082efa98ec4e6c89ull};
+    const auto mix = [](std::uint64_t h, std::uint64_t v) { return (h ^ v) * prime; };
+    const auto field = [&](const auto& values) {
+        lane[0] = mix(lane[0], values.size());
+        const std::size_t n = values.size(), whole = n & ~std::size_t(3);
+        for (std::size_t i = 0; i < whole; i += 4) {
+            lane[0] = mix(lane[0], std::uint64_t(std::uint32_t(values[i])));
+            lane[1] = mix(lane[1], std::uint64_t(std::uint32_t(values[i + 1])));
+            lane[2] = mix(lane[2], std::uint64_t(std::uint32_t(values[i + 2])));
+            lane[3] = mix(lane[3], std::uint64_t(std::uint32_t(values[i + 3])));
+        }
+        for (std::size_t i = whole; i < n; ++i) lane[i & 3] = mix(lane[i & 3], std::uint64_t(std::uint32_t(values[i])));
+    };
+    lane[0] = mix(lane[0], std::uint64_t(std::uint32_t(columns)) << 32 | std::uint32_t(rows));
+    lane[1] = mix(lane[1], std::uint64_t(std::uint32_t(pageColumns)) << 32 | std::uint32_t(pageRows));
+    lane[2] = mix(lane[2], std::uint64_t(std::uint32_t(step)));
+    for (const auto& heights : heightDm) field(heights);
+    field(receiver); field(accumulation); field(detailPages);
+    lane[3] = mix(lane[3], divides.size());
+    for (const auto edge : divides) lane[3] = mix(lane[3], std::uint64_t(edge.a) << 32 | edge.b);
+    std::uint64_t hash = 0;
+    for (const auto h : lane) hash = core::splitmix64(hash ^ h);
+    return hash;
+}
+
+std::uint64_t TerrainFoundation::computeFingerprint() const {
     std::uint64_t hash=14695981039346656037ull;
     const auto add=[&](std::uint64_t v) {
         for (int b=0;b<8;++b) { hash^=(v>>(8*b))&255; hash*=1099511628211ull; }
@@ -487,8 +753,10 @@ std::uint64_t TerrainFoundation::fingerprint() const {
 }
 
 std::string saveTerrainFoundation(const TerrainFoundation& f) {
+    nlohmann::json planes=nlohmann::json::array();
+    for (const auto& plane:f.heightDm) planes.push_back(plane.dense());
     nlohmann::json j{{"version",1},{"columns",f.columns},{"rows",f.rows},
-        {"height_dm",f.heightDm},{"receiver",f.receiver},{"accumulation",f.accumulation},
+        {"height_dm",planes},{"receiver",f.receiver.dense()},{"accumulation",f.accumulation.dense()},
         {"detail_pages",f.detailPages},{"fingerprint",f.fingerprint()},{"divides",nlohmann::json::array()}};
     for (auto edge:f.divides) j["divides"].push_back({edge.a,edge.b});
     return j.dump();
@@ -513,22 +781,30 @@ std::shared_ptr<const TerrainFoundation> loadTerrainFoundation(const std::string
     const auto count=std::size_t(columns*rows);
     const auto require=[](bool valid) { if (!valid) throw std::runtime_error("invalid H64 foundation snapshot"); };
     require(j.at("height_dm").size()==f->heightDm.size());
+    std::array<std::vector<std::int32_t>,5> planes;
     for (std::size_t s=0;s<f->heightDm.size();++s) {
         const auto& values=j.at("height_dm")[s]; require(values.size()==count);
+        planes[s].reserve(count);
         for (const auto& v:values) {
             require(v.is_number_integer()); const auto h=v.get<std::int64_t>();
-            require(h>=-30000 && h<=60000); f->heightDm[s].push_back(int(h));
+            require(h>=-30000 && h<=60000); planes[s].push_back(int(h));
         }
     }
     require(j.at("receiver").size()==count && j.at("accumulation").size()==count);
+    std::vector<std::int32_t> receiver; std::vector<std::uint32_t> accumulation;
+    receiver.reserve(count); accumulation.reserve(count);
     for (std::size_t i=0;i<count;++i) {
         const auto r=j.at("receiver")[i].get<std::int64_t>();
         const auto a=j.at("accumulation")[i].get<std::int64_t>();
         require(r>=-1 && r<std::int64_t(count) && a>=1 && a<=std::int64_t(count));
         if (r>=0) require(std::abs(int(i%columns)-int(r%columns))<=1 &&
-            std::abs(int(i/columns)-int(r/columns))<=1 && f->heightDm[4][i]>f->heightDm[4][std::size_t(r)]);
-        f->receiver.push_back(int(r)); f->accumulation.push_back(std::uint32_t(a));
+            std::abs(int(i/columns)-int(r/columns))<=1 && planes[4][i]>planes[4][std::size_t(r)]);
+        receiver.push_back(int(r)); accumulation.push_back(std::uint32_t(a));
     }
+    for (std::size_t s=0;s<planes.size();++s) f->heightDm[s]=TerrainFoundation::Plane::sparse(planes[s],kFoundationSeaFloorDm);
+    for (std::size_t s=0;s+1<planes.size();++s) f->heightDm[s].shareEqualChunks(f->heightDm[4]);
+    f->receiver=CellField<std::int32_t>::sparse(receiver,-1);
+    f->accumulation=CellField<std::uint32_t>::sparse(accumulation,1);
     require(j.at("detail_pages").size()==std::size_t(f->pageColumns)*f->pageRows);
     for (const auto& value:j.at("detail_pages")) {
         const int v=value.get<int>(); require(v==0 || v==1); f->detailPages.push_back(std::uint8_t(v));

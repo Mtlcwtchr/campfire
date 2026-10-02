@@ -203,7 +203,7 @@ bool RenderPipeline::run(Frame& frame) {
 
         SDL_GPUDepthStencilTargetInfo depth{};
         depth.texture = frame.depth;
-        depth.clear_depth = 1.0f;
+        depth.clear_depth = 0.0f;   // reversed depth: nought is the far plane
         depth.load_op = info.clearDepth ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
         depth.store_op = SDL_GPU_STOREOP_STORE;
         depth.stencil_load_op = SDL_GPU_LOADOP_DONT_CARE;

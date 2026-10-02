@@ -1,5 +1,6 @@
 #pragma once
 #include "engine/render/level_of_detail.hpp"
+#include "engine/biomes/registry.hpp"
 #include "game/world/ecology.hpp"
 #include <array>
 #include <compare>
@@ -25,6 +26,15 @@ struct Site {
     // Trees do not stand on dune sand or bare rock whatever the climate says.
     double sand=0, rock=0, marsh=0, snow=0;
     bool hasMaterials=false;
+    // The terrain category's biomes here (engine/biomes), resolved through
+    // the category where a layer says 0, and the forest_bias channel their
+    // density follows. Null: the engine's own scatter, exactly as before.
+    const engine::biomes::ForestBiome* forestBiome=nullptr;
+    const engine::biomes::DecorBiome* decorBiome=nullptr;
+    const engine::biomes::Registry* registry=nullptr;
+    double forestBias=0.5;
+    // A density brush's multiplier here (engine/biomes DetailEdits); 1: none.
+    double detailDensity=1.0;
 };
 struct Object {
     std::uint64_t id=0;
@@ -36,6 +46,9 @@ struct Object {
 struct Scatter {
     std::vector<Object> objects;
     std::uint64_t revision=0;
+    // The edit layer's revision when the scatter began to read the ground
+    // (edit_layer.hpp): objects stand on the ground as it was then.
+    std::uint64_t ground=0;
     std::size_t waterTilesSkipped=0,sampled=0;
     std::array<std::size_t,kModels.size()> populations{};
 };

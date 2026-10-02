@@ -1,9 +1,16 @@
 #include "game/render/world_renderer.hpp"
 
+#include "engine/biomes/registry.hpp"
+#include "engine/biomes/shader_code.hpp"
+
 #include <algorithm>
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
+#include <iostream>
 #include <nlohmann/json.hpp>
 #include "engine/pipeline/calc_pipeline.hpp"
 #include "engine/render/render_pipeline.hpp"
@@ -19,6 +26,8 @@
 #include "game/render/passes/terrain_pass.hpp"
 #include "game/render/passes/water_pass.hpp"
 #include "game/render/passes/weather_pass.hpp"
+#include "game/render/passes/hold_pass.hpp"
+#include "game/render/passes/sketch_pass.hpp"
 #include "game/render/shadow_clipmap.hpp"
 #include "game/world/foliage_catalog.hpp"
 #include "game/world/ring_mesh.hpp"
@@ -32,6 +41,14 @@ bool WorldRenderer::open(SDL_Window* window, const std::filesystem::path& assets
                          int headlessWidth, int headlessHeight) {
     source_ = &source;
     overlay_ = std::move(overlay);
+    {
+        // The terrain categories (engine/biomes): read, checked, made active
+        // and their shader code written before the first pipeline is built.
+        const auto dir = engine::biomes::defaultDirectory();
+        biomesWritten_ = engine::biomes::registryWritten(dir);
+        const auto started = engine::biomes::startUp(dir, assets.parent_path() / "shaders", assets.parent_path());
+        for (const auto& problem : started.problems) std::cerr << "terrain categories: " << problem << "\n";
+    }
     std::filesystem::path content = "content";
     for (int up = 0; up < 5 && !std::filesystem::exists(content); ++up) content = ".." / content;
     ground_ = content::loadGroundMaterials(content / "config" / "ground.json");
@@ -41,6 +58,41 @@ bool WorldRenderer::open(SDL_Window* window, const std::filesystem::path& assets
                                     std::uint32_t(std::max(1, headlessHeight)), assets) &&
                synchronize();
     return device_.open(window, assets) && synchronize();
+}
+
+void WorldRenderer::holdThePicture() {
+    // Only a picture there is: the copy between the surface and the post
+    // stages is taken when the grade runs, and it is the world without the
+    // interface, which goes on being drawn live over whatever is held.
+    if (!runner_ || !graded_) return;
+    const auto& targets = runner_->targets();
+    if (!targets.grab() || !targets.width() || !targets.height()) return;
+    SDL_GPUTextureCreateInfo info{};
+    info.type = SDL_GPU_TEXTURETYPE_2D;
+    info.format = engine::Device::kColourFormat;
+    info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
+    info.width = targets.width();
+    info.height = targets.height();
+    info.layer_count_or_depth = 1;
+    info.num_levels = 1;
+    info.sample_count = SDL_GPU_SAMPLECOUNT_1;
+    engine::Texture held = device_.makeTexture(info);
+    SDL_GPUCommandBuffer* commands = held ? SDL_AcquireGPUCommandBuffer(device_.handle()) : nullptr;
+    if (!commands) return;
+    SDL_GPUBlitInfo blit{};
+    blit.source.texture = targets.grab();
+    blit.source.w = targets.width();
+    blit.source.h = targets.height();
+    blit.destination.texture = held.get();
+    blit.destination.w = targets.width();
+    blit.destination.h = targets.height();
+    blit.load_op = SDL_GPU_LOADOP_DONT_CARE;
+    blit.filter = SDL_GPU_FILTER_NEAREST;
+    SDL_BlitGPUTexture(commands, &blit);
+    if (!SDL_SubmitGPUCommandBuffer(commands)) return;
+    held_ = std::move(held);
+    heldFrames_ = 0;
+    heldView_ = drawnView_;   // the view the copied frame was drawn from
 }
 
 void WorldRenderer::forgetTheWorld() {
@@ -57,8 +109,9 @@ void WorldRenderer::forgetTheWorld() {
 bool WorldRenderer::synchronize() {
     const auto next = source_->read();
     if (next && next == world_ && runner_ && builtSamples_ == wantedSamples_ &&
-        builtHalfTextures_ == wantedHalfTextures_) return true;
+        builtHalfTextures_ == wantedHalfTextures_ && !rebuildShaders_) return true;
     if (!next) { device_.fail("world renderer requires a published world"); return false; }
+    holdThePicture();
     forgetTheWorld();
     builtSamples_ = wantedSamples_;
     builtHalfTextures_ = wantedHalfTextures_;
@@ -101,15 +154,24 @@ bool WorldRenderer::synchronize() {
     std::vector<std::string> materials;
     for (std::size_t i = 0; i < content::kBlendedMaterials && i < ground_.size(); ++i)
         materials.push_back("ground/" + ground_[i].name);
-    // Layer order is the shader's (terrain_material.hlsli, GROUND_LAYERS):
-    // the six blended classes first, then their climate/water/slope variants.
-    // All Poly Haven scans (CC0), see tools/terrain_set_polyhaven.py.
+    // Layer order is the shader's (terrain_layers.hlsli, GROUND_LAYERS): the
+    // six blended classes first, then their climate/water/slope variants, then
+    // the terrain categories' own grounds - the texture catalogue of
+    // content/config/terrain/layers.json (engine/biomes). All Poly Haven scans
+    // (CC0), see tools/terrain_set_polyhaven.py.
     std::vector<std::string> maps;
-    for (const char* asset : {"leafy_grass", "dirt_floor", "red_sand", "rocks_ground_05", "brown_mud_02",
-                              "snow_02", "withered_grass", "forest_leaves_02", "coast_sand_04",
-                              "damp_beach_sand", "sand_01", "sandy_gravel_02", "rock_face_03", "mossy_rock",
-                              "cliff_side", "mud_cracked_dry_riverbed_002"})
-        maps.push_back(std::string("../terrain/ph/") + asset + "/ph_" + asset);
+    {
+        std::vector<std::string> names;
+        if (const auto registry = engine::biomes::active())
+            for (const auto& layer : registry->textureLayers()) names.push_back(layer.name);
+        if (names.size() < std::size(engine::biomes::kBuiltInLayers)) {
+            names.assign(std::begin(engine::biomes::kBuiltInLayers), std::end(engine::biomes::kBuiltInLayers));
+            for (const char* own : {"moon_dusted_04", "rubble", "mud_forest", "brown_mud_leaves_01", "burned_ground_01",
+                                    "red_laterite_soil_stones"})
+                names.push_back(own);
+        }
+        for (const auto& asset : names) maps.push_back("../terrain/ph/" + asset + "/ph_" + asset);
+    }
     auto* terrain = &collect_->gpuTerrain();
     drawing->add(std::make_unique<TerrainPass>(cache_, std::move(materials), maps, climate_, world_->climate(), shadows_->binding(), terrain))
         ->halfTextures(wantedHalfTextures_);
@@ -137,7 +199,42 @@ bool WorldRenderer::synchronize() {
         for (int i : world::foliage::kWildGrassSprites)
             grass.push_back("kenney_foliageSprites/PNG/Shaded/sprite_00" + std::to_string(i) + ".png");
     }
-    std::vector<std::string> spriteImages{grass.front(), grass.back()};
+    // The ground flora after the six grass views (layers 6..15, foliage.hlsl
+    // kCard*): flowers, ferns, reeds, dry and short grass, drawn by
+    // tools/make_foliage_cards.py. Without them the layers repeat the grass,
+    // so the shader's indices always exist.
+    {
+        constexpr std::size_t kFloraCards = 10;
+        const auto flora = device_.assets() / "../generated/foliage_cards";
+        std::ifstream input(flora / "cards.json");
+        const auto list = input ? nlohmann::json::parse(input, nullptr, false) : nlohmann::json();
+        std::vector<std::string> cards;
+        if (list.is_object() && list.contains("cards") && list["cards"].is_array())
+            for (const auto& entry : list["cards"]) {
+                if (!entry.is_string()) break;
+                const std::filesystem::path name(entry.get<std::string>());
+                if (name.empty() || name.has_parent_path() || !std::filesystem::is_regular_file(flora / name)) break;
+                cards.push_back("../generated/foliage_cards/" + name.string());
+            }
+        if (cards.size() != kFloraCards) {
+            std::cerr << "ground flora cards missing (run tools/make_foliage_cards.py); grass stands in\n";
+            cards.clear();
+            for (std::size_t i = 0; i < kFloraCards; ++i) cards.push_back(grass[i % grass.size()]);
+        } else if (list.contains("meadow") && list["meadow"].is_array() && list["meadow"].size() == grass.size()) {
+            // The same six views with their empty texels filled from the
+            // blades, so the mip chain has no dark rim round a far clump.
+            std::vector<std::string> meadow;
+            for (const auto& entry : list["meadow"]) {
+                if (!entry.is_string()) break;
+                const std::filesystem::path name(entry.get<std::string>());
+                if (name.empty() || name.has_parent_path() || !std::filesystem::is_regular_file(flora / name)) break;
+                meadow.push_back("../generated/foliage_cards/" + name.string());
+            }
+            if (meadow.size() == grass.size()) grass = std::move(meadow);
+        }
+        grass.insert(grass.end(), cards.begin(), cards.end());
+    }
+    std::vector<std::string> spriteImages{grass.front(), grass[world::foliage::kWildGrassSprites.size() - 1]};
     foliage_ = drawing->add(std::make_unique<FoliagePass>(cache_, std::move(grass), shadows_->binding(), terrain));
     models_ = drawing->add(std::make_unique<SceneModelsPass>(preparation_->placement, shadows_->binding(), terrain));
     farTrees_ = drawing->add(std::make_unique<FarTreesPass>(shadows_->binding(), terrain));
@@ -152,16 +249,57 @@ bool WorldRenderer::synchronize() {
     drawing->add(std::make_unique<SkyPass>());
     drawing->add(std::make_unique<FrustumPass>());
     drawing->add(std::make_unique<WeatherPass>());
+    drawing->add(std::make_unique<SketchPass>(&sketch_));
+    drawing->add(std::make_unique<HighlightPass>(&highlight_));
+    drawing->add(std::make_unique<HoldPass>(&held_));
     drawing->add(std::make_unique<GradePass>());
     sprites_ = drawing->add(std::make_unique<SpritePass>(spriteQueue_, std::move(spriteImages)));
     if (overlay_) if (auto overlay = overlay_(*terrain)) drawing->add(std::move(overlay));
     render_ = runner_->add(std::move(drawing));
-    if (runner_->build(device_)) return true;
+    const auto shaders = device_.assets().parent_path() / "shaders";
+    if (runner_->build(device_)) {
+        // The categories' generated code built: it is what to fall back to.
+        engine::biomes::markShaderCodeGood(shaders);
+        rebuildShaders_ = false;
+        return true;
+    }
     forgetTheWorld();
+    // Generated code that does not build goes back to the last that did,
+    // once, and the error stays where it was printed.
+    if (!restoredShaders_ && engine::biomes::restoreShaderCode(shaders)) {
+        restoredShaders_ = true;
+        std::cerr << "terrain categories: the generated shader code did not build (" << device_.error()
+                  << "); back to the last that did\n";
+        return synchronize();
+    }
     return false;
 }
 
+void WorldRenderer::pollBiomes() {
+    // A second between looks: a directory of a dozen small files.
+    const auto now = std::chrono::steady_clock::now();
+    if (now - biomesPolled_ < std::chrono::seconds(1)) return;
+    biomesPolled_ = now;
+    const auto dir = engine::biomes::defaultDirectory();
+    const auto written = engine::biomes::registryWritten(dir);
+    if (written == biomesWritten_) return;
+    biomesWritten_ = written;
+    const auto shaders = device_.assets().parent_path() / "shaders";
+    const auto started = engine::biomes::startUp(dir, shaders, device_.assets().parent_path());
+    for (const auto& problem : started.problems) std::cerr << "terrain categories: " << problem << "\n";
+    if (!started.loaded) return;
+    std::cerr << "terrain categories: reloaded" << (started.structureChanged ? " - the shaders build again" : "")
+              << "\n";
+    // Numbers reach the table by themselves (BiomeTextures::refresh); a new
+    // structure is new shader code, built once.
+    if (started.structureChanged) {
+        rebuildShaders_ = true;
+        restoredShaders_ = false;
+    }
+}
+
 bool WorldRenderer::draw(const client::Camera& camera, const WorldRenderSettings& requested) {
+    pollBiomes();
     WorldRenderSettings settings = requested;
     const GraphicsSettings& graphics = settings.graphics;
     if (settings.useGraphics) {
@@ -169,7 +307,7 @@ bool WorldRenderer::draw(const client::Camera& camera, const WorldRenderSettings
         settings.fog = graphics.fog;
         settings.shadows = settings.shadows && graphics.shadows;
         settings.sunDirection = graphics.sunDirection();
-        wantedSamples_ = graphics.antialiasing ? 4 : 1;
+        wantedSamples_ = graphics.antialiasing == 1 ? 4 : 1;
         wantedHalfTextures_ = graphics.terrainTextures == 0;
     }
     // Decisions from the cull camera, pixels from the drawing camera.
@@ -197,6 +335,7 @@ bool WorldRenderer::draw(const client::Camera& camera, const WorldRenderSettings
         if (farTrees_) farTrees_->options(graphics.farTrees, graphics.farTreesStart);
     }
     foliage_->focus(cull.centreX, cull.centreY);
+    foliage_->reach(settings.useGraphics ? graphics.foliageDistance : GraphicsSettings{}.foliageDistance);
     auto& terrain = collect_->gpuTerrain();
     terrain.stage(settings.stage);
     auto scene = sceneFor(camera, ground_);
@@ -212,17 +351,22 @@ bool WorldRenderer::draw(const client::Camera& camera, const WorldRenderSettings
                                core::Fixed::fromDoubleForContent(camera.centreY)};
     const auto climate = field_->surfaceClimateAt(focus).environment;
     const auto scalar = [](core::Fixed f) { return float(f.toDouble()); };
-    const auto local = weather.at(scalar(climate[0]), scalar(climate[2]), float(camera.focusHeight),
+    auto local = weather.at(scalar(climate[0]), scalar(climate[2]), float(camera.focusHeight),
         float(camera.centreX), float(camera.centreY), scalar(climate[5]));
+    // No weather: no rain falling past the camera and no overcast either,
+    // whatever day of the forecast it is.
+    if (weather.data[0][0] < 0.5f) local.air.precipitation = local.air.cloud = 0.0f;
     weather.data[1] = {scalar(climate[0]), scalar(climate[2]), scalar(climate[5]), settings.iceVisible ? 0.0f : 1.0f};
     weather.data[2] = {local.air.temperature, local.air.precipitation, local.air.cloud, local.air.wind};
     for (std::size_t i = 0; i < weather.data.size(); ++i)
         std::copy(weather.data[i].begin(), weather.data[i].end(), scene.parameters[i]);
     const double wide = std::max(1, world_->climate().wide()), high = std::max(1, world_->climate().high());
-    scene.parameters[20][0] = float(1.0 / (world::ClimateField::kMetres * wide));
-    scene.parameters[20][1] = float(1.0 / (world::ClimateField::kMetres * high));
+    scene.parameters[20][0] = float(1.0 / (world_->climate().metres() * wide));
+    scene.parameters[20][1] = float(1.0 / (world_->climate().metres() * high));
     scene.parameters[20][2] = float(0.5 / wide); scene.parameters[20][3] = float(0.5 / high);
     scene.extra[3] = float(settings.map);
+    for (std::size_t i = 0; i < settings.editor.size(); ++i)
+        std::copy(settings.editor[i].begin(), settings.editor[i].end(), scene.editor[i]);
     if (settings.map != world::MapView::Natural || !terrain.finalStage()) scene.extra[2] = 0;
     const float windLength = std::hypot(scalar(climate[3]), scalar(climate[4]));
     if (windLength > 0.001f) { scene.wind[0] = scalar(climate[3]) / windLength; scene.wind[1] = scalar(climate[4]) / windLength; }
@@ -233,11 +377,21 @@ bool WorldRenderer::draw(const client::Camera& camera, const WorldRenderSettings
     // Distance fog, from the draw distance: clear for the first third, then a
     // smooth rise to opaque at the draw distance itself. Inspection maps and
     // orthographic views measure no eye distance and are never fogged.
-    const double reach = std::clamp(settings.drawDistance, 500.0, 400000.0);
+    // The whole world is the one terrain, at every height: its far end and
+    // a view of most of it are drawn from the coarse levels of the same
+    // pages (H256, H1024 - tile_layout.hpp) and morph into the finer ones as
+    // the camera comes down, so nothing stands in for it. The fog goes as far
+    // as a camera that high can see.
+    const double detail = std::clamp(settings.drawDistance, 500.0, 400000.0);
+    const double altitude = camera.perspective() ? std::max(0.0, camera.eyePosition()[2] - camera.focusHeight) : 0.0;
+    terrain.window(0.0);
+    const double reach = std::max(detail, std::min(3000000.0, altitude * 4.0));
     const bool fogged = settings.fog && camera.perspective() && settings.map == world::MapView::Natural;
     scene.fog[0] = float(reach);
     scene.fog[1] = float(reach * (settings.useGraphics ? graphics.fogStart : 0.3));
     scene.fog[2] = fogged ? 1.0f : 0.0f;
+    // Where grass ends (FoliageVS fades over its last fifth).
+    scene.fog[3] = float(settings.useGraphics ? graphics.foliageDistance : GraphicsSettings{}.foliageDistance);
     if (settings.useGraphics) {
         scene.look[0] = graphics.sunIntensity; scene.look[1] = graphics.ambient;
         scene.look[2] = graphics.exposure; scene.look[3] = 1.0f;
@@ -251,18 +405,44 @@ bool WorldRenderer::draw(const client::Camera& camera, const WorldRenderSettings
         scene.skyZenith[3] = float(graphics.skyRotation * 3.14159265358979 / 180.0);
         scene.clouds[0] = graphics.cloudCoverage; scene.clouds[1] = graphics.cloudDensity;
         scene.clouds[2] = graphics.cloudAltitude;
-        scene.clouds[3] = float(graphics.cloudSteps()); // procedural: no content needed
+        // Procedural: no content needed. And none at all with the weather off
+        // (the editor): clouds over the ground being made are weather too.
+        scene.clouds[3] = settings.weather.data[0][0] < 0.5f ? 0.0f : float(graphics.cloudSteps());
     }
     // The grade (GradePass): the picture's own look, so on unless the
     // settings turn it down. Inspection maps and the unfinished generator
     // stages are measurements, not pictures, and are never graded.
     scene.quality[2] = settings.useGraphics ? (graphics.grade ? graphics.gradeStrength : 0.0f) : 1.0f;
     if (settings.map != world::MapView::Natural || !terrain.finalStage()) scene.quality[2] = 0.0f;
-    if (models_) models_->drawDistance(camera.perspective() ? reach : 400000.0);
+    // Post-process anti-aliasing (FXAA in GradePass), independent of the grade:
+    // edges are smoothed in every view, the measurement maps included.
+    scene.quality[3] = settings.useGraphics ? (graphics.antialiasing == 2 ? 1.0f : 0.0f) : 1.0f;
+    // Objects by the graphics' own draw distance, not by how far the fog goes:
+    // from high up the fog reaches a thousand kilometres, and the forest's
+    // hierarchy walked every root of it each frame for trees nobody could see.
+    if (models_) models_->drawDistance(camera.perspective() ? detail : 400000.0);
     if (models_)
         models_->prepareDensity(scene, cull.viewportWidth, scene);
     if (!shadows_->update(device_,scene,settings.sunDirection,settings.shadows &&
         std::getenv("CAMPFIRE_NO_SHADOWS")==nullptr && settings.map==world::MapView::Natural && terrain.finalStage())) return false;
+    graded_ = scene.quality[2] > 0.0f || scene.quality[3] > 0.0f;
+    // The held picture goes once the new ground in view is in: something on
+    // the card, nothing the view wants still missing. A few frames at least,
+    // so a plan has been made at all; and not for ever, whatever happens.
+    if (held_) {
+        ++heldFrames_;
+        const auto& ground = collect_->gpuTerrain();
+        const auto now = viewOf(camera);
+        const bool moved = std::abs(now[0] - heldView_[0]) > 0.5 || std::abs(now[1] - heldView_[1]) > 0.5 ||
+                           std::abs(now[2] - heldView_[2]) > 1e-4 || std::abs(now[3] - heldView_[3]) > 1e-4 ||
+                           std::abs(now[4] - heldView_[4]) > heldView_[4] * 1e-3;
+        // A plan that wants nothing (a view of open sea) is
+        // in as soon as it is made; one that never quite gets every page in
+        // is let go after a few seconds, not twenty.
+        if (moved || (heldFrames_ > 3 && ground.planned() && ground.missing() == 0) || heldFrames_ > 240)
+            held_.reset();
+    }
+    drawnView_ = viewOf(camera);
     return runner_->frame(device_, scene);
 }
 

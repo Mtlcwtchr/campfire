@@ -138,7 +138,7 @@ int main(int argc,char** argv) {
         for (const auto& river:graph.segments) for (const auto& p:river.course) {
             const double x=p.position.x.toDouble(),y=p.position.y.toDouble();
             if (locations.size()>=std::size_t(sites)) break;
-            if (p.halfWidth.toDouble()<3 || x<1024 || y<1024 || x>size*540-1024 || y>size*540-1024) continue;
+            if (p.halfWidth.toDouble()<3 || x<1024 || y<1024 || x>size*generation::kMetresPerCell-1024 || y>size*generation::kMetresPerCell-1024) continue;
             if (std::fmod(x,2048)<128 || std::fmod(x,2048)>1920 ||
                 std::fmod(y,2048)<128 || std::fmod(y,2048)>1920) continue;
             if (used.emplace(int(x/2048),int(y/2048)).second) locations.emplace_back(x,y);
@@ -149,7 +149,7 @@ int main(int argc,char** argv) {
             // One 2 km root plus all ancestors' H64 dependencies. H16 metadata
             // is complete before planning, just like runtime permanent preparation.
             const world::TileId root{int(x/2048),int(y/2048),rootLod};
-            const int n=(size*540+511)/512;
+            const int n=(size*generation::kMetresPerCell+511)/512;
             auto resident=std::make_shared<TerrainResidency>();resident->revision=1;
             resident->capacity={0,4096};
             std::size_t flags=0,cells=0;

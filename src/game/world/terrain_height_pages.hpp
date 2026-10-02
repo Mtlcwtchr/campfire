@@ -43,6 +43,12 @@ public:
 
     [[nodiscard]] std::int32_t sampleMetres() const { return step_; }
     [[nodiscard]] std::uint8_t level() const { return step_ == 4 ? 0 : step_ == 8 ? 1 : step_ == 16 ? 2 : 4; }
+    // The levels this atlas holds: its own, and for H64 every coarser one -
+    // H256 and H1024 pages are nine samples a side like H64's, so they share
+    // its slots (tile_layout.hpp, pageMetresForSpacing).
+    [[nodiscard]] bool holds(std::uint8_t level) const {
+        return level == this->level() || (step_ == 64 && level > 4 && level <= 8);
+    }
     [[nodiscard]] std::uint32_t storedSamples() const { return stored_; }
     [[nodiscard]] std::uint32_t width() const { return stored_ * columns_; }
     [[nodiscard]] std::uint32_t height() const { return stored_ * rows_; }
@@ -50,7 +56,7 @@ public:
     [[nodiscard]] std::size_t bytes() const { return std::size_t(width()) * height() * 2; }
 
     [[nodiscard]] bool accepts(const streaming::BaseTile& page) const {
-        return page.key.level == level() && page.sampleMetres == step_ &&
+        return holds(page.key.level) && page.sampleMetres == (4 << page.key.level) &&
                page.width == streaming::interiorSamples(step_) && page.height == page.width &&
                page.padding == padding_ && page.elevationMax > page.elevationMin && page.valid();
     }
@@ -65,8 +71,8 @@ public:
         out.y = static_cast<std::uint32_t>(slot / columns_) * stored_;
         out.uvOrigin = {(float(out.x) + padding_ + 0.5f) / float(width()),
                         (float(out.y) + padding_ + 0.5f) / float(height())};
-        out.uvPerMetre = {1.0f / (float(step_) * float(width())),
-                          1.0f / (float(step_) * float(height()))};
+        out.uvPerMetre = {1.0f / (float(page.sampleMetres) * float(width())),
+                          1.0f / (float(page.sampleMetres) * float(height()))};
         out.heightLow = static_cast<float>(page.elevationMin.toDouble());
         out.heightRange = static_cast<float>(page.elevationMax.toDouble() -
                                               page.elevationMin.toDouble());
@@ -81,9 +87,17 @@ private:
 
 // All 64 coordinate bits are identity, including negative page coordinates.
 // The dataset is owned by the atlas; XOR-ing its level into x would alias keys.
+// An atlas holding more than one level (H64 with H256 and H1024) keys them
+// apart by the level in the top bits: page coordinates stay far inside 28 bits.
 inline std::int64_t heightPageKey(streaming::TileKey key) {
-    const auto xy = (std::uint64_t(static_cast<std::uint32_t>(key.x)) << 32) |
-                    static_cast<std::uint32_t>(key.y);
+    if (key.level <= 4) {
+        const auto xy = (std::uint64_t(static_cast<std::uint32_t>(key.x)) << 32) |
+                        static_cast<std::uint32_t>(key.y);
+        return std::bit_cast<std::int64_t>(xy);
+    }
+    const auto xy = (std::uint64_t(key.level) << 56) |
+                    ((std::uint64_t(static_cast<std::uint32_t>(key.x)) & 0x0fffffffu) << 28) |
+                    (std::uint64_t(static_cast<std::uint32_t>(key.y)) & 0x0fffffffu);
     return std::bit_cast<std::int64_t>(xy);
 }
 

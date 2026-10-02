@@ -1,0 +1,135 @@
+{
+ "_comment": "The decor layer's ids (0: as the ground category says): decoration away from the forest - ruins, bones, debris, a camp's litter - a hectare, and decal sets with density weights. The forest's own deadwood belongs to its forest biome, not here: it follows the trees.",
+ "decor_biomes": [
+  {
+   "name": "deadwood_mossy",
+   "id": 1,
+   "props": [
+    [
+     "fallen_log",
+     1.5
+    ],
+    [
+     "mossy_stone",
+     4
+    ]
+   ]
+  },
+  {
+   "name": "bog_snags",
+   "id": 2,
+   "props": [
+    [
+     "snag",
+     3
+    ],
+    [
+     "half_sunk_log",
+     2
+    ]
+   ],
+   "decals": [
+    [
+     "duckweed",
+     1.0
+    ]
+   ]
+  },
+  {
+   "name": "stones_stumps",
+   "id": 3,
+   "props": [
+    [
+     "stones",
+     8
+    ],
+    [
+     "stump",
+     1
+    ]
+   ]
+  },
+  {
+   "name": "wastes_debris",
+   "id": 4,
+   "props": [
+    [
+     "bone_pile",
+     2
+    ],
+    [
+     "grey_boulder",
+     6
+    ]
+   ],
+   "decals": [
+    [
+     "grey_stain",
+     1.0
+    ]
+   ]
+  },
+  {
+   "name": "elnor_deadwood",
+   "id": 5,
+   "props": [
+    [
+     "fallen_log",
+     2
+    ],
+    [
+     "stump",
+     2
+    ]
+   ]
+  },
+  {
+   "name": "driftwood_vines",
+   "id": 6,
+   "props": [
+    [
+     "driftwood",
+     3
+    ],
+    [
+     "branches",
+     12
+    ]
+   ]
+  },
+  {
+   "name": "dry_branches_stones",
+   "id": 7,
+   "props": [
+    [
+     "dry_branches",
+     6
+    ],
+    [
+     "stones",
+     6
+    ]
+   ]
+  },
+  {
+   "name": "oak_litter",
+   "id": 8,
+   "props": [
+    [
+     "fallen_log",
+     2
+    ],
+    [
+     "branches",
+     20
+    ]
+   ],
+   "decals": [
+    [
+     "fallen_leaves",
+     1.0
+    ]
+   ]
+  }
+ ]
+}

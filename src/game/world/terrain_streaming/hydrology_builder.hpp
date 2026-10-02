@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <memory>
 
 #include "game/generation/world_map_gen.hpp"
@@ -38,5 +39,28 @@ HydrologyGraph buildHydrologyGraph(const generation::WorldMapData& world);
 // nothing but the cost.
 std::shared_ptr<const HydrologyGraph> sharedHydrologyGraph(
         const generation::WorldMapData& world);
+// The same, and read from (or written to) a cache under `cacheRoot` when it
+// is not empty: the graph of a map opened before comes off the disk.
+std::shared_ptr<const HydrologyGraph> sharedHydrologyGraph(
+        const generation::WorldMapData& world, const std::filesystem::path& cacheRoot);
+// The water is fitted to the ground in groups that read nothing of each other,
+// and a group whose inputs are what they were at its last fit takes that fit
+// back rather than being fitted again (hydrology_builder.cpp, FitGroups): an
+// edit to one island refits that island's water, not the continent's. The
+// graph is the same bit for bit either way. What the last build did, and a
+// way to make the next one fit everything.
+struct HydrologyFitStats {
+    std::size_t groups = 0, fitted = 0;
+    // What counts as a stream and how wide the widest river is are read off
+    // the whole map (one valley in three carries water; widths go against the
+    // map's largest flow). When an edit moves them every group's water is a
+    // different width, and every group is fitted again - rightly.
+    std::uint8_t streamFlow = 0, largestFlow = 0;
+};
+HydrologyFitStats lastHydrologyFits();
+void forgetHydrologyFits();
+
+// What a graph built from this map would carry as its sourceFingerprint.
+std::uint64_t hydrologySourceFingerprint(const generation::WorldMapData& world);
 
 } // namespace world::streaming

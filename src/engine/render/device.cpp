@@ -5,6 +5,9 @@
 #include <SDL3_shadercross/SDL_shadercross.h>
 
 #include <algorithm>
+#include <functional>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <iterator>
@@ -130,6 +133,7 @@ bool Device::open(SDL_Window* window, const std::filesystem::path& assets) {
 void Device::close() {
     if (device_) {
         SDL_WaitForGPUIdle(device_);
+        textures_.clear();
         for (const auto& submission : submissions_)
             SDL_ReleaseGPUFence(device_, submission.fence);
         submissions_.clear();
@@ -165,8 +169,96 @@ bool Device::submitFrame(SDL_GPUCommandBuffer* commands) {
     return true;
 }
 
+namespace {
+constexpr std::uint64_t kFnvBasis = 0xcbf29ce484222325ull;
+std::uint64_t fnv(std::uint64_t hash, const void* data, std::size_t bytes) {
+    const auto* p = static_cast<const unsigned char*>(data);
+    for (std::size_t i = 0; i < bytes; ++i) hash = (hash ^ p[i]) * 0x100000001b3ull;
+    return hash;
+}
+std::uint64_t fnv(std::uint64_t hash, const std::string& text) { return fnv(hash, text.data(), text.size()); }
+// A copy the caller frees with SDL_free, as it frees what the compiler gives.
+void* sdlCopy(const std::vector<std::uint8_t>& bytes, std::size_t& size) {
+    void* out = SDL_malloc(bytes.size());
+    if (!out) return nullptr;
+    std::memcpy(out, bytes.data(), bytes.size());
+    size = bytes.size();
+    return out;
+}
+} // namespace
+
+std::uint64_t Device::shaderKey(const std::filesystem::path& file, const char* entry,
+                                SDL_ShaderCross_ShaderStage stage) {
+    namespace fs = std::filesystem;
+    const fs::path folder = file.parent_path();
+    std::vector<fs::path> files;
+    std::error_code ec;
+    for (const auto& item : fs::directory_iterator(folder, ec))
+        if (item.is_regular_file(ec)) files.push_back(item.path());
+    std::sort(files.begin(), files.end());
+    std::uint64_t stamp = kFnvBasis;
+    for (const auto& f : files) {
+        stamp = fnv(stamp, f.filename().string());
+        const auto bytes = fs::file_size(f, ec);
+        const auto when = fs::last_write_time(f, ec).time_since_epoch().count();
+        stamp = fnv(stamp, &bytes, sizeof bytes);
+        stamp = fnv(stamp, &when, sizeof when);
+    }
+    if (stamp != folderStamp_ || folderDigest_ == 0) {
+        std::uint64_t digest = kFnvBasis;
+        for (const auto& f : files) {
+            digest = fnv(digest, f.filename().string());
+            digest = fnv(digest, readText(f));
+        }
+        folderStamp_ = stamp;
+        folderDigest_ = digest;
+    }
+    std::uint64_t key = fnv(folderDigest_, file.filename().string());
+    key = fnv(key, std::string(entry));
+    const int stageNumber = int(stage);
+    return fnv(key, &stageNumber, sizeof stageNumber);
+}
+
 void* Device::compileSpirv(const std::filesystem::path& file, const char* entry,
                            SDL_ShaderCross_ShaderStage stage, std::size_t& size) {
+    size = 0;
+    const std::uint64_t key = shaderKey(file, entry, stage);
+    if (const auto kept = spirv_.find(key); kept != spirv_.end()) return sdlCopy(kept->second, size);
+    if (shaderCache_.empty() && !std::getenv("ASR_SHADER_NO_CACHE"))
+        shaderCache_ = std::filesystem::absolute(assets_).lexically_normal().parent_path().parent_path() / ".cache" / "shaders";
+    char name[32];
+    std::snprintf(name, sizeof name, "%016llx.spv", static_cast<unsigned long long>(key));
+    const std::filesystem::path cached = shaderCache_.empty() ? std::filesystem::path{} : shaderCache_ / name;
+    if (!cached.empty()) {
+        std::ifstream in(cached, std::ios::binary);
+        std::vector<std::uint8_t> bytes(std::istreambuf_iterator<char>(in), {});
+        // SPIR-V begins with its magic number; anything else is not ours.
+        if (bytes.size() >= 4 && bytes[0] == 0x03 && bytes[1] == 0x02 && bytes[2] == 0x23 && bytes[3] == 0x07) {
+            auto& kept = spirv_[key] = std::move(bytes);
+            return sdlCopy(kept, size);
+        }
+    }
+    void* spirv = compileFromSource(file, entry, stage, size);
+    if (!spirv) return nullptr;
+    std::vector<std::uint8_t> bytes(static_cast<const std::uint8_t*>(spirv), static_cast<const std::uint8_t*>(spirv) + size);
+    if (!cached.empty()) {
+        // Written beside and renamed, so a reader never finds half of one.
+        std::error_code ec;
+        std::filesystem::create_directories(shaderCache_, ec);
+        const auto partial = cached.string() + ".partial";
+        {
+            std::ofstream out(partial, std::ios::binary | std::ios::trunc);
+            out.write(reinterpret_cast<const char*>(bytes.data()), std::streamsize(bytes.size()));
+        }
+        std::filesystem::rename(partial, cached, ec);
+        if (ec) std::filesystem::remove(partial, ec);
+    }
+    spirv_[key] = std::move(bytes);
+    return spirv;
+}
+
+void* Device::compileFromSource(const std::filesystem::path& file, const char* entry,
+                                SDL_ShaderCross_ShaderStage stage, std::size_t& size) {
     const std::string source = readText(file);
     size = 0;
     if (source.empty()) {
@@ -335,7 +427,7 @@ GraphicsPipeline Device::makePipeline(const PipelineWanted& wanted) {
     info.rasterizer_state.depth_bias_clamp = wanted.depthBiasClamp;
     info.depth_stencil_state.enable_depth_test = wanted.depthTest;
     info.depth_stencil_state.enable_depth_write = wanted.depthWrite;
-    info.depth_stencil_state.compare_op = SDL_GPU_COMPAREOP_LESS_OR_EQUAL;
+    info.depth_stencil_state.compare_op = SDL_GPU_COMPAREOP_GREATER_OR_EQUAL;   // reversed depth (Camera::viewProjection)
     info.multisample_state.sample_count = samples_;
     info.target_info.color_target_descriptions = &colour;
     info.target_info.num_color_targets = 1;
@@ -575,7 +667,7 @@ Sampler Device::makeSampler(const SDL_GPUSamplerCreateInfo& info) {
     return Sampler(device_, sampler);
 }
 
-Texture Device::loadMipped(const std::vector<std::filesystem::path>& levels) {
+Texture Device::loadMippedFromFiles(const std::vector<std::filesystem::path>& levels) {
     if (levels.empty()) return {};
     int width = 0, height = 0;
     if (!sizeOf(levels.front(), width, height)) {
@@ -601,8 +693,8 @@ Texture Device::loadMipped(const std::vector<std::filesystem::path>& levels) {
     return texture;
 }
 
-Texture Device::loadArrayMipped(const std::vector<std::vector<std::filesystem::path>>& layers,
-                               bool generateMipmaps) {
+Texture Device::loadArrayMippedFromFiles(const std::vector<std::vector<std::filesystem::path>>& layers,
+                                        bool generateMipmaps) {
     if (layers.empty() || layers.front().empty()) return {};
     int width = 0, height = 0;
     if (!sizeOf(layers.front().front(), width, height)) {
@@ -666,7 +758,7 @@ SDL_Surface* Device::loadDataPng(const std::filesystem::path& path) {
     auto* rgba=SDL_ConvertSurface(image,SDL_PIXELFORMAT_RGBA32);SDL_DestroySurface(image);return rgba;
 }
 
-Texture Device::loadDataArray(const std::vector<std::filesystem::path>& layers) {
+Texture Device::loadDataArrayFromFiles(const std::vector<std::filesystem::path>& layers) {
     if (layers.empty()) return {};
     Texture texture;Uint32 width=0,height=0;
     Uploader upload(*this);
@@ -689,7 +781,7 @@ Texture Device::loadDataArray(const std::vector<std::filesystem::path>& layers) 
     return texture;
 }
 
-Texture Device::loadArray(const std::vector<std::filesystem::path>& layers) {
+Texture Device::loadArrayFromFiles(const std::vector<std::filesystem::path>& layers) {
     if (layers.empty()) return {};
     int width = 0, height = 0;
     if (!sizeOf(layers.front(), width, height)) {
@@ -713,6 +805,68 @@ Texture Device::loadArray(const std::vector<std::filesystem::path>& layers) {
             return {};
         }
     return texture;
+}
+
+// --- images from files, kept -------------------------------------------------
+//
+// A world's renderer is made again whenever a different world is shown - its
+// passes hold that world's climate, shadows and ground - and every one of
+// them loaded its pictures from disk again: the ground's sixteen scans with
+// their mip chains alone were four seconds of a frozen window. The pictures
+// are not the world's. They are loaded once, kept here, and each pass is
+// handed a borrowed handle, which gives nothing back when it goes; the device
+// gives them all back when it closes.
+
+namespace {
+std::uint64_t stampOf(std::uint64_t key, const std::filesystem::path& file) {
+    std::error_code ec;
+    key = fnv(key, file.string());
+    const auto bytes = std::filesystem::file_size(file, ec);
+    const auto when = std::filesystem::last_write_time(file, ec).time_since_epoch().count();
+    key = fnv(key, &bytes, sizeof bytes);
+    return fnv(key, &when, sizeof when);
+}
+} // namespace
+
+Texture Device::keptTexture(std::uint64_t key, const std::function<Texture()>& load) {
+    // Loaded afresh each time, owned by the caller, as before there was a
+    // kept set: what a check of the loaders themselves wants.
+    static const bool fresh = std::getenv("ASR_TEXTURE_NO_CACHE") != nullptr;
+    if (fresh) return load();
+    if (const auto found = textures_.find(key); found != textures_.end()) return Texture(nullptr, found->second.get());
+    Texture made = load();
+    if (!made) return {};
+    SDL_GPUTexture* raw = made.get();
+    textures_.emplace(key, std::move(made));
+    return Texture(nullptr, raw);
+}
+
+Texture Device::loadMipped(const std::vector<std::filesystem::path>& levels) {
+    std::uint64_t key = fnv(kFnvBasis, std::string("mipped"));
+    for (const auto& f : levels) key = stampOf(key, f);
+    return keptTexture(key, [&] { return loadMippedFromFiles(levels); });
+}
+
+Texture Device::loadArrayMipped(const std::vector<std::vector<std::filesystem::path>>& layers,
+                               bool generateMipmaps) {
+    std::uint64_t key = fnv(kFnvBasis, std::string(generateMipmaps ? "array-mipped-generated" : "array-mipped"));
+    for (const auto& layer : layers) {
+        key = fnv(key, std::string("|"));
+        for (const auto& f : layer) key = stampOf(key, f);
+    }
+    return keptTexture(key, [&] { return loadArrayMippedFromFiles(layers, generateMipmaps); });
+}
+
+Texture Device::loadDataArray(const std::vector<std::filesystem::path>& layers) {
+    std::uint64_t key = fnv(kFnvBasis, std::string("data-array"));
+    for (const auto& f : layers) key = stampOf(key, f);
+    return keptTexture(key, [&] { return loadDataArrayFromFiles(layers); });
+}
+
+Texture Device::loadArray(const std::vector<std::filesystem::path>& layers) {
+    std::uint64_t key = fnv(kFnvBasis, std::string("array"));
+    for (const auto& f : layers) key = stampOf(key, f);
+    return keptTexture(key, [&] { return loadArrayFromFiles(layers); });
 }
 
 } // namespace engine

@@ -8,9 +8,11 @@
 #include <filesystem>
 #include <iostream>
 
+#include "engine/biomes/registry.hpp"
 #include "game/content/content_db.hpp"
 #include "game/generation/local_map_gen.hpp"
 #include "game/simulation/world.hpp"
+#include "game/world/scene_scatter.hpp"
 
 int main(int argc, char** argv) {
     std::filesystem::path root = argc > 1 ? argv[1] : "content";
@@ -54,6 +56,29 @@ int main(int argc, char** argv) {
                   << " natural features): " << (ok ? "can live here" : "PROBLEMS") << "\n";
         for (const auto& p : problems) std::cout << "  " << p << "\n";
         if (!ok) ++failures;
+    }
+
+    // The terrain categories and their libraries (content/config/terrain,
+    // engine/biomes): references, ids, shares, inheritance, the texture
+    // layers on disk, and the scene models their plants and props name.
+    {
+        const auto dir = root / "config" / "terrain";
+        std::vector<engine::biomes::Problem> problems;
+        const auto registry = engine::biomes::Registry::load(dir, &problems);
+        for (const auto& p : registry->validate(root.parent_path() / "assets")) problems.push_back(p);
+        const auto known = [](const std::string& model) {
+            for (const char* m : world::decor::kModels) if (model == m) return true;
+            return false;
+        };
+        for (const auto& p : registry->plants())
+            if (!known(p.model)) problems.push_back({"plants.json", p.name + ": model " + p.model + " is not a scene model"});
+        for (const auto& p : registry->props())
+            if (!known(p.model)) problems.push_back({"props.json", p.name + ": model " + p.model + " is not a scene model"});
+        std::cout << "\nterrain categories: " << registry->categories().size() << " categories, "
+                  << registry->forestBiomes().size() << " forest, " << registry->waterBiomes().size() << " water, "
+                  << registry->decorBiomes().size() << " decor biomes\n";
+        for (const auto& p : problems) std::cout << "error:   " << p.file << ": " << p.what << "\n";
+        if (!problems.empty()) ++failures;
     }
 
     std::cout << "\n" << (failures == 0 ? "content OK" : "content has unreachable definitions") << "\n";

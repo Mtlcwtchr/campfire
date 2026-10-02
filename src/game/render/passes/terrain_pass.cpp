@@ -172,6 +172,12 @@ engine::PassPlace TerrainPass::setup(engine::Device& device, engine::RenderPipel
     bindings.push_back({materialNormals_.get(), sampler_.get()});
     bindings.push_back({materialProperties_.get(), sampler_.get()});
     bindings.push_back(shadow_);
+    // The terrain categories after the shadow (t13, t14; terrain.hlsl).
+    if (pages_) {
+        const auto biomes = pages_->biomeBindings();
+        if (biomes.size() != 2) return {};
+        bindings.insert(bindings.end(), biomes.begin(), biomes.end());
+    }
 
     // The weather of the whole world, uploaded once and shared with the water.
     if (!pages_ && !climate_.ensure(device, climateField_)) return {};
@@ -199,6 +205,9 @@ void TerrainPass::collect(const engine::Frame& frame, engine::DrawQueue& queue) 
         bindings.push_back({materialNormals_.get(), sampler_.get()});
         bindings.push_back({materialProperties_.get(), sampler_.get()});
         bindings.push_back(shadow_);
+        const auto biomes = pages_->biomeBindings();
+        if (biomes.size() != 2) return;
+        bindings.insert(bindings.end(), biomes.begin(), biomes.end());
         terrainRenderer_.material.textures(std::move(bindings), fields);
         // The cut, already walked once by the terrain gather: ordered, and with
         // each square's buffers and parameters resolved. This pass used to

@@ -153,11 +153,14 @@ TEST(world_surface_uses_the_full_geometry_ladder_for_regional_roots) {
     view.prediction = view.matrix;
     auto residency = std::make_shared<world::terrain::TerrainResidency>();
     residency->revision = 1;
+    // H64, and the coarse levels a root is drawn from (H256, H1024): every
+    // one of them a page nine samples across (tile_layout.hpp).
+    for (const std::uint8_t level : {std::uint8_t(4), std::uint8_t(6), std::uint8_t(8)})
     for (int y = -2; y < 7; ++y) for (int x = -2; x < 7; ++x) {
-        const world::streaming::TileKey key{x, y, 4};
+        const world::streaming::TileKey key{x, y, level};
         if (!system.read()->pages().containsLand(key)) continue;
         auto surface = std::make_shared<world::terrain::SurfacePage>();
-        surface->step = 64; surface->padding = 2; surface->side = 13;
+        surface->step = 4 << level; surface->padding = 2; surface->side = 13;
         surface->bed.assign(169, 360); surface->head.assign(169, 0);
         residency->pages.insert(key); residency->surfaces.emplace(key, surface);
     }
@@ -177,7 +180,9 @@ TEST(world_surface_uses_the_full_geometry_ladder_for_regional_roots) {
 
 TEST(world_surface_builds_visible_coverage_before_nearby_detail) {
     auto map = ocean(11);
-    map.width = 16; map.cells.resize(16 * 4);
+    // Seventeen cells: just over two 4096 m roots across, so three of them,
+    // at a macro cell of 512 m (sixteen fell exactly on the second's edge).
+    map.width = 17; map.cells.resize(17 * 4);
     for (auto& cell : map.cells) { cell.sea = false; cell.elevation = 40; }
     world::WorldSystem system(config()); system.publish(std::move(map));
     auto channel = system.prepare(system.read());
@@ -193,11 +198,14 @@ TEST(world_surface_builds_visible_coverage_before_nearby_detail) {
     view.prediction = view.matrix;
     auto residency = std::make_shared<world::terrain::TerrainResidency>();
     residency->revision = 1;
+    // H64, and the coarse levels a root is drawn from (H256, H1024): every
+    // one of them a page nine samples across (tile_layout.hpp).
+    for (const std::uint8_t level : {std::uint8_t(4), std::uint8_t(6), std::uint8_t(8)})
     for (int y = -2; y < 7; ++y) for (int x = -2; x < 19; ++x) {
-        const world::streaming::TileKey key{x, y, 4};
+        const world::streaming::TileKey key{x, y, level};
         if (!system.read()->pages().containsLand(key)) continue;
         auto surface = std::make_shared<world::terrain::SurfacePage>();
-        surface->step = 64; surface->padding = 2; surface->side = 13;
+        surface->step = 4 << level; surface->padding = 2; surface->side = 13;
         surface->bed.assign(169, 360); surface->head.assign(169, 0);
         residency->pages.insert(key); residency->surfaces.emplace(key, surface);
     }

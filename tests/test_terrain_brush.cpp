@@ -210,3 +210,92 @@ TEST(the_carve_brush_cuts_a_channel_and_the_noise_brush_makes_ground) {
     }
     CHECK(highest - lowest > 1.0);
 }
+
+TEST(a_wide_smooth_takes_the_shape_of_a_hill_down_not_only_its_ripple) {
+    // What a person sees a smooth do: a peak under a wide brush comes down
+    // and its flanks fill. At four metres to the neighbour a sixty-metre
+    // smooth moved the top of this hill by millimetres; at the brush's own
+    // scale it has to move it by metres.
+    EditLayer layer;
+    const auto ground = hillPlus(layer);
+    Brush smooth;
+    smooth.kind = BrushKind::Smooth;
+    smooth.radiusMetres = 160;
+    smooth.strength = 6;
+    const double top = heightOf(ground, 500, 500);
+    for (int stroke = 0; stroke < 10; ++stroke)
+        applyBrush(layer, ground, smooth, {Fixed::fromInt(500), Fixed::fromInt(500)}, 1.0);
+    CHECK(heightOf(ground, 500, 500) < top - 2.0);
+}
+
+TEST(restore_gives_hand_edits_back_to_the_generated_ground) {
+    // Hybrid, in one brush: a hand-raised bump, taken back by Restore, is the
+    // ground the generator made there - and Restore never goes past it.
+    EditLayer layer;
+    const auto ground = hillPlus(layer);
+    Brush raise;
+    raise.radiusMetres = 40;
+    raise.strength = 10;
+    const double generated = heightOf(ground, 500, 500);
+    applyBrush(layer, ground, raise, {Fixed::fromInt(500), Fixed::fromInt(500)}, 1.0);
+    CHECK(heightOf(ground, 500, 500) > generated + 5.0);
+    Brush restore;
+    restore.kind = BrushKind::Restore;
+    restore.radiusMetres = 60;
+    restore.strength = 8;
+    restore.softness = 0.2;
+    for (int stroke = 0; stroke < 40; ++stroke) {
+        // Resolved on a layer of its own and then added, as the tools do.
+        EditLayer scratch;
+        applyBrush(scratch, ground, restore, {Fixed::fromInt(500), Fixed::fromInt(500)}, 0.5, &layer);
+        for (std::int64_t sy = 110; sy <= 140; ++sy)
+            for (std::int64_t sx = 110; sx <= 140; ++sx)
+                if (const auto add = scratch.sample(sx, sy); add.raw != 0) layer.add(sx, sy, add);
+    }
+    CHECK(std::abs(heightOf(ground, 500, 500) - generated) < 0.1);
+    CHECK(heightOf(ground, 500, 500) >= generated - 0.01);
+    // Where nothing was edited it does nothing at all.
+    EditLayer untouched;
+    EditLayer nothing;
+    CHECK_EQ(applyBrush(nothing, hillPlus(untouched), restore, {Fixed::fromInt(500), Fixed::fromInt(500)}, 1.0,
+                        &untouched), std::size_t(0));
+}
+
+TEST(erode_cuts_down_the_slope_and_leaves_the_crest) {
+    EditLayer layer;
+    const auto ground = hillPlus(layer);
+    Brush erode;
+    erode.kind = BrushKind::Hydraulic;
+    erode.radiusMetres = 200;
+    erode.strength = 8;
+    const double crest = heightOf(ground, 500, 500), flank = heightOf(ground, 600, 500);
+    for (int stroke = 0; stroke < 10; ++stroke)
+        applyBrush(layer, ground, erode, {Fixed::fromInt(500), Fixed::fromInt(500)}, 1.0);
+    // The flank, where the water from the crest runs, lost ground; the crest,
+    // which nothing drains through, hardly any.
+    const double cutFlank = flank - heightOf(ground, 600, 500);
+    const double cutCrest = crest - heightOf(ground, 500, 500);
+    CHECK(cutFlank > 0.5);
+    CHECK(cutFlank > cutCrest);
+}
+
+TEST(a_wide_brush_reads_the_ground_at_its_own_scale) {
+    // The ground is dear to ask for - a real one carves rivers into every
+    // answer - so a brush the size of a valley must not ask for it at every
+    // four metres of the valley.
+    EditLayer layer;
+    std::size_t asked = 0;
+    const auto hill = hillPlus(layer);
+    const GroundAt counted = [&](Fixed x, Fixed y) { ++asked; return hill(x, y); };
+    Brush smooth;
+    smooth.kind = BrushKind::Smooth;
+    smooth.radiusMetres = 400;
+    applyBrush(layer, counted, smooth, {Fixed::fromInt(500), Fixed::fromInt(500)}, 0.1);
+    CHECK(asked < 2000);
+    // And a raise does not read it at all.
+    asked = 0;
+    Brush raise;
+    raise.radiusMetres = 400;
+    applyBrush(layer, counted, raise, {Fixed::fromInt(500), Fixed::fromInt(500)}, 0.1);
+    CHECK_EQ(asked, std::size_t(0));
+}

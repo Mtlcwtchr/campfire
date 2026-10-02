@@ -111,7 +111,7 @@ WsFinish wsFinishTerms(float3 worldPosition)
     f.scale = (1.0 - haze).xxx;
     f.offset = hazeColour * haze;
     [branch] if (perspective && cloudsPS.w >= 0.5 && distance >= 1.0) {
-        const float jitter = frac(sin(dot(worldPosition.xy, float2(12.9898, 78.233))) * 43758.5453);
+        const float jitter = landscapeCloudJitter(worldPosition.xy);
         const float sunScale = lookPS.w > 0.5 ? lookPS.x : 1.0;
         const float4 cloud = cloudsAlong(cameraPS.xyz, ray, distance, 6, jitter, landscapeSun(),
             float3(1.05, 0.98, 0.88) * sunScale, landscapeSky(0.6) * 0.9, false);
@@ -187,6 +187,10 @@ float3 wsRefraction(float3 position, float2 straight, float waterDistance, float
     float4 seen = wsGrab(saturate(uv));
     // Never refract something standing in front of the water into it.
     if (sceneDepthFromAlpha(seen.a) < waterDistance * 0.97) seen = wsGrab(straight);
+    // Nothing drawn under this water at all - open sea past every page of
+    // ground - is the sky behind it, and the sea is not a window onto the
+    // clouds: its floor is dark and far down.
+    if (seen.a >= 0.999) return float3(0.035, 0.05, 0.055);
     return seen.rgb;
 }
 
@@ -367,8 +371,15 @@ float4 WaterScenePS(WaterOut input)
     mirrored.z = max(mirrored.z, 0.01);
     mirrored = normalize(mirrored);
     float4 found = 0;
-    [branch] if (fresnel > 0.035)
+    // Only where the march can tell one thing from another: its step and its
+    // tolerance grow with the distance, and from tens of kilometres a hit is
+    // anything within kilometres of the ray - land mirrored into open sea it
+    // never faces. Past that the sky is what the water shows.
+    const float traced = 1.0 - smoothstep(12000.0, 24000.0, waterDistance);
+    [branch] if (fresnel > 0.035 && traced > 0.0) {
         found = wsTraceReflection(position + up * 0.05, mirrored, waterDistance, wsJitter(input.position.xy));
+        found.a *= traced;
+    }
     const float3 sky = landscapeSkyRay(mirrored);
 
     // Refraction and the column. Snell's law for both paths (1.33).
@@ -378,6 +389,33 @@ float4 WaterScenePS(WaterOut input)
     const float cosView = sqrt(1.0 - (1.0 - cosIn * cosIn) / 1.7689);
     const float cosSun = max(sqrt(1.0 - (1.0 - sun.z * sun.z) / 1.7689), 0.2);
     WsBody body = wsBody(river, lake, seaLook);
+    // The kind of water here (engine/biomes): the water layer's biome, or
+    // the ground category's; a river through several categories changes
+    // along its course as the ground does. The engine's own where it says
+    // nothing - and never on the open sea, which no category is under.
+    BiomeWater kind = biomeWaterOf(0);
+#ifdef BIOMES_ENABLED
+    {
+        const BiomeHere here = biomeHereAt(p, max(length(headDx), length(headDy)));
+        [branch] if (here.any && (here.water > 0 || here.waterB > 0))
+            kind = biomeWaterMix(biomeWaterOf(here.water), biomeWaterOf(here.waterB), here.groundShare);
+        const float inlandShare = 1.0 - ocean;
+        kind.colourShare *= inlandShare;
+        kind.scum *= inlandShare;
+        kind.emissive *= inlandShare;
+        kind.foam = lerp(1.0, kind.foam, inlandShare);
+        [branch] if (kind.colourShare > 0.001)
+            body.deep = lerp(body.deep, kind.colour * 0.55, kind.colourShare);
+        [branch] if (kind.turbidity >= 0.0) {
+            // Murk: the column's extinction from clear to opaque within a
+            // metre, letting its own colour through.
+            const float3 tint = kind.colourShare > 0.001 ? kind.colour / max(max(kind.colour.r, max(kind.colour.g, kind.colour.b)), 1e-3)
+                                                         : float3(0.55, 0.85, 0.95);
+            const float k = lerp(0.06, 2.8, kind.turbidity * kind.turbidity);
+            body.extinction = lerp(body.extinction, k * (1.2 - tint * 0.8), inlandShare);
+        }
+    }
+#endif
     // Surf stirs the sand up: the breaking zone is milky and sandy-green.
     body.deep = lerp(body.deep, float3(0.13, 0.17, 0.15), coast.broken * ocean * 0.45);
     body.extinction = lerp(body.extinction, float3(0.9, 0.7, 0.75), coast.broken * ocean * 0.35);
@@ -458,6 +496,18 @@ float4 WaterScenePS(WaterOut input)
         film = coast.film * ocean;
     }
     const float3 foamColour = float3(0.92, 0.94, 0.93) * foamLight;
+    white *= kind.foam;
+    // A kind of water's own glow, and the scum on a still one: a film in
+    // patches that dulls the sky's reflection and takes the water's colour.
+    own += kind.colour * kind.emissive * 0.6;
+    [branch] if (kind.scum > 0.001) {
+        const float patches = smoothstep(0.35, 0.75, noiseAt(p / 3.1 + 7.7) * 0.6 + noiseAt(p / 0.9) * 0.4 +
+                                                     (kind.scum - 0.5) * 0.8) * (1.0 - fall.x);
+        const float3 scumColour = (kind.colour * 0.9 + float3(0.05, 0.06, 0.02)) * foamLight;
+        own = lerp(own, scumColour, patches * saturate(kind.scum * 1.2) * 0.85);
+        taken *= 1.0 - patches * kind.scum * 0.8;
+        takenShare *= 1.0 - patches * kind.scum * 0.8;
+    }
     // Never quite opaque: thin foam shows the water it floats on.
     own = lerp(own, foamColour, white * 0.88);
     float keep = 1.0 - white * 0.88;

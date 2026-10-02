@@ -27,8 +27,10 @@ inline float lookHaze(float distance, float elevation)
     const float d = distance > 0.0 ? distance : 0.0;
     const float h = elevation > 0.0 ? elevation : 0.0;
     const float density = 0.70 + 0.30 * exp2(-h / 600.0);
-    const float amount = (1.0 - exp2(-d * density / 8500.0)) * 0.55;
-    return amount < 0.32 ? amount : 0.32;
+    // Half of it by sixteen kilometres, not eight: the middle distance keeps
+    // its colour and only the far ridges go into the blue.
+    const float amount = (1.0 - exp2(-d * density / 16000.0)) * 0.60;
+    return amount < 0.38 ? amount : 0.38;
 }
 
 inline float lookWaterDepth(float depth)
@@ -83,6 +85,21 @@ float3 landscapePigment(float3 colour, float vegetation)
     return lerp(float3(grey, grey, grey), colour, 0.94 - 0.12 * saturate(vegetation));
 }
 
+// One tree's leaves against its neighbours'. A wood whose every crown is the
+// same green reads as a carpet from any distance; a painted one is a mosaic -
+// cool deep greens, warm yellow-greens, and here and there a crown already
+// turning. `random` is the tree's own number (its yaw, as a fraction of a
+// turn), so the placed tree, its impostor and the far card agree. Only green
+// texels move: bark and dead wood keep their colour. Brightness is kept.
+float3 landscapeCrownTint(float random, float3 texel)
+{
+    const float r = frac(random * 7.31);
+    float3 tint = lerp(float3(0.88, 0.99, 0.98), float3(1.06, 1.03, 0.86), smoothstep(0.05, 0.90, r));
+    tint = lerp(tint, float3(1.24, 1.00, 0.60), smoothstep(0.935, 0.965, r));
+    const float leafy = saturate((texel.g - max(texel.r, texel.b)) * 8.0);
+    return lerp(float3(1.0, 1.0, 1.0), tint, leafy);
+}
+
 float3 landscapeDaylight(float3 normal, float occlusion, float visibility)
 {
     const float cloud=parametersPS[2].z*parametersPS[0].x;
@@ -90,12 +107,19 @@ float3 landscapeDaylight(float3 normal, float occlusion, float visibility)
     const float sunScale = lookPS.w > 0.5 ? lookPS.x : 1.0;
     const float skyScale = lookPS.w > 0.5 ? lookPS.y : 1.0;
     const float skyView = saturate(normal.z * 0.5 + 0.5);
-    const float3 ambient = lerp(float3(0.25, 0.29, 0.33), float3(0.36, 0.40, 0.44), skyView);
-    const float3 bounce = float3(0.055, 0.042, 0.026) * (1.0 - saturate(normal.z));
+    // A warm sun and a sky only a little cooler: the late-afternoon storybook
+    // light of a painted world (the Witcher's Velen, Clair Obscur's plates).
+    // The shade is cool air over warm ground, not blue paint - a sky light
+    // any bluer turned every slope facing away from the sun to slate.
+    const float3 ambient = lerp(float3(0.205, 0.215, 0.235), float3(0.300, 0.330, 0.385), skyView);
+    const float3 bounce = float3(0.095, 0.066, 0.034) * (1.0 - saturate(normal.z));
     // Occlusion removes sky light, not the sunlight falling on an exposed lip.
+    // The sun is warm, not amber: (1.17, 1.00, 0.78) on top of the grade's own
+    // gold turned every sunlit meadow orange; daylight in Velen is a warm
+    // white, and the gold belongs to the evening.
     return (ambient * (1.0+cloud*0.12) + bounce) * saturate(occlusion) * skyScale +
-            lerp(float3(1.09, 1.02, 0.88),float3(0.85,0.91,1.0),cloud) *
-            (0.78 * saturate(dot(normal, landscapeSun())) * (1.0-cloud*0.78) * visibility) * sunScale;
+            lerp(float3(1.12, 1.00, 0.85),float3(0.85,0.91,1.0),cloud) *
+            (0.92 * saturate(dot(normal, landscapeSun())) * (1.0-cloud*0.78) * visibility) * sunScale;
 }
 
 float3 landscapeDaylight(float3 normal, float occlusion)
@@ -166,6 +190,16 @@ float3 landscapeFog(float3 colour, float3 worldPosition)
 // The cloud deck between the eye and a surface: mountain tops standing in
 // cloud, the world seen from above the deck. Free when the stretch never
 // enters the slab, which is every pixel of a view from under the clouds.
+// Where along the ray the cloud march starts, as a pattern fixed to the
+// ground (4 m cells, small numbers): a sine hash of absolute world metres is
+// noise in 32-bit floats a few kilometres out, and it changed with every
+// morph and every move - the cloud deck shimmered over the ground.
+float landscapeCloudJitter(float2 xy)
+{
+    const float2 cell = fmod(floor(xy / 4.0), 4096.0);
+    return frac(52.9829189 * frac(dot(cell, float2(0.06711056, 0.00583715))));
+}
+
 float3 landscapeClouded(float3 colour, float3 worldPosition)
 {
     if (!landscapePerspective() || cloudsPS.w < 0.5) return colour;
@@ -173,7 +207,7 @@ float3 landscapeClouded(float3 colour, float3 worldPosition)
     const float far = length(toSurface);
     if (far < 1.0) return colour;
     const float3 d = toSurface / far;
-    const float jitter = frac(sin(dot(worldPosition.xy, float2(12.9898, 78.233))) * 43758.5453);
+    const float jitter = landscapeCloudJitter(worldPosition.xy);
     const float sunScale = lookPS.w > 0.5 ? lookPS.x : 1.0;
     const float4 cloud = cloudsAlong(cameraPS.xyz, d, far, 6, jitter, landscapeSun(),
         float3(1.05, 0.98, 0.88) * sunScale, landscapeSky(0.6) * 0.9, false);
@@ -190,7 +224,11 @@ float3 landscapeClouded(float3 colour, float3 worldPosition)
 // distance to write, so its surfaces write 0 - "something opaque is here" is
 // still what the open-sea sheet needs to know.
 static const float kSceneDepthNear = 0.5;
-static const float kSceneDepthLog = 16.87;   // log2(60000 / 0.5)
+// To four thousand kilometres: the whole world from as high as a camera goes.
+// It was sixty, and from any higher every distance read as sixty - a water
+// surface two hundred kilometres away found everything "in front of" it, and
+// looked through itself at the sky.
+static const float kSceneDepthLog = 22.93;   // log2(4000000 / 0.5)
 float sceneDepthAlpha(float3 worldPosition)
 {
     if (!landscapePerspective()) return 0.0;

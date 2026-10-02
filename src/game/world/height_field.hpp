@@ -197,6 +197,10 @@ public:
     // height depends on it and nothing may be able to see one without the
     // other.
     HeightField(const generation::WorldMapData* coarse, std::uint64_t seed);
+    // The same, with the macro layer's whole-map answer already worked out
+    // for this map (MacroWorld::resolved): nothing is read of the map to make it.
+    HeightField(const generation::WorldMapData* coarse, std::uint64_t seed,
+                std::shared_ptr<const MacroWorld::Resolved> resolved);
 
     const MacroWorld& macro() const { return macro_; }
 

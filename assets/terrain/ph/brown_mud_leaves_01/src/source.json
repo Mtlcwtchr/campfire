@@ -1,0 +1,23 @@
+{
+  "site": "polyhaven",
+  "asset_id": "brown_mud_leaves_01",
+  "asset_url": "https://polyhaven.com/a/brown_mud_leaves_01",
+  "license": "CC0",
+  "authors": [
+    "Rob Tuytel"
+  ],
+  "attribution_required": false,
+  "original_physical_metres": [
+    1.3,
+    1.3
+  ],
+  "runtime_world_scale": 1.3,
+  "resolution": "2k",
+  "files": {
+    "diffuse": "ph_brown_mud_leaves_01_diffuse.png",
+    "normal": "ph_brown_mud_leaves_01_normal.png",
+    "displacement": "ph_brown_mud_leaves_01_displacement.png",
+    "rough": "ph_brown_mud_leaves_01_rough.png",
+    "ao": "ph_brown_mud_leaves_01_ao.png"
+  }
+}

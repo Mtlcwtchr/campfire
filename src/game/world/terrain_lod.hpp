@@ -55,6 +55,9 @@ struct DataLodPolicy {
     // Zero table keeps the legacy quadtree. Equal extents refine one footprint;
     // doubled extents replace a parent with four spatial children.
     std::array<int, kGeometryLevels> chunkMetres{};
+    // Past H64: H256 and H1024, whose pages are two and eight kilometres
+    // (tile_layout.hpp). The renderer's policies; CPU fixtures stop at H64.
+    bool widePages = false;
     std::int64_t metresAt(int lod) const {
         return chunkMetres[0]
                        ? chunkMetres[std::clamp(lod, 0, int(kGeometryLevels) - 1)]
@@ -66,27 +69,32 @@ struct DataLodPolicy {
     }
     int cellsAt(int lod) const { return int(metresAt(lod) / stepAt(lod)); }
 };
+constexpr DataLodPolicy withWidePages(DataLodPolicy policy) { policy.widePages = true; return policy; }
 inline constexpr DataLodPolicy kRenderDataLodPolicy{1};
 // Runtime landscape stops at H8 geometry: no H4 pages, local H4 windows or H2
 // feature meshes. Legacy detail policies below remain CPU comparison fixtures.
 inline constexpr int kTerrainChunkCells = 32;
-inline constexpr DataLodPolicy kRegionalDataLodPolicy{1, 1, true, false, true, kTerrainChunkCells};
+inline constexpr DataLodPolicy kRegionalDataLodPolicy =
+        withWidePages(DataLodPolicy{1, 1, true, false, true, kTerrainChunkCells});
 // Unbounded fixed coverage remains a CPU comparison fixture, not a runtime policy.
 inline constexpr DataLodPolicy kStableFeatureDataLodPolicy{1, 2, true, true};
-inline constexpr DataLodPolicy kCameraFeatureDataLodPolicy{1, 2, true, false, true, kTerrainChunkCells};
+inline constexpr DataLodPolicy kCameraFeatureDataLodPolicy =
+        withWidePages(DataLodPolicy{1, 2, true, false, true, kTerrainChunkCells});
 inline constexpr std::size_t kMeshesPerPlan = 4;
 inline constexpr std::size_t kCameraPreloadPages = 16;
 
 constexpr std::int32_t dataStepForGeometry(std::int32_t geometryMetres, DataLodPolicy policy = {}) {
     const auto dataMetres = geometryMetres >> std::clamp(policy.finerLevels, 0, 2);
+    const std::int32_t coarse = !policy.widePages || dataMetres <= 128 ? 64 : dataMetres <= 512 ? 256 : 1024;
     return std::max(4 << std::clamp(policy.finestLevel,0,2),
-        dataMetres <= 4 ? 4 : dataMetres <= 8 ? 8 : dataMetres <= 32 ? 16 : 64);
+        dataMetres <= 4 ? 4 : dataMetres <= 8 ? 8 : dataMetres <= 32 ? 16 : coarse);
 }
 
 constexpr std::uint8_t dataLevelForGeometryLevel(std::int32_t geometryLevel, DataLodPolicy policy = {}) {
     const auto level = geometryLevel - std::clamp(policy.finerLevels, 0, 2);
+    const int coarse = !policy.widePages || level <= 5 ? 4 : level <= 7 ? 6 : 8;
     return std::uint8_t(std::max(std::clamp(policy.finestLevel,0,2),
-        level <= 0 ? 0 : level == 1 ? 1 : level <= 3 ? 2 : 4));
+        level <= 0 ? 0 : level == 1 ? 1 : level <= 3 ? 2 : coarse));
 }
 
 // How far past the target edge length flat ground may go. Three, so a plain
@@ -208,51 +216,116 @@ inline int geometryLevelFor(double metresPerPixel, int previous = -1, LodPolicy 
     return level;
 }
 
+// A bit for every 64 m of the world that may hold land - held in tiles of
+// 64 x 64 bits (4 km), and a tile only as bits where it is part land and part
+// sea. A tile all sea or all land is one word in the table. It was a dense
+// bit plane, which is forty-seven megabytes for a world 800 x 2000 km that is
+// nothing but sea.
 class LandMask64 {
 public:
     LandMask64() = default;
     LandMask64(std::int32_t worldWidthMetres, std::int32_t worldHeightMetres)
         : width_((std::max(0, worldWidthMetres) + 63) / 64),
           height_((std::max(0, worldHeightMetres) + 63) / 64),
-          bits_((static_cast<std::size_t>(width_) * height_ + 63) / 64) {}
+          tilesWide_((width_ + kTile - 1) / kTile),
+          tiles_(static_cast<std::size_t>(tilesWide_) * ((height_ + kTile - 1) / kTile), kSea) {}
 
     void mark(std::int32_t x, std::int32_t y) {
         if (!inside(x, y)) return;
-        const auto bit = static_cast<std::size_t>(y) * width_ + x;
-        bits_[bit / 64] |= std::uint64_t{1} << (bit % 64);
+        auto& tile = tiles_[tileOf(x, y)];
+        if (tile == kLand) return;
+        (*bitsFor(tile))[y % kTile] |= std::uint64_t{1} << (x % kTile);
     }
     void markWorldRect(std::int32_t minX, std::int32_t minY,
                        std::int32_t maxXExclusive, std::int32_t maxYExclusive) {
         if (maxXExclusive <= minX || maxYExclusive <= minY) return;
-        const auto floor64 = [](std::int32_t v) { return v >= 0 ? v / 64 : (v - 63) / 64; };
-        for (std::int32_t y = floor64(minY); y <= floor64(maxYExclusive - 1); ++y)
-            for (std::int32_t x = floor64(minX); x <= floor64(maxXExclusive - 1); ++x) mark(x, y);
+        std::int32_t x0, y0, x1, y1;
+        if (!cellRect(minX, minY, maxXExclusive, maxYExclusive, x0, y0, x1, y1)) return;
+        for (std::int32_t ty = y0 / kTile; ty <= y1 / kTile; ++ty)
+            for (std::int32_t tx = x0 / kTile; tx <= x1 / kTile; ++tx) {
+                auto& tile = tiles_[static_cast<std::size_t>(ty) * tilesWide_ + tx];
+                if (tile == kLand) continue;
+                const std::int32_t ax = std::max(x0, tx * kTile), bx = std::min(x1, tx * kTile + kTile - 1);
+                const std::int32_t ay = std::max(y0, ty * kTile), by = std::min(y1, ty * kTile + kTile - 1);
+                if (ax == tx * kTile && bx == tx * kTile + kTile - 1 &&
+                    ay == ty * kTile && by == ty * kTile + kTile - 1) {
+                    tile = kLand;   // the whole tile: no bits to hold
+                    continue;
+                }
+                auto& bits = *bitsFor(tile);
+                const std::uint64_t row = span(ax - tx * kTile, bx - tx * kTile);
+                for (std::int32_t y = ay; y <= by; ++y) bits[y - ty * kTile] |= row;
+            }
     }
     [[nodiscard]] bool land(std::int32_t x, std::int32_t y) const {
         if (!inside(x, y)) return false;
-        const auto bit = static_cast<std::size_t>(y) * width_ + x;
-        return ((bits_[bit / 64] >> (bit % 64)) & 1u) != 0;
+        const auto tile = tiles_[tileOf(x, y)];
+        if (tile == kSea) return false;
+        if (tile == kLand) return true;
+        return ((bits_[std::size_t(tile)][y % kTile] >> (x % kTile)) & 1u) != 0;
     }
     [[nodiscard]] bool anyLandInWorldRect(std::int32_t minX, std::int32_t minY,
                                           std::int32_t maxXExclusive,
                                           std::int32_t maxYExclusive) const {
         if (maxXExclusive <= minX || maxYExclusive <= minY) return false;
-        const auto floor64 = [](std::int32_t v) { return v >= 0 ? v / 64 : (v - 63) / 64; };
-        for (std::int32_t y = floor64(minY); y <= floor64(maxYExclusive - 1); ++y)
-            for (std::int32_t x = floor64(minX); x <= floor64(maxXExclusive - 1); ++x)
-                if (land(x, y)) return true;
+        std::int32_t x0, y0, x1, y1;
+        if (!cellRect(minX, minY, maxXExclusive, maxYExclusive, x0, y0, x1, y1)) return false;
+        for (std::int32_t ty = y0 / kTile; ty <= y1 / kTile; ++ty)
+            for (std::int32_t tx = x0 / kTile; tx <= x1 / kTile; ++tx) {
+                const auto tile = tiles_[static_cast<std::size_t>(ty) * tilesWide_ + tx];
+                if (tile == kSea) continue;
+                if (tile == kLand) return true;
+                const auto& bits = bits_[std::size_t(tile)];
+                const std::int32_t ax = std::max(x0, tx * kTile), bx = std::min(x1, tx * kTile + kTile - 1);
+                const std::int32_t ay = std::max(y0, ty * kTile), by = std::min(y1, ty * kTile + kTile - 1);
+                const std::uint64_t row = span(ax - tx * kTile, bx - tx * kTile);
+                for (std::int32_t y = ay; y <= by; ++y)
+                    if (bits[y - ty * kTile] & row) return true;
+            }
         return false;
     }
     [[nodiscard]] std::int32_t width() const { return width_; }
     [[nodiscard]] std::int32_t height() const { return height_; }
-    [[nodiscard]] std::size_t bytes() const { return bits_.size() * sizeof(std::uint64_t); }
+    [[nodiscard]] std::size_t bytes() const {
+        return tiles_.size() * sizeof(tiles_[0]) + bits_.size() * sizeof(Bits);
+    }
 
 private:
+    static constexpr std::int32_t kTile = 64;               // cells a side: one word a row
+    static constexpr std::int32_t kSea = -1, kLand = -2;    // tiles with no bits of their own
+    using Bits = std::array<std::uint64_t, kTile>;
+
     [[nodiscard]] bool inside(std::int32_t x, std::int32_t y) const {
         return x >= 0 && y >= 0 && x < width_ && y < height_;
     }
-    std::int32_t width_ = 0, height_ = 0;
-    std::vector<std::uint64_t> bits_;
+    [[nodiscard]] std::size_t tileOf(std::int32_t x, std::int32_t y) const {
+        return static_cast<std::size_t>(y / kTile) * tilesWide_ + x / kTile;
+    }
+    Bits* bitsFor(std::int32_t& tile) {
+        if (tile == kSea) {
+            tile = static_cast<std::int32_t>(bits_.size());
+            bits_.push_back(Bits{});
+        }
+        return &bits_[std::size_t(tile)];
+    }
+    // Bits `from`..`to` inclusive of a row word.
+    static std::uint64_t span(std::int32_t from, std::int32_t to) {
+        const std::uint64_t upTo = to >= 63 ? ~std::uint64_t{0} : (std::uint64_t{1} << (to + 1)) - 1;
+        return upTo & ~((std::uint64_t{1} << from) - 1);
+    }
+    // World metres to the cells they touch, clipped to the mask; false if none.
+    bool cellRect(std::int32_t minX, std::int32_t minY, std::int32_t maxXExclusive, std::int32_t maxYExclusive,
+                  std::int32_t& x0, std::int32_t& y0, std::int32_t& x1, std::int32_t& y1) const {
+        const auto floor64 = [](std::int32_t v) { return v >= 0 ? v / 64 : (v - 63) / 64; };
+        x0 = std::max(0, floor64(minX));
+        y0 = std::max(0, floor64(minY));
+        x1 = std::min(width_ - 1, floor64(maxXExclusive - 1));
+        y1 = std::min(height_ - 1, floor64(maxYExclusive - 1));
+        return x0 <= x1 && y0 <= y1;
+    }
+    std::int32_t width_ = 0, height_ = 0, tilesWide_ = 0;
+    std::vector<std::int32_t> tiles_;   // kSea, kLand or an index into bits_
+    std::vector<Bits> bits_;
 };
 
 // Conservative by construction: a 64 m cell is land when any generated macro

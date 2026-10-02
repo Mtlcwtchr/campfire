@@ -93,25 +93,17 @@ inline float foliageSuitability(float grass, float rock, float shore, float upri
 
 inline float foliageDensity(float suitability, float field)
 {
-    // The field decides WHERE, the suitability decides how much.
+    // Where the ground is grass the grass grows: the terrain's own grass
+    // material decides WHERE (through the suitability), as it decides where
+    // the grass texture is drawn - the two are one surface. The field only
+    // makes it thicker and thinner within that, never bare.
     //
-    // It used to be a gain of between 0.55 and 1.45 applied before a saturate,
-    // and on any ground that suits grass at all the product was over one
-    // whatever the field said. So the patchiness was clipped off exactly where
-    // there was grass to be patchy - the country came out as an even carpet
-    // wherever the climate allowed one, and the field only showed at the dying
-    // edges where nothing grew anyway.
-    //
-    // Thresholded instead: below a fifth of the field there is bare ground,
-    // above three fifths there is as much as the ground can carry, and between
-    // them is the edge of a clump. Clumps and bare patches both exist now, at
-    // all four of the field's scales.
-    // Value-noise octaves summed stay close to their mean (about +-0.1), so
-    // the old 0.2..0.6 threshold read as an even carpet with thin edges. The
-    // field is stretched first: thick islands, bare gaps and wide meadows
-    // where the kilometre octave is high.
+    // It used to threshold the field, below a fifth bare ground and above
+    // three fifths a full sward: clumps and bare patches all over ground the
+    // terrain drew as grass, the cards ragged pieces laid on a green field
+    // rather than the field itself.
     const float spread = saturate(0.5 + (field - 0.5) * 2.6);
-    return saturate(suitability * 2.6) * smoothstep(0.28, 0.66, spread);
+    return saturate(suitability * 2.6) * (0.72 + 0.28 * smoothstep(0.2, 0.8, spread));
 }
 
 struct FoliageCommunity {

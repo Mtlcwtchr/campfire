@@ -131,7 +131,7 @@ bool DagViewport::draw(const camera::Camera& camera, SDL_Rect area,
     colour.load_op = SDL_GPU_LOADOP_CLEAR; colour.store_op = SDL_GPU_STOREOP_STORE;
     colour.clear_color = {22/255.0f, 30/255.0f, 40/255.0f, 1};
     SDL_GPUDepthStencilTargetInfo depth{};
-    depth.texture = targets_.depth(); depth.clear_depth = 1;
+    depth.texture = targets_.depth(); depth.clear_depth = 0;
     depth.load_op = SDL_GPU_LOADOP_CLEAR; depth.store_op = SDL_GPU_STOREOP_DONT_CARE;
     depth.stencil_load_op = SDL_GPU_LOADOP_DONT_CARE; depth.stencil_store_op = SDL_GPU_STOREOP_DONT_CARE;
     auto* pass = SDL_BeginGPURenderPass(commands, &colour, 1, &depth);

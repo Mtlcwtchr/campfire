@@ -24,6 +24,7 @@ PackedHeightPage packHeightPage(std::shared_ptr<const world::streaming::BakedPag
     out.mayHaveWater = count == 0;
     auto surface = std::make_shared<world::terrain::SurfacePage>();
     surface->side = side; surface->padding = p.base.padding; surface->step = p.base.sampleMetres;
+    surface->version = p.ground;   // the dug ground it shows, nought for the generator's
     surface->bed.resize(count); surface->head.resize(count);
     const double low = p.base.elevationMin.toDouble();
     const double range = (p.base.elevationMax - p.base.elevationMin).toDouble();

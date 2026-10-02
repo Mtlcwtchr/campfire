@@ -1,11 +1,26 @@
 #include "engine/render/geometry/hiz_pyramid.hpp"
 
 #include <algorithm>
+#include <cstring>
 
 #include "engine/render/frame.hpp"
 #include "engine/render/render_pipeline.hpp"
 
 namespace engine {
+namespace {
+// hiz_build.hlsl's Pyramid block is six uints (width, height, sourceWidth,
+// sourceHeight, sourceBase, targetBase). They used to be written as floats and
+// read back as their bit patterns: a 480-texel row was 1139802112 texels long,
+// the bounds test passed for every thread, and row y wrote y * 1139802112
+// floats past the target's start - GPU page faults, a poisoned command queue
+// and every later frame black, or, short of a fault, other buffers
+// overwritten.
+void pyramidBlock(float* own, std::uint32_t width, std::uint32_t height, std::uint32_t sourceWidth,
+                  std::uint32_t sourceHeight, std::uint32_t sourceBase, std::uint32_t targetBase) {
+    const std::uint32_t words[6]{width, height, sourceWidth, sourceHeight, sourceBase, targetBase};
+    std::memcpy(own, words, sizeof(words));
+}
+}
 
 bool HiZPyramid::ensure(Device& device, RenderPipeline& pipeline, std::uint32_t width,
                         std::uint32_t height) {
@@ -87,12 +102,7 @@ void HiZPyramid::recordBuild(const Frame& frame, RenderPipeline& pipeline) {
     first.groupsY = (height_ + 7) / 8;
     first.storageReads = {frame.depth};
     first.writes = {scratch[0].get()};
-    first.own[0] = float(width_);
-    first.own[1] = float(height_);
-    first.own[2] = 0;
-    first.own[3] = 0;
-    first.own[4] = 0;
-    first.own[5] = 0;
+    pyramidBlock(first.own, width_, height_, 0, 0, 0, 0);
     pipeline.postDispatch(std::move(first));
 
     std::uint32_t sourceWidth = width_, sourceHeight = height_;
@@ -105,14 +115,9 @@ void HiZPyramid::recordBuild(const Frame& frame, RenderPipeline& pipeline) {
         reduce.groupsY = (targetHeight + 7) / 8;
         reduce.reads = {scratch[mip - 1].get()};
         reduce.writes = {scratch[mip].get()};
-        reduce.own[0] = float(targetWidth);
-        reduce.own[1] = float(targetHeight);
-        reduce.own[2] = float(sourceWidth);
-        reduce.own[3] = float(sourceHeight);
         // Each scratch level is its own allocation. The packed offsets only
         // exist in the copy pass below, so reductions always address from 0.
-        reduce.own[4] = 0;
-        reduce.own[5] = 0;
+        pyramidBlock(reduce.own, targetWidth, targetHeight, sourceWidth, sourceHeight, 0, 0);
         pipeline.postDispatch(std::move(reduce));
         sourceWidth = targetWidth;
         sourceHeight = targetHeight;
@@ -124,16 +129,12 @@ void HiZPyramid::recordBuild(const Frame& frame, RenderPipeline& pipeline) {
         copy.groupsY = (std::max(1u, height_ >> mip) + 7) / 8;
         copy.reads = {scratch[mip].get()};
         copy.writes = {output};
-        copy.own[0] = float(std::max(1u, width_ >> mip));
-        copy.own[1] = float(std::max(1u, height_ >> mip));
         std::size_t targetBase = 0;
         for (std::uint32_t level = 0; level < mip; ++level)
             targetBase += std::size_t(std::max(1u, width_ >> level)) *
                           std::max(1u, height_ >> level);
-        copy.own[2] = 0;
-        copy.own[3] = 0;
-        copy.own[4] = 0;
-        copy.own[5] = float(targetBase);
+        pyramidBlock(copy.own, std::max(1u, width_ >> mip), std::max(1u, height_ >> mip), 0, 0, 0,
+                     static_cast<std::uint32_t>(targetBase));
         pipeline.postDispatch(std::move(copy));
     }
     pendingIndex_ = writeIndex;

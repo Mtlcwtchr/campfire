@@ -1,0 +1,23 @@
+{
+  "site": "polyhaven",
+  "asset_id": "mud_forest",
+  "asset_url": "https://polyhaven.com/a/mud_forest",
+  "license": "CC0",
+  "authors": [
+    "eye-candy.xyz"
+  ],
+  "attribution_required": false,
+  "original_physical_metres": [
+    2.35,
+    2.35
+  ],
+  "runtime_world_scale": 2.35,
+  "resolution": "2k",
+  "files": {
+    "diffuse": "ph_mud_forest_diffuse.png",
+    "normal": "ph_mud_forest_normal.png",
+    "displacement": "ph_mud_forest_displacement.png",
+    "rough": "ph_mud_forest_rough.png",
+    "ao": "ph_mud_forest_ao.png"
+  }
+}

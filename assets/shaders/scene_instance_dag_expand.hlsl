@@ -53,8 +53,20 @@ void ExpandCS(uint3 id : SV_DispatchThreadID) {
         const uint node = (nodeFirst + i) * 12;
         if (isinf(loadFloat(nodes[node + 5])) && stackSize < 256) stack[stackSize++] = i;
     }
-    while (stackSize > 0) {
+    // Each node once, and never for ever: a node reached through two parents
+    // is the same output slot, and a second walk below it is only time - the
+    // kind that ends in a GPU watchdog (scene_mesh_dag_expand.hlsl).
+    uint visited[64];   // 2048 nodes
+    for (uint w = 0; w < 64; ++w) visited[w] = 0;
+    uint steps = 0;
+    while (stackSize > 0 && steps < 32768) {
+        ++steps;
         const uint localId = stack[--stackSize];
+        if (localId < 2048u) {
+            const uint bit = 1u << (localId & 31u);
+            if ((visited[localId >> 5] & bit) != 0u) continue;
+            visited[localId >> 5] |= bit;
+        }
         const uint node = (nodeFirst + localId) * 12;
         const float3 centre = float3(loadFloat(nodes[node + 0]),
                                      loadFloat(nodes[node + 1]),

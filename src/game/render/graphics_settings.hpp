@@ -22,7 +22,7 @@ inline constexpr std::array<Resolution, 8> kResolutions{{
 struct GraphicsSettings {
     // Quality
     int quality = 2;                 // 0 low, 1 medium, 2 high, 3 ultra: LOD error allowance
-    int antialiasing = 1;            // 0 off, 1 MSAA 4x (rebuilds the render state)
+    int antialiasing = 2;            // 0 off, 1 MSAA 4x (rebuilds the render state), 2 FXAA (post)
     // Window resolution: 0 leaves the window as it is, the rest are the
     // entries of kResolutions (pixels, not points), the last is fullscreen.
     int resolution = 0;
@@ -38,6 +38,9 @@ struct GraphicsSettings {
     float vegetationMeshKiloTriangles = 600.0f;
     bool farTrees = true;            // GPU-scattered tree impostors out to the horizon
     float farTreesStart = 1500.0f;   // where placed objects hand over to them, metres
+    // How far grass and ground flora are drawn, metres: the far tier's
+    // candidates are spread over this disc only, and fade out at its rim.
+    float foliageDistance = 2000.0f;
     float terrainBlend = 3.0f;       // metres of material transition band
     int terrainTextures = 1;         // 0 half (1024), 1 full (2048 UE originals); rebuilds the renderer
     // Distance and fog

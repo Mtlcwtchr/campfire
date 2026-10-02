@@ -1,0 +1,186 @@
+{
+ "_comment": "Decal sets. speckle, stain and streak are drawn by the terrain shader and stored nowhere: each cell of cell_m hashes itself (bound to the ground, not the camera), decides by density whether it holds one, and draws it procedurally. instance decals are placed as models from the world's seed. A category switches a set on; the control channels only scale its density. Colours are linear-ish albedo; emissive glows; fade_m: seen from .. to (metres from the eye); slope: the steepness it lies on; near_water_m: only this far above the water (0: anywhere).",
+ "decals": [
+  {
+   "name": "grodomantite",
+   "kind": "speckle",
+   "cell_m": 1.5,
+   "density": 0.18,
+   "size_m": [
+    0.08,
+    0.35
+   ],
+   "cluster": {
+    "cell_m": 24,
+    "share": 0.4
+   },
+   "colour": [
+    0.78,
+    0.06,
+    0.05
+   ],
+   "emissive": 0.15,
+   "metal": 0.8,
+   "rough": 0.35,
+   "slope": [
+    0.0,
+    0.9
+   ],
+   "under_foliage": 0.3,
+   "fade_m": [
+    0,
+    600
+   ]
+  },
+  {
+   "name": "black_wind_stain",
+   "kind": "stain",
+   "cell_m": 18,
+   "density": 0.6,
+   "size_m": [
+    6,
+    22
+   ],
+   "colour": [
+    0.05,
+    0.04,
+    0.06
+   ],
+   "opacity": 0.85,
+   "edge_noise": 0.6,
+   "fade_m": [
+    0,
+    12000
+   ]
+  },
+  {
+   "name": "dust_streaks",
+   "kind": "streak",
+   "cell_m": 8,
+   "density": 0.4,
+   "size_m": [
+    3,
+    9
+   ],
+   "along": "wind",
+   "colour": [
+    0.62,
+    0.62,
+    0.64
+   ],
+   "opacity": 0.5,
+   "fade_m": [
+    0,
+    3000
+   ]
+  },
+  {
+   "name": "grey_stain",
+   "kind": "stain",
+   "cell_m": 14,
+   "density": 0.4,
+   "size_m": [
+    4,
+    12
+   ],
+   "colour": [
+    0.55,
+    0.55,
+    0.57
+   ],
+   "opacity": 0.45,
+   "edge_noise": 0.5,
+   "fade_m": [
+    0,
+    6000
+   ]
+  },
+  {
+   "name": "slate_chips",
+   "kind": "speckle",
+   "cell_m": 1.2,
+   "density": 0.25,
+   "size_m": [
+    0.05,
+    0.18
+   ],
+   "colour": [
+    0.42,
+    0.44,
+    0.47
+   ],
+   "rough": 0.6,
+   "slope": [
+    0.0,
+    0.8
+   ],
+   "under_foliage": 0.4,
+   "fade_m": [
+    0,
+    300
+   ]
+  },
+  {
+   "name": "duckweed",
+   "kind": "stain",
+   "cell_m": 6,
+   "density": 0.5,
+   "size_m": [
+    1.5,
+    5
+   ],
+   "colour": [
+    0.25,
+    0.38,
+    0.12
+   ],
+   "opacity": 0.8,
+   "edge_noise": 0.5,
+   "near_water_m": 0.6,
+   "fade_m": [
+    0,
+    2000
+   ]
+  },
+  {
+   "name": "fallen_leaves",
+   "kind": "speckle",
+   "cell_m": 0.6,
+   "density": 0.5,
+   "size_m": [
+    0.05,
+    0.12
+   ],
+   "colour": [
+    0.35,
+    0.22,
+    0.12
+   ],
+   "under_foliage": 0.6,
+   "fade_m": [
+    0,
+    200
+   ]
+  },
+  {
+   "name": "dry_tufts",
+   "kind": "speckle",
+   "cell_m": 1.6,
+   "density": 0.3,
+   "size_m": [
+    0.15,
+    0.4
+   ],
+   "colour": [
+    0.62,
+    0.55,
+    0.35
+   ],
+   "under_foliage": 0.8,
+   "fade_m": [
+    0,
+    400
+   ]
+  }
+ ]
+}

@@ -38,16 +38,34 @@ TerrainWorkerPool& PageStore::workerPool() {
 }
 
 std::shared_ptr<const BakedPage> PageStore::resident(TileKey key) const {
+    // A page something has been dug into since it was baked is not the ground
+    // any more, wherever it is kept: the caller is told there is none, and the
+    // next page() bakes it again.
+    const auto fresh = [&](const std::shared_ptr<const BakedPage>& page) {
+        if (current(*page)) return true;
+        const std::lock_guard<std::mutex> held(guard_);
+        ++stats_.stale;
+        return false;
+    };
     // The prebaked world first. It is published whole and never changed after,
     // so a reader takes the map by pointer and looks in it without a lock.
     const auto pinned = std::atomic_load(&pinned_);
-    if (const auto found = pinned->find(key); found != pinned->end()) return found->second;
-    const std::lock_guard<std::mutex> held(guard_);
-    const auto found = pages_.find(key);
-    if (found == pages_.end()) return nullptr;
-    order_.splice(order_.end(), order_, found->second.age);
-    ++stats_.hits;
-    return found->second.page;
+    if (const auto found = pinned->find(key); found != pinned->end() && fresh(found->second)) return found->second;
+    std::shared_ptr<const BakedPage> page;
+    {
+        const std::lock_guard<std::mutex> held(guard_);
+        const auto found = pages_.find(key);
+        if (found == pages_.end()) return nullptr;
+        order_.splice(order_.end(), order_, found->second.age);
+        ++stats_.hits;
+        page = found->second.page;
+    }
+    return fresh(page) ? page : nullptr;
+}
+
+bool PageStore::current(const BakedPage& page) const {
+    const auto* edits = config_.edits.get();
+    return !edits || edits->revisionIn(reach(page.base.key)) <= page.groundRevision;
 }
 
 std::size_t PageStore::footprintOf(const BakedPage& page) {
@@ -63,20 +81,38 @@ std::size_t PageStore::footprintOf(const BakedPage& page) {
            (page.refinementDepth.size() + page.refinementAshore.size()) * sizeof(core::Fixed);
 }
 
-void PageStore::keepLocked(TileKey key, std::shared_ptr<const BakedPage> page) {
+std::shared_ptr<const BakedPage> PageStore::keepLocked(TileKey key, std::shared_ptr<const BakedPage> page) {
     const auto found = pages_.find(key);
+    if (repinLocked(key, page)) {
+        // The pinned set holds it now; an older copy in the working set (the
+        // prebake passes through it) must not be found in its place.
+        if (found != pages_.end()) {
+            bytes_ -= footprintOf(*found->second.page);
+            order_.erase(found->second.age);
+            pages_.erase(found);
+        }
+        return page;
+    }
     if (found != pages_.end()) {
-        // Somebody else finished first. Their page and this one are the same
-        // bytes, so the one already resident stays and nothing is disturbed.
-        ++stats_.rebaked;
         order_.splice(order_.end(), order_, found->second.age);
-        return;
+        if (found->second.page->groundRevision >= page->groundRevision) {
+            // Somebody else finished first. Their page and this one are the
+            // same bytes, so the one already resident stays and nothing is
+            // disturbed.
+            ++stats_.rebaked;
+            return found->second.page;
+        }
+        // Baked over newer ground than the one it replaces.
+        bytes_ -= footprintOf(*found->second.page);
+        bytes_ += footprintOf(*page);
+        found->second.page = page;
+        return page;
     }
     order_.push_back(key);
     auto age = order_.end();
     --age;
     bytes_ += footprintOf(*page);
-    pages_.emplace(key, Entry{std::move(page), age});
+    pages_.emplace(key, Entry{page, age});
     while (bytes_ > config_.residentBytes && order_.size() > 1) {
         const TileKey oldest = order_.front();
         order_.pop_front();
@@ -87,6 +123,20 @@ void PageStore::keepLocked(TileKey key, std::shared_ptr<const BakedPage> page) {
         }
         ++stats_.evicted;
     }
+    return page;
+}
+
+bool PageStore::repinLocked(TileKey key, const std::shared_ptr<const BakedPage>& page) {
+    const auto pinned = std::atomic_load(&pinned_);
+    const auto found = pinned->find(key);
+    if (found == pinned->end()) return false;
+    if (found->second->groundRevision >= page->groundRevision) return true;
+    // Copy on write, as the prebake publishes: a reader holding the old map
+    // keeps reading it, whole.
+    auto next = std::make_shared<Pinned>(*pinned);
+    (*next)[key] = page;
+    std::atomic_store(&pinned_, std::shared_ptr<const Pinned>(std::move(next)));
+    return true;
 }
 
 std::shared_ptr<const BakedPage> PageStore::page(TileKey key) {
@@ -102,48 +152,77 @@ std::shared_ptr<const BakedPage> PageStore::page(TileKey key) {
             std::fprintf(stderr, "terrain cache: %s: %s; falling back to generated pages\n",
                 config_.diskCacheRoot.string().c_str(), result.detail.c_str());
     };
-    if (persistent) {
-        BakedPage stored;
-        const auto result = diskCache_->read(key, stored);
-        if (result) {
-            auto loaded = std::make_shared<const BakedPage>(std::move(stored));
+    const auto* edits = config_.edits.get();
+    const auto area = reach(key);
+    // A stroke that lands inside the page while it bakes makes the bake a
+    // picture of ground that is gone. It is baked again, a few times; a
+    // stroke that goes on longer than that gets the last one, which is
+    // current up to the moment it began and is found stale - and baked once
+    // more - the next time anybody asks.
+    constexpr int kAttempts = 3;
+    for (int attempt = 1;; ++attempt) {
+        // The ground as this attempt begins. Read before anything is sampled:
+        // every edit at or below this revision is in what the attempt reads.
+        const std::uint64_t revision = edits ? edits->revision() : 0;
+        const std::uint64_t ground = edits ? edits->fingerprint(area) : 0;
+        const auto unchanged = [&] { return !edits || edits->revisionIn(area) <= revision; };
+        const auto stale = [&] {
             const std::lock_guard<std::mutex> held(guard_);
-            ++stats_.diskLoaded;
-            keepLocked(key, loaded);
-            const auto found = pages_.find(key);
-            return found != pages_.end() ? found->second.page : loaded;
+            ++stats_.stale;
+        };
+
+        if (persistent) {
+            BakedPage stored;
+            const auto result = diskCache_->read(key, stored, ground);
+            if (result) {
+                stored.groundRevision = revision;
+                auto loaded = std::make_shared<const BakedPage>(std::move(stored));
+                if (unchanged() || attempt == kAttempts) {
+                    const std::lock_guard<std::mutex> held(guard_);
+                    ++stats_.diskLoaded;
+                    return keepLocked(key, std::move(loaded));
+                }
+                stale();
+                continue;
+            }
+            { const std::lock_guard<std::mutex> held(guard_); ++stats_.diskMisses; }
+            if (result.status != CacheStatus::NotFound) cacheFailure(result);
         }
-        { const std::lock_guard<std::mutex> held(guard_); ++stats_.diskMisses; }
-        if (result.status != CacheStatus::NotFound) cacheFailure(result);
+
+        // Runtime detail is a real chain, not an H4 bake behind H8 topology. Do
+        // not wait on a sibling task in this pool: missing parents are made here.
+        std::shared_ptr<const BakedPage> parent;
+        if (key.level < 2) parent = page({key.x, key.y, static_cast<std::uint8_t>(key.level + 1)});
+        else if (key.level == 2) parent = resident({key.x, key.y, 4});
+        // A parent's samples are reused as they are, so a parent older than
+        // the ground this page reaches would carry the old ground into it.
+        if (parent && edits && edits->revisionIn(area) > parent->groundRevision) parent.reset();
+
+        // Baked outside the residency lock. A bake is tens of milliseconds and
+        // every other page in the store would otherwise wait on it; the cost of
+        // two workers baking one page at the same moment is one wasted bake of an
+        // identical answer, which is counted rather than prevented.
+        BakedPage made = bakerForThisThread().bakePage(key, spacing, config_.padding, {}, parent.get());
+        if (!made.base.valid()) return nullptr;
+        made.groundRevision = revision;
+        made.ground = ground;
+        auto baked = std::make_shared<const BakedPage>(std::move(made));
+        const bool current = unchanged();
+        if (!current && attempt < kAttempts) { stale(); continue; }
+
+        // Never file a page under a name its bytes may not answer to.
+        if (persistent && current) {
+            const auto saved = diskCache_->write(*baked);
+            if (saved) { const std::lock_guard<std::mutex> held(guard_); ++stats_.diskSaved; }
+            else cacheFailure(saved);
+        }
+
+        const std::lock_guard<std::mutex> held(guard_);
+        ++stats_.baked;
+        stats_.evaluatedSamples += baked->evaluatedSamples;
+        stats_.reusedSamples += baked->reusedSamples;
+        return keepLocked(key, std::move(baked));
     }
-
-    // Runtime detail is a real chain, not an H4 bake behind H8 topology. Do
-    // not wait on a sibling task in this pool: missing parents are made here.
-    std::shared_ptr<const BakedPage> parent;
-    if (key.level < 2) parent = page({key.x, key.y, static_cast<std::uint8_t>(key.level + 1)});
-    else if (key.level == 2) parent = resident({key.x, key.y, 4});
-
-    // Baked outside the residency lock. A bake is tens of milliseconds and
-    // every other page in the store would otherwise wait on it; the cost of
-    // two workers baking one page at the same moment is one wasted bake of an
-    // identical answer, which is counted rather than prevented.
-    auto baked = std::make_shared<const BakedPage>(
-            bakerForThisThread().bakePage(key, spacing, config_.padding, {}, parent.get()));
-    if (!baked->base.valid()) return nullptr;
-
-    if (persistent) {
-        const auto saved = diskCache_->write(*baked);
-        if (saved) { const std::lock_guard<std::mutex> held(guard_); ++stats_.diskSaved; }
-        else cacheFailure(saved);
-    }
-
-    const std::lock_guard<std::mutex> held(guard_);
-    ++stats_.baked;
-    stats_.evaluatedSamples += baked->evaluatedSamples;
-    stats_.reusedSamples += baked->reusedSamples;
-    keepLocked(key, baked);
-    const auto found = pages_.find(key);
-    return found != pages_.end() ? found->second.page : baked;
 }
 
 BaseTileBaker& PageStore::bakerForThisThread() const {
@@ -154,7 +233,10 @@ BaseTileBaker& PageStore::bakerForThisThread() const {
     // reference stays good outside this lock.
     const std::lock_guard<std::mutex> held(bakerGuard_);
     auto& slot = bakers_[std::this_thread::get_id()];
-    if (!slot) slot = std::make_unique<BaseTileBaker>(world_, graph_, quantisation_);
+    if (!slot) {
+        slot = std::make_unique<BaseTileBaker>(world_, graph_, quantisation_, config_.edits.get());
+        slot->landMask(&landMask_);
+    }
     return *slot;
 }
 
@@ -172,11 +254,12 @@ std::vector<TileKey> PageStore::keysOverlapping(core::WorldRect area, std::uint8
 }
 
 bool PageStore::containsLand(TileKey key) const {
-    constexpr std::int32_t halo = terrain::kFoundationMetres;
-    const auto minX = key.x * kPageMetres - halo;
-    const auto minY = key.y * kPageMetres - halo;
-    return landMask_.anyLandInWorldRect(minX, minY, minX + kPageMetres + 2 * halo,
-                                        minY + kPageMetres + 2 * halo);
+    const std::int32_t metres = pageMetresAtLevel(key.level);
+    // A coarse page's padding reaches two of its own samples out.
+    const std::int32_t halo = std::max(terrain::kFoundationMetres, 2 * (kSampleMetres << key.level));
+    const auto minX = key.x * metres - halo;
+    const auto minY = key.y * metres - halo;
+    return landMask_.anyLandInWorldRect(minX, minY, minX + metres + 2 * halo, minY + metres + 2 * halo);
 }
 
 std::size_t PageStore::pinnedBytes() const { return pinnedBytes_.load(); }
@@ -308,9 +391,7 @@ std::size_t PageStore::forget(core::WorldRect area) {
     const std::lock_guard<std::mutex> held(guard_);
     std::size_t dropped = 0;
     for (auto it = pages_.begin(); it != pages_.end();) {
-        const auto extent = tileBounds(it->first);
-        if (extent.max.x <= area.min.x || extent.min.x >= area.max.x ||
-            extent.max.y <= area.min.y || extent.min.y >= area.max.y) {
+        if (!reach(it->first).overlaps(area)) {
             ++it;
             continue;
         }

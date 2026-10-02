@@ -1,5 +1,11 @@
 #include "framework.hpp"
 #include <set>
+#include <unordered_map>
+#include <cstdio>
+#include <cmath>
+#include <numbers>
+#include <filesystem>
+#include <cstdlib>
 
 #include <atomic>
 #include <chrono>
@@ -553,7 +559,9 @@ TEST(terrain_plan_perspective_has_mixed_lod_and_retains_coverage_looking_up) {
 }
 
 TEST(terrain_plan_h64_covers_new_camera_while_detail_worker_is_blocked) {
-    Country country(1, 64, 2);
+    // Wide enough that the third camera below (two root tiles in) is still
+    // over the world, whatever a macro cell measures.
+    Country country(1, int((3 * world::tileMetresAt(6)) / generation::kMetresPerCell) - 24, 2);
     const auto roots = country.roots(6);
     TerrainPlanner planner(country.world, *country.pages, roots);
     auto residency = country.resident();
@@ -1564,4 +1572,335 @@ TEST(terrain_camera_spends_a_bounded_number_of_triangles_on_every_square) {
         CHECK(worst <= 128);
     }
     CHECK(levelsSeen > 0);
+}
+
+// Walking evicts H8 pages from the small atlas all the time - the ones the eye
+// left behind. That used to clear the whole region's cut (a world root is
+// 65 km), so the square under the pawn fell from 8 m triangles to a 1 km slab
+// at once and came back through every level over the next few seconds: "the
+// chunk under my feet is rebuilt as I walk". Losing pages now folds back only
+// the subtree that stood on them, to its nearest drawable ancestor.
+TEST(terrain_plan_lost_pages_fold_back_only_their_own_subtree) {
+    TerrainConfig config;
+    std::string error;
+    const auto file = std::filesystem::path(__FILE__).parent_path().parent_path() / "content/config/terrain.json";
+    CHECK(readTerrainConfig(file, config, error));
+    config.preloadPages = 0;
+    auto policy = kRegionalDataLodPolicy;
+    policy.chunkCells = config.chunkCells;
+    policy.chunkMetres = config.chunkMetres;
+    Country country(2, 16, 16);
+    const auto height = [](double x, double y) {
+        return 100 + 18 * std::sin(x / 41.0) * std::cos(y / 57.0) + 6 * std::sin(x / 13.0 + y / 9.0);
+    };
+    auto resident = std::make_shared<TerrainResidency>();
+    resident->revision = 1;
+    const auto addPage = [&](TileKey key) {
+        if (resident->surfaces.contains(key)) return false;
+        auto page = std::make_shared<SurfacePage>();
+        page->step = 4 << key.level; page->padding = 2;
+        const int metres = pageMetresAtLevel(key.level);
+        page->side = metres / page->step + 1 + 2 * page->padding;
+        for (int y = 0; y < page->side; ++y) for (int x = 0; x < page->side; ++x) {
+            page->bed.push_back(float(height(double(key.x) * metres + (x - page->padding) * page->step,
+                                             double(key.y) * metres + (y - page->padding) * page->step)));
+            page->head.push_back(0);
+        }
+        resident->pages.insert(key);
+        resident->surfaces.emplace(key, std::move(page));
+        return true;
+    };
+    TerrainPlanner planner(country.world, *country.pages, {{0, 0, int(kGeometryLevels) - 1}}, policy);
+    const double px = 2000, py = 2000;
+    TerrainView view;
+    view.config = config;
+    view.width = 1920; view.height = 1080;
+    {
+        const double pitch = 14 * std::numbers::pi / 180, ex = px - 4, ey = py, ez = height(px, py) + 2.2;
+        const double f[3]{std::cos(pitch), 0, -std::sin(pitch)}, r[3]{0, -1, 0}, u[3]{std::sin(pitch), 0, std::cos(pitch)};
+        const double focal = 1.7320508, sx = focal * 1080.0 / 1920.0;
+        const auto at = [&](const double* a) { return a[0] * ex + a[1] * ey + a[2] * ez; };
+        view.matrix = {float(sx * r[0]), float(sx * r[1]), float(sx * r[2]), float(-sx * at(r)),
+                       float(focal * u[0]), float(focal * u[1]), float(focal * u[2]), float(-focal * at(u)),
+                       0, 0, 0, 0.5f,
+                       float(f[0]), float(f[1]), float(f[2]), float(-at(f))};
+        view.prediction = view.matrix;
+        view.x = view.lookX = view.windowX = ex;
+        view.y = view.lookY = view.windowY = ey;
+        view.radius = 50000;
+    }
+    double time = 0;
+    std::shared_ptr<const TerrainPlan> plan;
+    const auto replan = [&] {
+        for (int attempt = 0; attempt < 50; ++attempt) {
+            time += 0.1;
+            if (!planner.request(view, resident, time)) return;
+            const auto next = collect(planner);
+            if (!next) return;
+            plan = next;
+            // A new residency object per change, as GpuTerrain publishes one:
+            // the planner diffs against the previous object it was given.
+            resident = std::make_shared<TerrainResidency>(*resident);
+            bool added = false;
+            for (const auto key : plan->missing) added = addPage(key) || added;
+            if (!added) return;
+            ++resident->revision;
+        }
+    };
+    for (int n = 0; n < 200 && (!plan || plan->needsUpdate || !plan->missing.empty()); ++n) replan();
+    if (!plan) return;
+    const auto under = [&]() -> const TerrainPlan::Block* {
+        for (const auto& b : plan->coverage)
+            if (px >= b.bounds.minX && px < b.bounds.maxX && py >= b.bounds.minY && py < b.bounds.maxY) return &b;
+        return nullptr;
+    };
+    CHECK(under() != nullptr);
+    if (!under()) return;
+    const int settled = under()->tile.lod;
+    CHECK_EQ(settled, 1);                     // H8 underfoot, the finest runtime geometry
+    // (a) The atlas lets go of H8 far from the eye, as it does on every walk.
+    resident = std::make_shared<TerrainResidency>(*resident);
+    std::size_t evicted = 0;
+    for (auto it = resident->pages.begin(); it != resident->pages.end();) {
+        const auto key = *it;
+        const double cx = (key.x + 0.5) * pageMetresAtLevel(key.level), cy = (key.y + 0.5) * pageMetresAtLevel(key.level);
+        if (key.level == 1 && std::hypot(cx - px, cy - py) > 1200) {
+            resident->surfaces.erase(key);
+            it = resident->pages.erase(it);
+            ++evicted;
+        } else ++it;
+    }
+    CHECK(evicted > 0);
+    ++resident->revision;
+    // Do not re-add what was evicted: the stream has not brought it back yet.
+    for (int n = 0; n < 8; ++n) {
+        time += 0.1;
+        if (!planner.request(view, resident, time)) break;
+        plan = collect(planner);
+        if (!plan) return;
+        const auto* b = under();
+        CHECK(b != nullptr);
+        if (!b) return;
+        CHECK_EQ(b->tile.lod, settled);       // never back up to the root
+        CHECK(plan->compatible(*resident));
+    }
+    // (b) The page under the eye itself goes: only this square folds back, to
+    // its parent - which here has the same footprint and reads H16.
+    const TileKey own{int(std::floor(px / pageMetresAtLevel(1))), int(std::floor(py / pageMetresAtLevel(1))), 1};
+    CHECK(resident->pages.contains(own));
+    resident = std::make_shared<TerrainResidency>(*resident);
+    resident->surfaces.erase(own);
+    resident->pages.erase(own);
+    ++resident->revision;
+    time += 0.1;
+    if (!planner.request(view, resident, time)) { CHECK(false); return; }
+    plan = collect(planner);
+    if (!plan) return;
+    const auto* b = under();
+    CHECK(b != nullptr);
+    if (!b) return;
+    CHECK(b->tile.lod > settled);
+    CHECK(b->tile.lod <= settled + 2);
+    CHECK(plan->compatible(*resident));
+    // Every point in front of the eye is still covered exactly once.
+    for (double x = px - 300; x <= px + 1500; x += 97)
+        for (double y = py - 600; y <= py + 600; y += 113) {
+            int count = 0;
+            for (const auto& block : plan->coverage)
+                count += x >= block.bounds.minX && x < block.bounds.maxX && y >= block.bounds.minY && y < block.bounds.maxY;
+            CHECK_EQ(count, 1);
+        }
+}
+
+// A diagnostic, not a regression test - it returns at once unless asked:
+//
+//     ASR_UNDERFOOT_PROBE=1 [ASR_UNDERFOOT_SPEED=1.4] asr_terrain_tests terrain_probe_walk_underfoot
+//
+// A third-person camera walks east over rolling ground with the runtime policy
+// and terrain.json, planning the way GpuTerrain does: the next plan is asked
+// for only once the last one's display transition (morph_seconds) is over.
+// Every plan reports what happened to the square under the pawn - its tile,
+// its built mesh, its stitched copy, its morph - and how far the ground near
+// the pawn visibly moves when the plan's transition plays.
+TEST(terrain_probe_walk_underfoot) {
+    if (!std::getenv("ASR_UNDERFOOT_PROBE")) return;
+    const double speed = std::getenv("ASR_UNDERFOOT_SPEED") ? std::atof(std::getenv("ASR_UNDERFOOT_SPEED")) : 1.4;
+    const double walk = std::getenv("ASR_UNDERFOOT_METRES") ? std::atof(std::getenv("ASR_UNDERFOOT_METRES")) : 300;
+    TerrainConfig config;
+    std::string error;
+    const auto file = std::filesystem::path(__FILE__).parent_path().parent_path() / "content/config/terrain.json";
+    CHECK(readTerrainConfig(file, config, error));
+    auto policy = kRegionalDataLodPolicy;
+    policy.chunkCells = config.chunkCells;
+    policy.chunkMetres = config.chunkMetres;
+    Country country(2, 16, 16);
+    const auto height = [](double x, double y) {
+        return 100 + 18 * std::sin(x / 41.0) * std::cos(y / 57.0) + 6 * std::sin(x / 13.0 + y / 9.0) + 0.002 * x;
+    };
+    auto resident = std::make_shared<TerrainResidency>();
+    resident->revision = 1;
+    const auto addPage = [&](TileKey key) {
+        if (resident->surfaces.contains(key)) return false;
+        auto page = std::make_shared<SurfacePage>();
+        page->step = 4 << key.level; page->padding = 2;
+        const int metres = pageMetresAtLevel(key.level);
+        page->side = metres / page->step + 1 + 2 * page->padding;
+        for (int y = 0; y < page->side; ++y) for (int x = 0; x < page->side; ++x) {
+            const double wx = double(key.x) * metres + (x - page->padding) * page->step;
+            const double wy = double(key.y) * metres + (y - page->padding) * page->step;
+            page->bed.push_back(float(height(wx, wy)));
+            page->head.push_back(0);
+        }
+        resident->pages.insert(key);
+        resident->surfaces.emplace(key, std::move(page));
+        return true;
+    };
+    TerrainPlanner planner(country.world, *country.pages, {{0, 0, int(kGeometryLevels) - 1}}, policy);
+    const auto cameraAt = [&](double px, double py) {
+        // Third person: four metres behind the pawn, 2.2 m over its ground, 14 degrees down.
+        TerrainView view;
+        view.config = config;
+        view.width = 1920; view.height = 1080;
+        const double pitch = 14 * std::numbers::pi / 180, ex = px - 4, ey = py, ez = height(px, py) + 2.2;
+        const double f[3]{std::cos(pitch), 0, -std::sin(pitch)}, r[3]{0, -1, 0}, u[3]{std::sin(pitch), 0, std::cos(pitch)};
+        const double focal = 1.7320508, aspect = 1920.0 / 1080.0, nearPlane = 0.5;
+        const auto at = [&](const double* a) { return a[0] * ex + a[1] * ey + a[2] * ez; };
+        const double sx = focal / aspect;
+        view.matrix = {float(sx * r[0]), float(sx * r[1]), float(sx * r[2]), float(-sx * at(r)),
+                       float(focal * u[0]), float(focal * u[1]), float(focal * u[2]), float(-focal * at(u)),
+                       0, 0, 0, float(nearPlane),
+                       float(f[0]), float(f[1]), float(f[2]), float(-at(f))};
+        view.prediction = view.matrix;
+        view.x = view.lookX = view.windowX = ex;
+        view.y = view.lookY = view.windowY = ey;
+        view.radius = 50000;
+        return view;
+    };
+    double time = 0;
+    std::shared_ptr<const TerrainPlan> plan;
+    const auto step = [&](const TerrainView& view) {
+        for (int attempt = 0; attempt < 50; ++attempt) {
+            if (!planner.request(view, resident, time)) return plan;
+            const auto next = collect(planner);
+            if (!next) return plan;
+            plan = next;
+            // A new residency object per change, as GpuTerrain publishes one:
+            // the planner diffs against the previous object it was given.
+            resident = std::make_shared<TerrainResidency>(*resident);
+            bool added = false;
+            for (const auto key : plan->missing) added = addPage(key) || added;
+            if (!added) return plan;
+            ++resident->revision;
+            time += 0.05;
+        }
+        return plan;
+    };
+    // Settle at the start: every page there, every mesh built, no morph left.
+    double px = 2000, py = 2000;
+    for (int n = 0; n < 200; ++n) {
+        step(cameraAt(px, py));
+        time += 0.1;
+        if (plan && !plan->needsUpdate && !plan->interpolated) break;
+    }
+    if (!plan) return;
+    const auto under = [&](const TerrainPlan& p) -> const TerrainPlan::Block* {
+        for (const auto& b : p.coverage)
+            if (px >= b.bounds.minX && px < b.bounds.maxX && py >= b.bounds.minY && py < b.bounds.maxY) return &b;
+        return nullptr;
+    };
+    const auto base = [](const TerrainPlan::Block& b) {
+        return b.mesh && b.mesh->unstitched ? b.mesh->unstitched.get() : b.mesh.get();
+    };
+    // How far the ground within `reach` of the pawn moves while this plan's
+    // display transition plays: |displayFrom - what the new mesh shows|.
+    const auto jump = [&](const TerrainPlan& p, double reach) {
+        double worst = 0;
+        for (const auto& b : p.coverage) {
+            if (!b.mesh || b.bounds.maxX < px - reach || b.bounds.minX > px + reach ||
+                b.bounds.maxY < py - reach || b.bounds.minY > py + reach) continue;
+            const auto& m = *b.mesh;
+            for (const auto& v : m.vertices) {
+                if (!(v.skirt & 8)) continue;
+                const double x = b.tile.x * double(b.metres()) + v.x * m.step;
+                const double y = b.tile.y * double(b.metres()) + v.y * m.step;
+                if (std::hypot(x - px, y - py) > reach) continue;
+                const auto i = std::size_t(v.y) * (m.cells + 1) + v.x;
+                const double shown = (v.skirt & 2) ? v.edgeBed : std::lerp(m.bed[i], v.parentBed, b.parentMorph);
+                worst = std::max(worst, std::abs(v.displayFrom[0] - shown));
+            }
+        }
+        return worst;
+    };
+    std::printf("walk %.1f m/s over %.0f m; start under foot: lod %d tile %d,%d step %.0f m\n", speed, walk,
+                under(*plan) ? under(*plan)->tile.lod : -1, under(*plan) ? under(*plan)->tile.x : 0,
+                under(*plan) ? under(*plan)->tile.y : 0, under(*plan) && under(*plan)->mesh ? under(*plan)->mesh->step : 0.0);
+    struct Count { int plans = 0, tile = 0, built = 0, stitched = 0, morph = 0, visible = 0; } count;
+    // Every block whose mesh object differs from the last plan's for the same
+    // tile is a new vertex + index buffer on the card. Why it is new:
+    struct Copies {
+        std::size_t blocks = 0, uploads = 0, newBase = 0, restitched = 0, interpolated = 0, noop = 0, bytes = 0;
+    } copies;
+    const auto shown = [](const TerrainPlan::Block& b, const AdaptiveVertex& v) {
+        const auto& m = *b.mesh;
+        const auto i = std::size_t(v.y) * (m.cells + 1) + v.x;
+        return (v.skirt & 2) ? double(v.edgeBed) : std::lerp(double(m.bed[i]), double(v.parentBed), double(b.parentMorph));
+    };
+    const double startX = px;
+    auto previous = plan;
+    while (px - startX < walk) {
+        // GpuTerrain asks again only after the last transition has played.
+        const double dt = previous->interpolated ? std::max(0.1, config.morphSeconds) : 0.1;
+        px += speed * dt;
+        time += dt;
+        step(cameraAt(px, py));
+        if (!plan || plan == previous) continue;
+        ++count.plans;
+        {
+            std::unordered_map<std::int64_t, const TerrainPlan::Block*> before;
+            for (const auto& b : previous->coverage) before.emplace(world::tileKeyOf(b.tile), &b);
+            for (const auto& b : plan->coverage) {
+                if (!b.mesh) continue;
+                ++copies.blocks;
+                const auto it = before.find(world::tileKeyOf(b.tile));
+                if (it != before.end() && it->second->mesh == b.mesh) continue;
+                ++copies.uploads;
+                copies.bytes += b.mesh->vertices.size() * sizeof(AdaptiveVertex) + b.mesh->indices.size() * 4;
+                const bool interpolating = std::any_of(b.mesh->vertices.begin(), b.mesh->vertices.end(),
+                                                       [](const auto& v) { return (v.skirt & 8) != 0; });
+                if (it == before.end() || !it->second->mesh || base(*it->second) != base(b)) { ++copies.newBase; continue; }
+                (interpolating ? copies.interpolated : copies.restitched) += 1;
+                // Same base mesh: does any vertex show a different height at all?
+                const auto& o = *it->second;
+                bool same = o.mesh->vertices.size() == b.mesh->vertices.size() && o.parentMorph == b.parentMorph;
+                for (std::size_t i = 0; same && i < b.mesh->vertices.size(); ++i)
+                    same = std::abs(shown(o, o.mesh->vertices[i]) - shown(b, b.mesh->vertices[i])) < 1e-4;
+                copies.noop += same;
+            }
+        }
+        const auto* a = under(*previous);
+        const auto* b = under(*plan);
+        if (!a || !b) { std::printf("  x=%.1f no block under foot\n", px - startX); previous = plan; continue; }
+        const bool tile = !(a->tile == b->tile);
+        const bool built = !tile && base(*a) != base(*b);
+        const bool stitched = !tile && !built && a->mesh != b->mesh;
+        const bool morph = !tile && a->parentMorph != b->parentMorph;
+        const double near = jump(*plan, 30), far = jump(*plan, 128);
+        count.tile += tile; count.built += built; count.stitched += stitched; count.morph += morph;
+        count.visible += near > 0.02;
+        if (tile || built || stitched || morph || near > 0.02)
+            std::printf("  x=%6.1f %s%s%s%s lod %d->%d morph %.2f->%.2f step %.0f->%.0f  ground moves %.3f m within 30 m, %.3f within 128 m  meshes-built %zu\n",
+                        px - startX, tile ? "TILE " : "", built ? "REBUILT " : "", stitched ? "RESTITCHED " : "",
+                        morph ? "MORPH " : "", a->tile.lod, b->tile.lod, a->parentMorph, b->parentMorph,
+                        a->mesh ? a->mesh->step : 0.0, b->mesh ? b->mesh->step : 0.0, near, far, plan->meshesBuilt);
+        previous = plan;
+    }
+    std::printf("plans %d: under foot tile changed %d, base mesh rebuilt %d, restitched only %d, morph changed %d; "
+                "ground near the pawn visibly moved in %d\n",
+                count.plans, count.tile, count.built, count.stitched, count.morph, count.visible);
+    std::printf("mesh objects: %zu blocks drawn over %d plans, %zu new on the card (%.1f per plan, %.1f KB per plan): "
+                "new base %zu, restitched copy %zu, display-transition copy %zu; copies showing no height change %zu; "
+                "AdaptiveVertex %zu bytes\n",
+                copies.blocks, count.plans, copies.uploads, double(copies.uploads) / std::max(1, count.plans),
+                double(copies.bytes) / 1024.0 / std::max(1, count.plans), copies.newBase, copies.restitched,
+                copies.interpolated, copies.noop, sizeof(AdaptiveVertex));
 }

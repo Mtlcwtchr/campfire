@@ -1,0 +1,23 @@
+{
+  "site": "polyhaven",
+  "asset_id": "rubble",
+  "asset_url": "https://polyhaven.com/a/rubble",
+  "license": "CC0",
+  "authors": [
+    "Amal Kumar"
+  ],
+  "attribution_required": false,
+  "original_physical_metres": [
+    2.0,
+    2.0
+  ],
+  "runtime_world_scale": 2.0,
+  "resolution": "2k",
+  "files": {
+    "diffuse": "ph_rubble_diffuse.png",
+    "normal": "ph_rubble_normal.png",
+    "displacement": "ph_rubble_displacement.png",
+    "rough": "ph_rubble_rough.png",
+    "ao": "ph_rubble_ao.png"
+  }
+}

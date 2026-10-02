@@ -30,10 +30,12 @@
 // as a chunk generated with its neighbours.
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <vector>
 
 #include "engine/core/geometry.hpp"
+#include "game/generation/cell_field.hpp"
 #include "game/world/coords.hpp"
 
 namespace generation { struct WorldMapData; struct WorldCell; }
@@ -123,6 +125,14 @@ public:
     // Attaching also decides what counts as a stream here, which is a question
     // about the whole map and so cannot be answered per query. See attach().
     void attach(const generation::WorldMapData* coarse);
+    // What attach() works out about the whole map - which courses hold water,
+    // where it stands - is a pure function of the map, and on a world 2000 km
+    // a side it is a pass over sixteen million cells. Handed over, a second
+    // MacroWorld on the same map takes it as it is (WorldSnapshot keeps one
+    // for every field it gives out).
+    struct Resolved;
+    [[nodiscard]] std::shared_ptr<const Resolved> resolved() const;
+    void attach(const generation::WorldMapData* coarse, std::shared_ptr<const Resolved> resolved);
     bool ready() const { return coarse_ != nullptr; }
 
     // The drainage, in doublings of flow, at or above which a channel holds
@@ -283,8 +293,23 @@ private:
     // Resolved once in drainage order, independent of the query window/LOD.
     // A node has ONE head shared by every tributary and the outgoing reach.
     // Wet runoff is inherited downstream even when the local climate is dry.
-    std::vector<core::Fixed> surface_;
-    std::vector<std::uint8_t> wet_;
+    //
+    // Sparse (the sea's head is nought and it is dry, which is the fill), and
+    // shared: a HeightField is copied onto every worker, and each copy used to
+    // carry its own nine bytes for every cell of the world - fifty megabytes a
+    // copy on the reference world, nearly all of it sea.
+    struct Drainage {
+        generation::CellField<core::Fixed> surface;
+        generation::CellField<std::uint8_t> wet;
+    };
+    std::shared_ptr<const Drainage> drainage_;
+public:
+    struct Resolved {
+        const generation::WorldMapData* map = nullptr;
+        std::uint8_t streamFlow = 255, largestFlow = 0;
+        std::shared_ptr<const Drainage> drainage;
+    };
+private:
 
     // How wide the water is and how far out the ground is drawn down to it,
     // both as a share of this map's own range of flows rather than as absolute

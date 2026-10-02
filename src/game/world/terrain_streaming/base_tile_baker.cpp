@@ -97,11 +97,11 @@ HsimQuantisation hsimQuantisationFor(const generation::WorldMapData& world) {
     // Macro elevations saturate at 255; H64 mountains are allowed to be taller.
     // Include every stage so switching geometry cannot clip an un-eroded peak
     // or change the encoding of already resident height pages.
-    if (world.terrainFoundation) for (const auto& heights : world.terrainFoundation->heightDm) {
-        if (heights.empty()) continue;
-        const auto [bottom,top]=std::minmax_element(heights.begin(),heights.end());
-        low=std::min(low,static_cast<std::int64_t>(*bottom)/10-1);
-        high=std::max(high,static_cast<std::int64_t>(*top)/10+1);
+    if (world.terrainFoundation) {
+        // Held chunks only: the rest is the sea floor (cell_field.hpp).
+        const auto [bottom,top]=world.terrainFoundation->heightRange();
+        low=std::min(low,static_cast<std::int64_t>(bottom)/10-1);
+        high=std::max(high,static_cast<std::int64_t>(top)/10+1);
     }
 
     // What the field adds on top of the coarse map, from ringHeightBounds:
@@ -114,8 +114,9 @@ HsimQuantisation hsimQuantisationFor(const generation::WorldMapData& world) {
 }
 
 BaseTileBaker::BaseTileBaker(const generation::WorldMapData& world, const HydrologyGraph& graph,
-                             HsimQuantisation quantisation)
+                             HsimQuantisation quantisation, const EditLayer* edits)
     : world_(world), graph_(graph), quantisation_(quantisation), field_(&world, world.seed) {
+    field_.edits(edits);
     const auto cells = static_cast<std::size_t>(std::max(0, world.width)) *
                        static_cast<std::size_t>(std::max(0, world.height));
     if (world.cells.size() != cells) return;
@@ -222,7 +223,8 @@ BakedPage BaseTileBaker::bakePage(TileKey key, std::int32_t sampleMetres, std::u
     // H64 and H16 share the large band's value at every common lattice point.
     // This makes H64 a strict foundation of H16 instead of an independently
     // sampled shape. H8 refines H16; H4 adds the medium band.
-    const bool wantsLarge = sampleMetres <= 16 || sampleMetres == 64;
+    // And every coarser page is a strict subsample of H64, bands and all.
+    const bool wantsLarge = sampleMetres <= 16 || sampleMetres >= 64;
     const bool wantsMedium = sampleMetres <= kSampleMetres;
     const auto startBand = [&](ResidualTile& band, ResidualLevel level) {
         band.key = key;
@@ -248,7 +250,7 @@ BakedPage BaseTileBaker::bakePage(TileKey key, std::int32_t sampleMetres, std::u
     // a coarser page is a strict subsample of the same surface, never a
     // different one.
     const std::int64_t stride = sampleMetres / kSampleMetres;
-    const std::int64_t perPage = kPageMetres / sampleMetres;
+    const std::int64_t perPage = pageMetresForSpacing(sampleMetres) / sampleMetres;
     const std::int64_t originX = static_cast<std::int64_t>(key.x) * perPage - padding;
     const std::int64_t originY = static_cast<std::int64_t>(key.y) * perPage - padding;
 
@@ -314,7 +316,17 @@ BakedPage BaseTileBaker::bakePage(TileKey key, std::int32_t sampleMetres, std::u
             // graph, in one call, so the bed cannot end up above its own
             // surface.
             const core::WorldPos position{Fixed::fromInt(worldX), Fixed::fromInt(worldY)};
-            const auto pieces = field_.piecesAt(position.x, position.y);
+            auto pieces = field_.piecesAt(position.x, position.y);
+            if (sampleMetres > 64 && landMask_) {
+                const std::int64_t px = floorDiv(worldX, kPageMetres) * kPageMetres;
+                const std::int64_t py = floorDiv(worldY, kPageMetres) * kPageMetres;
+                constexpr std::int64_t halo = terrain::kFoundationMetres;
+                if (!landMask_->anyLandInWorldRect(int(px - halo), int(py - halo), int(px + kPageMetres + halo),
+                                                   int(py + kPageMetres + halo))) {
+                    pieces.country = Fixed::fromInt(-60);
+                    pieces.moved = core::kZero;
+                }
+            }
             CarvedSample carved;
             if (world_.terrainFoundation && world_.terrainStage<generation::TerrainStage::Water) {
                 carved.floor=pieces.country+pieces.moved;

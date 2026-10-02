@@ -55,6 +55,12 @@ __pycache__/
 # baked texture maps and mip levels are reproducible outputs of pack_terrain.py.
 /assets/generated/
 /assets/retired/
+# Poly Haven scene-model sources: reproducible with tools/fetch_models.py from
+# content/config/scene_model_sources.json (md5-checked), and hundreds of MB.
+/assets/models/polyhaven/
+# UE foliage exports (tools/export_ue_foliage.py): not CC0, reproducible from the
+# AncientSettlement UE project; hundreds of MB.
+/assets/models/ue_foliage/
 /assets/terrain/**/*_albedo.png
 /assets/terrain/**/*_albedo@*.png
 /assets/terrain/**/*_normal.png
@@ -70,3 +76,6 @@ __pycache__/
 /doc/problems/*.png
 /doc/problems/*.mov
 /doc/previews/
+
+# --- generated from content/config/terrain (engine/biomes) ---
+/assets/shaders/*.gen.hlsli

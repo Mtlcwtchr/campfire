@@ -97,7 +97,7 @@ TEST(terrain_config_rejects_invalid_values_without_partial_application) {
         R"({"look_ahead_seconds":true})", R"({"max_look_ahead_metres":-1})",
         R"({"morph_seconds":-0.1})", R"({"morph_seconds":11})", R"({"morph_seconds":true})",
         R"({"morph_seconds":1e999})", R"({"mesh_builds_per_batch":0})",
-        R"({"mesh_builds_per_batch":65})", R"({"mesh_builds_per_batch":1.5})",
+        R"({"mesh_builds_per_batch":1025})", R"({"mesh_builds_per_batch":1.5})",
         R"({"prediction_seconds":-1})", R"({"prediction_seconds":3})",
         R"({"prediction_max_metres":-1})", R"({"prediction_max_metres":4097})",
         R"({"mesh_builds_per_batch":4,"meshes_per_plan":8})",
@@ -226,20 +226,24 @@ TEST(terrain_config_checked_in_file_is_valid_and_chunks_align_with_pages) {
     // Check the shipped tuning, not TerrainConfig's fallback defaults.
     CHECK_EQ(config.detailDistanceScale, 8.0);
     CHECK_EQ(config.chunkCells, 32);
-    // Two hundred and fifty-six metres to a tile until the step catches up with
-    // the tile, and from there the tile doubles with the step: a tile has to be
-    // at least one cell across, and pinning every level to the same extent is
-    // what used to pin the STEP too, capping the pyramid at 256 m and drawing
-    // the far view at sixty times the density the pixel policy asked for.
+    // Two hundred and fifty-six metres to a tile until sixteen of its steps
+    // fill it, and from there sixteen cells a tile, doubling with the step: a
+    // coarse tile is a mesh with shape in it, not one cell, and the root is
+    // sixty-four kilometres - a whole world is hundreds of roots, not the tens
+    // of thousands of one-cell squares a tile one step wide made of it.
     for (std::size_t lod = 0; lod < config.chunkMetres.size(); ++lod) {
         const int metres = config.chunkMetres[lod];
-        CHECK_EQ(metres, std::max(256, 4 << lod));
+        CHECK_EQ(metres, std::max(256, (4 << lod) * 16));
         CHECK(metres > 0 && (metres & (metres - 1)) == 0);
         // Whole pages either way round: a tile fits inside a page or covers them.
         CHECK(512 % metres == 0 || metres % 512 == 0);
     }
     CHECK_EQ(config.morphSeconds, 0.25);
-    CHECK_EQ(config.meshesPerPlan, std::size_t(4));
+    // A plan comes only once the last one's morph is done: twelve meshes a
+    // plan left a static view refining for over seven hundred frames.
+    CHECK_EQ(config.meshesPerPlan, std::size_t(192));
+    CHECK_EQ(config.meshCacheBytes, std::size_t(256) << 20);
+    CHECK_EQ(config.gpuMeshCacheBytes, std::size_t(512) << 20);
     CHECK_EQ(config.preloadPages, std::size_t(16));
     CHECK_EQ(config.preloadMarginPixels, 32.0);
     CHECK_EQ(config.lookAheadSeconds, 0.2);

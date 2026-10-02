@@ -120,11 +120,22 @@ void ClusterCuller::dispatchGpu(const Frame& frame, RenderPipeline& into,
     own[16] = selection.halfWidth;
     own[17] = selection.halfHeight;
     own[18] = selection.focal;
-    own[19] = 0;
-    own[20] = selection.hiz && selection.hizLevels ? 1.0f : 0.0f;
-    own[21] = float(selection.hiz ? selection.hizWidth : 1);
-    own[22] = float(selection.hiz ? selection.hizHeight : 1);
-    own[23] = float(selection.hiz ? selection.hizLevels : 1);
+    // The output capacity of a compacted stream (cluster_compact.hlsl clamps
+    // the dense prefix to it); 0 is unbounded.
+    const auto outputCapacity = static_cast<std::uint32_t>(outputCapacity_);
+    std::memcpy(own + 19, &outputCapacity, sizeof(outputCapacity));
+    // The HiZ block is four uints in the shader (cluster_geometry.hlsli:
+    // hizEnabled, hizWidth, hizHeight, hizLevels). Written as floats they were
+    // read back as their bit patterns - a 480-texel pyramid was 1139802112
+    // texels wide, the mip walk summed level sizes far past the buffer, and
+    // the cull read unmapped memory: a GPU page fault, the command queue
+    // poisoned, and every later frame black.
+    const bool hiz = selection.hiz && selection.hizLevels;
+    const std::uint32_t hizWords[4]{hiz ? 1u : 0u,
+                                    static_cast<std::uint32_t>(hiz ? selection.hizWidth : 1),
+                                    static_cast<std::uint32_t>(hiz ? selection.hizHeight : 1),
+                                    static_cast<std::uint32_t>(hiz ? selection.hizLevels : 1)};
+    std::memcpy(own + 20, hizWords, sizeof(hizWords));
 
     ComputeDispatch reset;
     reset.pipeline = reset_;

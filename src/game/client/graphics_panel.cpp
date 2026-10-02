@@ -55,13 +55,17 @@ bool GraphicsPanel::toggle(ui::Ui& ui, std::uint64_t id, float x, float& y, cons
 bool GraphicsPanel::draw(ui::Ui& ui, game::GraphicsSettings& s) {
     const auto& theme = ui.theme();
     const game::GraphicsSettings before = s;
-    ui.panel({0, 0, float(kWide), float(kHigh)});
+    const float high = float(ui.height());
+    ui.panel({0, 0, float(kWide), high});
     ui.text(12, 10, "GRAPHICS", theme.accent, 1.2f);
     ui.textRight(kWide - 12, 12, "O close", theme.labelSoft, 0.8f);
     const char* tabs[] = {"Quality", "Lighting", "Sky & fog", "Scene"};
     for (int i = 0; i < 4; ++i)
         if (ui.tab(ui::widgetId("graphics.tab", i), {10.0f + i * 90.0f, 34, 86, 24}, tabs[i], tab_ == i)) tab_ = i;
-    float y = 68;
+    // Everything under the tabs scrolls when the window is shorter than it.
+    const ui::Rect frame{0, 64, float(kWide), high - 64 - 44};
+    const ui::Rect content = ui.beginScroll(ui::widgetId("graphics.scroll", tab_), frame);
+    float y = content.y + 4;
     const float x = 14;
     // Dropdowns draw last so an open list lies over the rows below it.
     struct Choice { std::uint64_t id; ui::Rect rect; std::vector<std::string> options; int* value; };
@@ -81,7 +85,7 @@ bool GraphicsPanel::draw(ui::Ui& ui, game::GraphicsSettings& s) {
             for (const auto& r : game::kResolutions) names.emplace_back(r.name);
             choose("Resolution", "graphics.resolution", std::move(names), s.resolution);
         }
-        choose("Anti-aliasing", "graphics.aa", {"Off", "MSAA 4x"}, s.antialiasing);
+        choose("Anti-aliasing", "graphics.aa", {"Off", "MSAA 4x", "FXAA"}, s.antialiasing);
         choose("Terrain textures", "graphics.textures", {"1024 (half)", "2048 (UE source)"}, s.terrainTextures);
         slider(ui, ui::widgetId("graphics.draw"), x, y, "Draw distance", s.drawDistanceKm, 2, 60, "%.1f km", true);
         slider(ui, ui::widgetId("graphics.blend"), x, y, "Terrain blend", s.terrainBlend, 0.5f, 12, "%.1f m", true);
@@ -95,6 +99,7 @@ bool GraphicsPanel::draw(ui::Ui& ui, game::GraphicsSettings& s) {
         slider(ui, ui::widgetId("graphics.vegbudget"), x, y, "Tree mesh budget", s.vegetationMeshKiloTriangles, 5, 8000, "%.0fk tris", true);
         toggle(ui, ui::widgetId("graphics.fartrees"), x, y, "Trees to the horizon (GPU)", s.farTrees);
         slider(ui, ui::widgetId("graphics.fartreestart"), x, y, "Placed objects reach", s.farTreesStart, 400, 6000, "%.0f m", true);
+        slider(ui, ui::widgetId("graphics.foliagereach"), x, y, "Grass reach", s.foliageDistance, 150, 8000, "%.0f m", true);
         y += 6;
         ui.text(x, y, "LOD allowance x" + [&] { char b[16]; std::snprintf(b, sizeof b, "%.2f", s.lodScale()); return std::string(b); }(),
                 theme.labelSoft, 0.85f);
@@ -138,11 +143,14 @@ bool GraphicsPanel::draw(ui::Ui& ui, game::GraphicsSettings& s) {
         break;
     }
     }
-    const float by = kHigh - 36;
+    ui.endScroll(y + 8);
+    const float by = high - 36;
     if (ui.button(ui::widgetId("graphics.save"), {12, by, 110, 24}, "Save")) saveRequested = true;
     if (ui.button(ui::widgetId("graphics.reset"), {130, by, 110, 24}, "Defaults")) resetRequested = true;
     if (!status.empty()) ui.text(250, by + 7, status, theme.labelSoft, 0.8f);
     for (auto& choice : choices) {
+        // A box scrolled out of the frame is not there to open.
+        if (choice.rect.y < frame.y || choice.rect.bottom() > frame.bottom()) continue;
         const int picked = ui.dropdown(choice.id, choice.rect, choice.options, *choice.value);
         if (picked >= 0) *choice.value = picked;
     }

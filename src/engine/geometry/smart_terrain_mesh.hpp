@@ -9,6 +9,10 @@ namespace engine {
 struct SurfacePage {
     int side = 0, padding = 0, step = 0;
     std::vector<float> bed, head;
+    // Opaque to geometry: which ground this page of its key holds. Two pages
+    // of one key with the same version hold the same surface, so a mesh built
+    // from one serves the other; a different version means rebuild.
+    std::uint64_t version = 0;
 };
 struct AdaptiveVertex {
     // Explicit source heights, exact parent triangles and stitched shared edges.

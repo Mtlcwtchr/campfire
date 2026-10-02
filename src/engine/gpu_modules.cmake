@@ -22,7 +22,7 @@ add_library(asr_engine_render STATIC
         src/engine/pipeline/calc_pipeline.cpp
         src/engine/pipeline/runner.cpp)
 target_include_directories(asr_engine_render PUBLIC src)
-target_link_libraries(asr_engine_render PUBLIC SDL3::SDL3-static SDL3_image::SDL3_image-static
+target_link_libraries(asr_engine_render PUBLIC asr_core SDL3::SDL3-static SDL3_image::SDL3_image-static
         SDL3_shadercross::SDL3_shadercross-static PRIVATE asr_warnings)
 add_library(Campfire::Render ALIAS asr_engine_render)
 

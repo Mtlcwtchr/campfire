@@ -1,6 +1,13 @@
 #include "water.hlsl"
 #include "terrain_pages.hlsli"
 #include "terrain_page_detail.hlsli"
+// Kinds of water by the ground's category and the water layer (engine/biomes):
+// the category plane and the biome table after the scene grab (t11, t12).
+#define BIOME_PLANE_SLOT t11
+#define BIOME_PLANE_SAMPLER s11
+#define BIOME_TABLE_SLOT t12
+#define BIOME_TABLE_SAMPLER s12
+#include "terrain_biomes.hlsli"
 #include "water_scene.hlsli"
 
 WaterOut waterPageSurfaceVertex(PageSurface s, uint skirt)
@@ -69,10 +76,13 @@ WaterOut resolveWaterPageDetail(WaterOut input, out float bed)
 WaterOut resolveWaterPageDetail(WaterOut input) { float bed, head; return resolveWaterPageDetail(input, bed, head); }
 
 // The sea: its own sheet, its waves and its shore (water_sheet.hlsli).
+#include "editor_overlay.hlsli"
 #include "water_sheet.hlsli"
+
 
 float4 WaterPagePS(WaterOut input) : SV_Target0
 {
+    const float pixel = max(length(ddx(input.worldXY)), length(ddy(input.worldXY)));
     float bed, head;
     WaterOut water = resolveWaterPageDetail(input, bed, head);
     const float river = saturate(water.motion.z), lake = saturate(water.motion.w);
@@ -89,6 +99,6 @@ float4 WaterPagePS(WaterOut input) : SV_Target0
     water.ice *= 1.0 - handedOver;
     float4 result = WaterScenePS(water);
     result.a *= weight;
-    return result;
+    return withEditorMarks(result, input.worldXY, pixel);
 }
 

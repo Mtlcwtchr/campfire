@@ -25,6 +25,10 @@ namespace world {
 
 inline constexpr int kGrassCell = 2, kGrassRegion = 64, kGrassWindow = 256;
 inline constexpr std::size_t kGrassCandidateBudget = 65536;
+// Cards a fine root draws near the eye (PageGrassVS): a patch of turf, the
+// extra ones scattered within its cell. Read from the quad, not the root.
+inline constexpr int kTurfCards = 4;
+inline constexpr float kTurfReach = 0.8f;   // metres off the root, at most
 // Barycentric heights on actual rendered triangles, including stitched edges.
 // The shader follows the same source/parent/stage morph as the terrain.
 struct PageGrassRoot {

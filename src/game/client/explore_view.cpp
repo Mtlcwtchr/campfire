@@ -1,4 +1,9 @@
 #include "game/client/explore_view.hpp"
+
+#include "engine/core/profiler.hpp"
+#include "engine/ui/profiler_window.hpp"
+#include "game/generation/world_compose.hpp"
+#include "game/generation/world_import.hpp"
 #include "game/client/explore_bench.hpp"
 
 #include <algorithm>
@@ -11,18 +16,24 @@
 #include <iostream>
 #include <memory>
 #include <optional>
+#include <sstream>
 #include <nlohmann/json.hpp>
+#include <SDL3_image/SDL_image.h>
 
 #include "game/client/controls.hpp"
 #include "game/client/explore_diagnostics.hpp"
 #include "game/client/world_inspection.hpp"
 #include "game/generation/world_map_gen.hpp"
+#include "game/generation/world_layout.hpp"
 #include "game/render/calc/terrain_collect.hpp"
 #include "game/client/explore_menu.hpp"
 #include "game/render/passes/menu_pass.hpp"
 #include "game/world/coords.hpp"
 #include "game/world/height_field.hpp"
 #include "game/world/foliage_catalog.hpp"
+#include "game/world/world_delta.hpp"
+#include "engine/world_store/atomic_file.hpp"
+#include "engine/world_store/codec.hpp"
 #include "engine/ui/ui.hpp"
 
 namespace client {
@@ -37,6 +48,34 @@ std::filesystem::path groundFile() {
 }
 // Per-machine graphics choices, beside editor.json rather than in content/.
 std::filesystem::path graphicsFile() { return groundFile().parent_path().parent_path().parent_path() / "graphics.json"; }
+// The world the editor makes, beside them: worlds/world.json.
+std::filesystem::path worldFile() { return graphicsFile().parent_path() / "worlds" / "world.json"; }
+
+// The world that is showing, described as regions, for the editor to start
+// from: as many whole regions as fit, every one generated with the world's own
+// dials and the world's own seed. One seed across every region is one noise
+// field across the whole map, so this is the world on the screen, not a new one.
+generation::WorldLayout layoutShowing(const generation::WorldMapParams& params,
+                                      const std::vector<generation::WorldPreset>& presets) {
+    generation::WorldLayout layout =
+            generation::emptyLayout(std::max(1, params.width / generation::kCellsPerRegion),
+                                    std::max(1, params.height / generation::kCellsPerRegion), params.seed);
+    layout.plates = params.plates;
+    std::string preset;
+    for (const auto& p : presets)
+        if (p.params.seaPercent == params.seaPercent && p.params.erosionPasses == params.erosionPasses &&
+            p.params.rainfallPercent == params.rainfallPercent)
+            preset = p.name;
+    for (auto& region : layout.regions) {
+        region.generated = true;
+        region.settings.preset = preset;
+        region.settings.seed = params.seed;
+        region.settings.seaPercent = params.seaPercent;
+        region.settings.erosionPasses = params.erosionPasses;
+        region.settings.rainfallPercent = params.rainfallPercent;
+    }
+    return layout;
+}
 
 
 // The file the editor writes, watched.
@@ -116,6 +155,9 @@ bool ExploreView::draw(const Camera& camera) {
                                  float(camera.centreX) + half, float(camera.centreY) + half};
     }
     auto weather = menu_->weatherSnapshot();
+    // Every shader's switch for it (weather.hlsli). The explorer's own editor
+    // turns it off as the client's Edit mode does.
+    if (!weather_ || menu_->editor().active()) weather.data[0][0] = 0.0f;
     const auto snapshot = source_->read();
     const auto climate=snapshot->climate().at(focus).environment;
     const auto scalar=[](core::Fixed f) { return static_cast<float>(f.toDouble()); };
@@ -131,6 +173,16 @@ bool ExploreView::draw(const Camera& camera) {
     settings_.drawDistance = menu_->drawDistance();
     settings_.graphics = menu_->graphics();
     settings_.useGraphics = true;
+    settings_.editor = marks_ ? *marks_ : menu_->editor().overlay();
+    // The coast sketch: drawn while the world is being shaped, rebuilt when a
+    // stroke, a pin or an undo changed it - a few milliseconds, no generation.
+    const auto& editor = menu_->editor();
+    const std::uint64_t wanted = editor.active() ? editor.sketchRevision() : 0;
+    if (wanted != sketchShown_) {
+        sketchShown_ = wanted;
+        renderer_.sketch(wanted ? std::make_shared<const generation::SketchMesh>(generation::sketchMesh(editor.layout()))
+                                : nullptr);
+    }
     return renderer_.draw(camera, settings_);
 }
 
@@ -141,12 +193,44 @@ bool ExploreView::compareGrassCulling(const Camera& camera, const std::string& p
 #endif
 
 int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCells,
-                   const std::filesystem::path& assets, const std::string& shotPath,
+                   const std::filesystem::path& assets, const std::string& shotPathAsked,
                    double startZoom, const std::string& startAt, bool measuring, bool closeUp,
                    bool tracing, int shotFrame, bool showMenu, int crowd, double shotTime,
                    const std::string& mapName, double weatherDay, int weatherPreset,
                    const core::TimeConfig& calendar, const std::array<float,4>& seasons,
                    const ExploreViewOptions& options) {
+    // --shot-list: the picture being waited for changes as the list is worked
+    // through; everything that asks "is this a run for a picture" still asks it
+    // of this one name.
+    std::string shotPath = shotPathAsked;
+    struct ListedShot { std::string path, graphics; bool eye = true; double x = 0, y = 0, value = 0, yaw = 0, pitch = 0; };
+    std::vector<ListedShot> shotList;
+    if (!options.shotList.empty()) {
+        std::ifstream list(options.shotList);
+        if (!list) { std::cerr << "--shot-list: cannot read " << options.shotList << "\n"; return 1; }
+        std::string line;
+        while (std::getline(list, line)) {
+            if (const auto hash = line.find('#'); hash != std::string::npos) line.erase(hash);
+            std::istringstream in(line);
+            ListedShot shot;
+            std::string kind;
+            if (!(in >> shot.path)) continue;
+            if (!(in >> kind >> shot.x >> shot.y >> shot.value >> shot.yaw >> shot.pitch) ||
+                (kind != "eye" && kind != "orbit")) {
+                std::cerr << "--shot-list: expected PATH eye|orbit X Y ABOVE|ZOOM YAW PITCH, not: " << line << "\n";
+                return 1;
+            }
+            shot.eye = kind == "eye";
+            in >> shot.graphics;   // optional: this shot's graphics.json
+            shotList.push_back(shot);
+        }
+        if (shotList.empty()) { std::cerr << "--shot-list: no shots in " << options.shotList << "\n"; return 1; }
+        shotPath = shotList.front().path;
+    }
+    std::size_t shotNext = 0;   // the next entry of shotList to aim at
+    int shotAimedAt = 0;        // the frame the camera last moved for a listed shot
+    int shotBlackRetries = 0;   // black pictures taken again for the current shot
+    int shotSettledFrames = 0;  // frames the streaming has been caught up for
 #if !ASR_ENABLE_PROFILING
     if (measuring || tracing || crowd > 0 || std::getenv("ASR_FRAME_PROFILE") ||
         std::getenv("ASR_TERRAIN_PROFILE") || std::getenv("ASR_GRASS_COMPARE_CULL") ||
@@ -166,6 +250,24 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
     generation::WorldMapParams params;
     params.seed = seed;
     params.width = params.height = worldCells;
+    // A world made in the editor, if one was named: its regions decide the
+    // size and everything else.
+    const auto worldPresets = generation::loadWorldPresets(groundFile().parent_path() / "world_presets.json");
+    std::optional<generation::WorldLayout> startLayout;
+    if (!options.worldFile.empty() && std::filesystem::exists(options.worldFile)) {
+        startLayout = generation::loadWorldLayout(options.worldFile);
+        if (!startLayout) {
+            std::cerr << "could not read the world " << options.worldFile << "\n";
+            return 1;
+        }
+        // What was imported into it (the client's Import tab), beside it.
+        startLayout->imported = generation::openImported(
+                engine::world_store::WorldRoot::forLayout(options.worldFile) / "source", *startLayout);
+        params = generation::paramsFor(*startLayout);
+    } else if (!options.worldFile.empty()) {
+        // Not made yet: start from the usual world, and Save writes it here.
+        std::cout << "no world at " << options.worldFile << " yet - Save in the editor makes it\n";
+    }
     // Say it before anything else, because everything after it is a lie
     // otherwise.
     //
@@ -183,8 +285,61 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
 #endif
     std::cout << "raising a " << params.width << "x" << params.height << " world ..." << std::flush;
     const auto started = std::chrono::steady_clock::now();
+    // The world's history over its generated base (world_delta.hpp), in the
+    // root beside the layout it belongs to: worlds/world.json keeps its delta
+    // in worlds/world/. Only a world read from a file has one - a world from
+    // the menu is a seed, not a place with a past.
+    std::unique_ptr<world::delta::WorldDelta> worldDelta;
+    if (startLayout) {
+        const engine::world_store::WorldRoot root(engine::world_store::WorldRoot::forLayout(options.worldFile));
+        world::delta::LoadReport report;
+        worldDelta = world::delta::WorldDelta::open(root, params.seed, &report);
+        for (const auto& warning : report.warnings) std::cerr << "world delta: " << warning << "\n";
+        for (const auto& damaged : report.damaged) std::cerr << "world delta, unreadable: " << damaged << "\n";
+        if (!worldDelta)
+            std::cerr << "the world delta in " << root.directory().string()
+                      << " cannot be read; nothing will be saved over it this session\n";
+        else if (!report.fresh)
+            std::cout << "world delta: " << report.chunks << " chunks, " << report.ops << " journal records\n";
+        if (worldDelta) {
+            const auto layout = engine::world_store::readFileBytes(options.worldFile);
+            worldDelta->source(std::filesystem::path(options.worldFile).filename().string(),
+                               layout ? engine::world_store::contentHash(*layout) : 0);
+        }
+    }
+    // --dig: where, how wide, how deep. A world from the menu has no history
+    // to dig into, so it gets one in memory, which is never saved.
+    struct Dig { double x = 0, y = 0, radius = 60, metres = -12; };
+    std::optional<Dig> dig;
+    if (!options.dig.empty()) {
+        Dig d;
+        if (std::sscanf(options.dig.c_str(), "%lf,%lf,%lf,%lf", &d.x, &d.y, &d.radius, &d.metres) < 2 ||
+            d.radius <= 0 || d.metres == 0) {
+            std::cerr << "--dig wants X,Y[,RADIUS[,METRES]], not " << options.dig << "\n";
+            return 1;
+        }
+        dig = d;
+        if (!worldDelta) worldDelta = std::make_unique<world::delta::WorldDelta>(params.seed);
+    }
     world::WorldSystem builder;
-    builder.build(params);
+    // Objects and ground both: what was cut stays cut, and what was dug is
+    // what the pages are baked over and the renderer draws.
+    if (worldDelta) builder.attach(worldDelta->objects(), worldDelta->heights());
+    // Every way out of the loop below goes through here, and a delta with
+    // anything unsaved is saved on the way - unless the session is a probe.
+    struct SaveOnExit {
+        world::delta::WorldDelta* delta;
+        ~SaveOnExit() {
+            if (!delta || !delta->dirty() || !delta->root()) return;
+            const auto report = delta->save();
+            if (!report.ok) std::cerr << "world delta not saved: " << report.error << "\n";
+        }
+    } saveOnExit{dig ? nullptr : worldDelta.get()};
+    Uint64 deltaSavedAt = SDL_GetTicks();
+    // A world read from a file is its layout - its regions and what was
+    // imported into them - not a world grown from its seed alone.
+    if (startLayout) builder.publish(generation::generateLayoutWorld(*startLayout));
+    else builder.build(params);
     auto snapshot = builder.read();
     auto* world = &snapshot->worldMap();
     auto field = snapshot->field();
@@ -210,6 +365,12 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
             if (!startAt.empty() && landmark.name.find(startAt) != std::string::npos)
                 start = landmark.where;
     }
+    // Where --at can go, by name and as coordinates, for scripted shots.
+    std::cout << "landmarks:";
+    for (const auto& landmark : snapshot->landmarks())
+        std::cout << " [" << landmark.name << " " << std::lround(landmark.where.x.toDouble()) << ","
+                  << std::lround(landmark.where.y.toDouble()) << "]";
+    std::cout << "\n";
 
     Camera camera;
     camera.centreX = start.x.toDouble();
@@ -219,8 +380,10 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
     camera.heightOffset = std::clamp(options.heightOffset, -10000.0, 10000.0);
     camera.focusHeight = field.heightAt(start).toDouble() + camera.heightOffset;
     camera.pixelsPerTile = startZoom > 0 ? startZoom : 0.6;
+    // Width and height apart: a world of regions need not be square.
     double worldMetres = static_cast<double>(params.width) * generation::kMetresPerCell;
-    camera.setBounds(0, 0, worldMetres, worldMetres);
+    double worldHighMetres = static_cast<double>(params.height) * generation::kMetresPerCell;
+    camera.setBounds(0, 0, worldMetres, worldHighMetres);
     // Headless, the viewport is the offscreen target and nothing else.
     const auto viewportOf = [&](Camera& into) {
         if (window) SDL_GetWindowSizeInPixels(window, &into.viewportWidth, &into.viewportHeight);
@@ -229,7 +392,33 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
     viewportOf(camera);
     camera.setMode(options.cameraMode);
     camera.orbit(options.yaw - camera.yaw, options.pitch - camera.pitch);
-
+    if (!options.eye.empty()) {
+        double ex = 0, ey = 0, above = 1.7;
+        if (std::sscanf(options.eye.c_str(), "%lf,%lf,%lf", &ex, &ey, &above) < 2) {
+            std::cerr << "--eye wants X,Y[,ABOVE], not " << options.eye << "\n";
+            return 1;
+        }
+        camera.setMode(Camera::Mode::Free);
+        camera.centreX = ex;
+        camera.centreY = ey;
+        camera.focusHeight = field.heightAt({core::Fixed::fromDoubleForContent(ex),
+                                             core::Fixed::fromDoubleForContent(ey)}).toDouble() + above;
+        camera.orbit(options.yaw - camera.yaw, options.pitch - camera.pitch);
+    }
+    // A listed shot: on foot (free camera, metres over the ground) or third
+    // person round a point (orbit, zoom in pixels per tile).
+    const auto aimListed = [&](const ListedShot& shot) {
+        const double ground = field.heightAt({core::Fixed::fromDoubleForContent(shot.x),
+                                              core::Fixed::fromDoubleForContent(shot.y)}).toDouble();
+        camera.setMode(shot.eye ? Camera::Mode::Free : Camera::Mode::Orbit);
+        camera.centreX = shot.x;
+        camera.centreY = shot.y;
+        camera.heightOffset = 0;
+        camera.focusHeight = ground + (shot.eye ? shot.value : 0.0);
+        if (!shot.eye) camera.pixelsPerTile = shot.value;
+        camera.orbit(shot.yaw - camera.yaw, shot.pitch - camera.pitch);
+    };
+    if (!shotList.empty()) aimListed(shotList[shotNext++]);
     // The dials, on the screen, over the world they made. Built before the view
     // because the view's menu pass holds on to it, and told about the ground
     // after, because the ground is the view's and is read when the view opens.
@@ -247,15 +436,40 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
                  "Shift: fly faster; wheel: orbit distance / flight speed; Shift+G: sample / mesh grid / off;\n"
                  "Shift+M: object mesh on / off\n";
     menu.open(params, &renderer.ground(), groundFile());
+    {
+        // The world editor starts from the world that is showing, described as
+        // regions; its presets are the same file the world menu reads.
+        auto showing = startLayout ? *startLayout : layoutShowing(params, worldPresets);
+        menu.editor().open(worldPresets,
+                           options.worldFile.empty() ? worldFile() : std::filesystem::path(options.worldFile),
+                           std::move(showing));
+        // The map in its panel is drawn over the world as it came out.
+        menu.editor().builtWorld(*world);
+        if (!options.editLayer.empty() && !menu.editor().chooseLayerNamed(options.editLayer)) {
+            std::cerr << "Unknown layer: " << options.editLayer
+                      << "\nExpected: regions continents ranges hills sea weathering rain\n";
+            return 1;
+        }
+        if (options.editing) menu.toggleEditor();
+    }
     // Saved graphics first, then the command line on top: a shot asked for
     // with --draw-distance or --no-fog must get exactly that.
     menu.graphics() = game::loadGraphicsSettings(graphicsFile());
     // Reproducible runs, unless the run is there to reproduce what the saved
     // settings do (ASR_SHOT_USER_GRAPHICS=1).
     if ((!shotPath.empty() || options.benchFrames > 0) && !std::getenv("ASR_SHOT_USER_GRAPHICS"))
-        menu.graphics() = game::GraphicsSettings{};
+        menu.graphics() = options.graphicsFile.empty() ? game::GraphicsSettings{}
+                                                       : game::loadGraphicsSettings(options.graphicsFile);
     if (options.drawDistance > 0) menu.drawDistance(options.drawDistance);
+    if (options.clean) menu.presentation().developer = false;
     if (!options.fog) menu.graphics().fog = false;
+    // A listed shot may bring its own graphics.json (lighting A/B in one
+    // launch); the others get what the run started with.
+    const game::GraphicsSettings shotBaseGraphics = menu.graphics();
+    const auto graphicsForShot = [&](const ListedShot& shot) {
+        menu.graphics() = shot.graphics.empty() ? shotBaseGraphics : game::loadGraphicsSettings(shot.graphics);
+    };
+    if (!shotList.empty()) graphicsForShot(shotList.front());
     view.fog(options.fog);
     menu.configureWeather(calendar,seasons,weatherDay,weatherPreset);
     GroundWatch groundWatch(groundFile());
@@ -268,6 +482,8 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
     // live camera flies. Empty when not inspecting.
     std::optional<Camera> frozen;
     bool leftWasDown = false;
+    // A world-editor brush stroke in progress (it started on the ground).
+    bool editPainting = false;
     // What the resolution dropdown last put the window at; 0 = untouched.
     int appliedResolution = 0;
     if (options.benchFrames > 0)
@@ -283,6 +499,7 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
     bool running = true;
     Uint64 last = SDL_GetTicks();
     int frame = 0;
+    int dug = 0;   // the frame --dig landed on
 #if ASR_ENABLE_FPS
     std::uint64_t reported = 0;
 #endif
@@ -305,17 +522,38 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
         menu.panel().sceneView = true;
     }
 
+    // The runtime profiler's window (Ctrl/Cmd+P, or ASR_PROFILER=1 at start).
+    ui::ProfilerWindow profiler;
+    if (window && std::getenv("ASR_PROFILER")) profiler.open();
+    // ASR_PROFILE_TRACE=file: sampled without a window, the frames written as a
+    // Chrome trace on the way out (chrome://tracing, ui.perfetto.dev).
+    struct TraceOnExit {
+        const char* file = std::getenv("ASR_PROFILE_TRACE");
+        TraceOnExit() { if (file) engine::profile::setEnabled(true); }
+        ~TraceOnExit() {
+            if (!file) return;
+            std::string why;
+            if (!engine::profile::writeChromeTrace(file, engine::profile::frames(), &why)) std::cerr << why << "\n";
+            engine::profile::setEnabled(false);
+        }
+    } traceOnExit;
     while (running) {
 #if ASR_ENABLE_PROFILING
         diagnostics.mark(ExploreDiagnostics::Begin);
 #endif
         viewportOf(camera);
         camera.minZoom = std::min(camera.viewportWidth / worldMetres,
-                                  camera.viewportHeight * 2.0 / worldMetres) *
+                                  camera.viewportHeight * 2.0 / worldHighMetres) *
                          0.9;
         pointer.wheel = 0;
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
+            if (profiler.handle(event)) continue;
+            if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat && event.key.key == SDLK_P &&
+                (event.key.mod & (SDL_KMOD_CTRL | SDL_KMOD_GUI))) {
+                if (window) profiler.toggle();
+                continue;
+            }
             if (event.type == SDL_EVENT_QUIT) running = false;
             else if (!shotPath.empty() || measuring || tracing || scripted) continue;
             else if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat &&
@@ -348,6 +586,15 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
                             renderer.terrainSkirts() ? "ON" : "OFF");
                 std::fflush(stdout);
             }
+            // Explore / Edit.
+            else if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat && event.key.key == SDLK_GRAVE) {
+                menu.toggleEditor();
+                std::cout << (menu.editor().active()
+                                      ? "Edit mode: pick the regions or a layer in the panel; LMB paints, "
+                                        "Alt+LMB erases, [ ] brush size, Ctrl+Z undo, Enter builds\n"
+                                      : "Explore mode\n");
+            }
+            else if (menu.editor().handle(event)) continue;
             else if (menu.handle(event)) continue;
             else if (event.type == SDL_EVENT_MOUSE_WHEEL) pointer.wheel += event.wheel.y;
             else if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE)
@@ -374,7 +621,7 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
             }
         }
         float mx = 0, my = 0;
-        const SDL_MouseButtonFlags buttons = SDL_GetMouseState(&mx, &my);
+        const SDL_MouseButtonFlags buttons = profiler.hasMouse() ? 0 : SDL_GetMouseState(&mx, &my);
         int windowWidth = camera.viewportWidth, windowHeight = camera.viewportHeight;
         if (window) SDL_GetWindowSize(window, &windowWidth, &windowHeight);
         mx *= static_cast<float>(camera.viewportWidth) / std::max(1, windowWidth);
@@ -386,6 +633,16 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
         // The graphics window, in its own pixels (top right of the view).
         const bool leftDown = (buttons & SDL_BUTTON_LMASK) != 0;
         bool overGraphics = false;
+        // The world editor's panel, in its own pixels (left, under the strip).
+        bool overEditor = false;
+        {
+            auto& input = menu.editor().panelInput();
+            input.mouseX = mx - WorldEditor::kPanelX; input.mouseY = my - WorldEditor::kPanelY;
+            input.pressed = leftDown && !leftWasDown; input.released = !leftDown && leftWasDown;
+            input.down = leftDown; input.wheel = 0;
+            overEditor = menu.editor().active() && input.mouseX >= 0 && input.mouseY >= 0 &&
+                         input.mouseX < WorldEditor::kWide && input.mouseY < WorldEditor::kHigh;
+        }
         {
             auto& input = menu.panelInput();
             const float px = float(camera.viewportWidth) - GraphicsPanel::kWide - 16, py = 16;
@@ -470,9 +727,34 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
             // The draw distance slider keeps the pointer while it is dragged,
             // even off the panel; the camera must not pan under it meanwhile.
             const bool slider = !relativeMouse && menu.pointer(mx - 16, my - 16, (buttons & SDL_BUTTON_LMASK) != 0);
-            const bool overPanel = slider || overGraphics || (!relativeMouse && mx >= 16 && my >= 16 &&
+            const bool overPanel = slider || overGraphics || overEditor || (!relativeMouse && mx >= 16 && my >= 16 &&
                                   mx < 16 + ExploreMenu::kWide && my < 16 + ExploreMenu::kStatusHigh);
-            controls.update(camera, pointer, SDL_GetKeyboardState(nullptr), step, overPanel);
+            static const bool none[SDL_SCANCODE_COUNT]{};
+            controls.update(camera, pointer, profiler.hasKeyboard() ? none : SDL_GetKeyboardState(nullptr), step, overPanel);
+            // Edit mode: the brush follows the pointer over the ground, and the
+            // left button paints regions into the selection (Alt: out of it).
+            // A stroke has to START on the ground: a drag that began on the
+            // panel - a slider - never paints the map it wanders onto.
+            if (menu.editor().active()) {
+                if (menu.editor().panelInput().pressed) editPainting = !overPanel;
+                if (!leftDown) editPainting = false;
+                const bool onScreen = mx >= 0 && my >= 0 && mx < camera.viewportWidth && my < camera.viewportHeight;
+                const bool valid = !relativeMouse && !overPanel && onScreen;
+                double wx = 0, wy = 0;
+                if (valid) {
+                    // Onto the ground rather than onto a plane: twice, the second
+                    // time at the height the first one found.
+                    double z = camera.focusHeight - camera.heightOffset;
+                    for (int pass = 0; pass < 2; ++pass) {
+                        camera.worldOfScreenAtHeight(int(mx), int(my), z, wx, wy);
+                        z = field.heightAt({core::Fixed::fromDoubleForContent(std::clamp(wx, 0.0, worldMetres - 1.0)),
+                                            core::Fixed::fromDoubleForContent(std::clamp(wy, 0.0, worldHighMetres - 1.0))})
+                                    .toDouble();
+                    }
+                }
+                const bool alt = (SDL_GetModState() & SDL_KMOD_ALT) != 0;
+                menu.editor().pointer(wx, wy, valid, editPainting && !alt, editPainting && alt);
+            }
         } else {
             if (active && !relativeMouse && shotPath.empty() && !scripted)
                 menu.pointer(mx - 16, my - 16, (buttons & SDL_BUTTON_LMASK) != 0);
@@ -485,27 +767,72 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
             groundLookedAt = now;
             if (groundWatch.changed(renderer.ground())) menu.groundReread();
         }
+        // History is saved as it happens, from the delta's own thread: the
+        // frame only asks, and never waits for a disk.
+        if (worldDelta && !dig && worldDelta->root() && now - deltaSavedAt > 20000) {
+            deltaSavedAt = now;
+            if (worldDelta->dirty()) worldDelta->saveInBackground();
+        }
 
-        // A different world, asked for by Enter.
-        if (menu.wanted()) {
-            generation::WorldMapParams wanted = menu.params();
-            builder.build(wanted);
+        // A different world: asked for by Enter in the world menu, or by the
+        // world editor. The menu's is a new world, and the camera goes to where
+        // it starts; the editor's is the same world changed, and the camera
+        // stays where the person is working.
+        const auto rebuild = [&](const generation::WorldMapParams& wanted, bool recentre,
+                                 const generation::WorldLayout* layout = nullptr) {
+            const auto began = std::chrono::steady_clock::now();
+            // A layout is made of its generations (world_compose.hpp).
+            if (layout) builder.publish(generation::generateLayoutWorld(*layout));
+            else builder.build(wanted);
             snapshot = builder.read();
             world = &snapshot->worldMap();
             field = snapshot->field();
+            menu.editor().builtWorld(*world);
             // The card is holding the old country under the new one's chunk
             // numbers; none of it means anything now.
             menu.resetEnvironment();
-            const core::WorldPos where = snapshot->startingPoint();
             worldMetres = static_cast<double>(wanted.width) * generation::kMetresPerCell;
-            camera.setBounds(0, 0, worldMetres, worldMetres);
-            camera.centreX = where.x.toDouble();
-            camera.centreY = where.y.toDouble();
-            camera.focusHeight = field.heightAt(where).toDouble() +
-                                 (camera.mode == Camera::Mode::Free ? 80.0 : camera.heightOffset);
+            worldHighMetres = static_cast<double>(wanted.height) * generation::kMetresPerCell;
+            camera.setBounds(0, 0, worldMetres, worldHighMetres);
+            if (recentre) {
+                const core::WorldPos where = snapshot->startingPoint();
+                camera.centreX = where.x.toDouble();
+                camera.centreY = where.y.toDouble();
+            }
+            camera.centreX = std::clamp(camera.centreX, 0.0, worldMetres - 1.0);
+            camera.centreY = std::clamp(camera.centreY, 0.0, worldHighMetres - 1.0);
+            const core::WorldPos here{core::Fixed::fromDoubleForContent(camera.centreX),
+                                      core::Fixed::fromDoubleForContent(camera.centreY)};
+            if (recentre || camera.mode != Camera::Mode::Free)
+                camera.focusHeight = field.heightAt(here).toDouble() +
+                                     (camera.mode == Camera::Mode::Free ? 80.0 : camera.heightOffset);
+            return std::chrono::duration<double>(std::chrono::steady_clock::now() - began).count();
+        };
+        if (menu.wanted()) {
+            // Another world: this one's history does not belong to it.
+            builder.attach(nullptr);
+            rebuild(menu.params(), true);
+            menu.editor().showing(layoutShowing(menu.params(), worldPresets));
             menu.built(0);
         }
-        camera.clampTo(static_cast<int>(worldMetres), static_cast<int>(worldMetres));
+        if (menu.editor().wanted()) {
+            // The same world with its base changed: the history carries over,
+            // the ground dug into it with it.
+            if (worldDelta) builder.attach(worldDelta->objects(), worldDelta->heights());
+            const generation::WorldMapParams wanted = generation::paramsFor(menu.editor().layout());
+            std::cout << "building a " << menu.editor().layout().regionsX << "x" << menu.editor().layout().regionsY
+                      << " region world ..." << std::flush;
+            double seconds = 0;
+            try {
+                seconds = rebuild(wanted, false, &menu.editor().layout());
+                std::cout << " " << seconds << " s\n";
+            } catch (const std::exception& error) {
+                std::cout << " failed: " << error.what() << "\n";
+                seconds = -1;
+            }
+            menu.editor().built(seconds);
+        }
+        camera.clampTo(static_cast<int>(worldMetres), static_cast<int>(worldHighMetres));
         const core::WorldPos focus{core::Fixed::fromDoubleForContent(camera.centreX),
                                    core::Fixed::fromDoubleForContent(camera.centreY)};
 #if ASR_ENABLE_PROFILING
@@ -564,6 +891,8 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
             std::cerr << "the frame would not draw: " << renderer.error() << "\n";
             return 1;
         }
+        engine::profile::frame();
+        profiler.draw();
         ++frame;
         {
         const auto& cutWork = renderer.runner().work();
@@ -632,14 +961,84 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
         // was asked for at a particular frame, which is how the half-built state
         // gets looked at on purpose.
         const bool settled = renderer.settled();
-        if (!shotPath.empty() && (shotFrame > 0 ? frame >= shotFrame : settled)) {
+        // A picture waits for the streaming to have been caught up for a
+        // while, not for one frame of it: the first frames of a place can be
+        // settled ground under trees still standing in as their coarse
+        // stand-ins, which is a picture of the loading, not of the place.
+        // Counted, not consecutive: a view whose streaming flickers between
+        // done and one page short would otherwise never be taken.
+        shotSettledFrames += settled ? 1 : 0;
+        // --dig lands on settled ground, so what follows is the live path - the
+        // resident pages going stale and being written over - and the shot
+        // waits for the ground to settle a second time.
+        if (dig && !dug && settled) {
+            world::Brush brush;
+            brush.kind = dig->metres < 0 ? world::BrushKind::Lower : world::BrushKind::Raise;
+            brush.radiusMetres = dig->radius;
+            brush.strength = std::abs(dig->metres);
+            const auto current = builder.read()->field();
+            const world::GroundAt ground = [&current](core::Fixed x, core::Fixed y) {
+                return current.heightAt({x, y});
+            };
+            const auto samples = worldDelta->brush(
+                brush, ground, {core::Fixed::fromDoubleForContent(dig->x), core::Fixed::fromDoubleForContent(dig->y)},
+                1.0, world::delta::Origin::Authoring);
+            std::cout << "dug " << samples << " samples at " << dig->x << ", " << dig->y << " ("
+                      << dig->metres << " m over " << dig->radius << " m) - frame " << frame << "\n";
+            dug = frame;
+            continue;
+        }
+        // A listed shot after the first waits for the camera's move to reach
+        // the streaming: "settled" is about the view the last frame asked for.
+        const bool aimedLongEnough = shotFrame > 0 || frame >= shotAimedAt + 8;
+        // And never for ever: a listed view that has not settled in 1500
+        // frames is taken as it is (and said so), so one stubborn view does
+        // not hold up the rest of the list.
+        const bool shotOverdue = !shotList.empty() && shotFrame <= 0 && frame >= shotAimedAt + 1500;
+        if (shotOverdue && !shotPath.empty())
+            std::cout << "not settled after 1500 frames: " << shotPath << " taken as it is\n";
+        if (!shotPath.empty() && aimedLongEnough &&
+            (shotOverdue || (shotFrame > 0 ? frame >= shotAimedAt + shotFrame
+                           : settled && shotSettledFrames >= 45 && (!dig || (dug && frame > dug + 2))))) {
             if (!renderer.screenshot(shotPath)) {
                 std::cerr << "the screenshot would not save: " << renderer.error() << "\n";
                 return 1;
             }
+            // A black picture is a frame that went wrong, not the place: say
+            // so and take it again a little later (twice at most).
+            if (shotBlackRetries < 2) {
+                double mean = -1;
+                if (SDL_Surface* written = IMG_Load(shotPath.c_str())) {
+                    if (SDL_Surface* rgba = SDL_ConvertSurface(written, SDL_PIXELFORMAT_RGBA32)) {
+                        double sum = 0; std::size_t n = 0;
+                        for (int y = 0; y < rgba->h; y += 8) {
+                            const auto* row = static_cast<const Uint8*>(rgba->pixels) + std::size_t(y) * rgba->pitch;
+                            for (int x = 0; x < rgba->w; x += 8, ++n) sum += row[x * 4] + row[x * 4 + 1] + row[x * 4 + 2];
+                        }
+                        mean = n ? sum / (n * 3 * 255.0) : -1;
+                        SDL_DestroySurface(rgba);
+                    }
+                    SDL_DestroySurface(written);
+                }
+                if (mean >= 0 && mean < 0.015) {
+                    std::cout << "black frame at " << shotPath << " (frame " << frame << ", error '"
+                              << renderer.error() << "') - taking it again\n";
+                    ++shotBlackRetries;
+                    shotAimedAt = frame + 60;
+                    continue;
+                }
+            }
+            shotBlackRetries = 0;
             const auto& shotWork = renderer.runner().work();
+            const auto shotEye = camera.eyePosition();
             std::cout << "wrote " << shotPath << " - frame " << frame
                       << ", seed " << world->seed << ", at " << camera.centreX << ", " << camera.centreY
+                      << ", eye z " << shotEye[2] << " over ground "
+                      << field.heightAt({core::Fixed::fromDoubleForContent(shotEye[0]),
+                                         core::Fixed::fromDoubleForContent(shotEye[1])}).toDouble()
+                      << " (water " << field.waterLevelAt({core::Fixed::fromDoubleForContent(shotEye[0]),
+                                         core::Fixed::fromDoubleForContent(shotEye[1])}).toDouble() << ")"
+                      << ", yaw " << camera.yaw << " pitch " << camera.pitch << " (" << camera.modeName() << ")"
                       << " - " << (shotWork.unknownIndirectDraws ? ">=" : "")
                       << shotWork.triangles << " triangles, " << shotWork.draws
                       << " draws, " << shotWork.indirectDraws << " indirect; "
@@ -681,6 +1080,16 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
                 std::cout << "wrote skirt comparison " << comparison << '\n';
             }
 #endif
+            if (shotNext < shotList.size()) {
+                const auto& next = shotList[shotNext++];
+                aimListed(next);
+                graphicsForShot(next);
+                shotPath = next.path;
+                shotAimedAt = frame;
+                shotSettledFrames = 0;
+                std::cout.flush();
+                continue;
+            }
             return 0;
         }
     }

@@ -25,7 +25,7 @@ bool readTerrainConfig(const std::filesystem::path& file, TerrainConfig& into, s
                 key == "prediction_seconds" || key == "prediction_max_metres" ||
                 key == "look_ahead_seconds" || key == "max_look_ahead_metres" ||
                 key == "local_detail_height_metres" || key == "upload_mib_per_frame" ||
-                key == "cull_ground") continue;
+                key == "cull_ground" || key == "mesh_cache_mib" || key == "gpu_mesh_cache_mib") continue;
             throw std::runtime_error("unknown parameter: " + key);
         }
         const auto number = [&](const char* key, auto& destination, double low, double high) {
@@ -99,7 +99,7 @@ bool readTerrainConfig(const std::filesystem::path& file, TerrainConfig& into, s
             fresh.lod.targetTrianglePixels > fresh.lod.refineTrianglePixels)
             throw std::runtime_error("LOD hysteresis requires 2*coarsen < refine and coarsen <= target <= refine");
         number("morph_seconds", fresh.morphSeconds, 0, 10);
-        aliasedNumber("mesh_builds_per_batch", "meshes_per_plan", fresh.meshesPerPlan, 1, 64);
+        aliasedNumber("mesh_builds_per_batch", "meshes_per_plan", fresh.meshesPerPlan, 1, 1024);
         number("preload_pages", fresh.preloadPages, 0, 256);
         number("preload_margin_pixels", fresh.preloadMarginPixels, 0, 512);
         aliasedNumber("prediction_seconds", "look_ahead_seconds", fresh.lookAheadSeconds, 0, 2);
@@ -108,6 +108,11 @@ bool readTerrainConfig(const std::filesystem::path& file, TerrainConfig& into, s
         double uploadMiB = double(fresh.uploadBytesPerFrame) / (1u << 20);
         number("upload_mib_per_frame", uploadMiB, 1, 64);
         fresh.uploadBytesPerFrame = static_cast<std::size_t>(uploadMiB * (1u << 20));
+        double meshMiB = double(fresh.meshCacheBytes) / (1u << 20), gpuMeshMiB = double(fresh.gpuMeshCacheBytes) / (1u << 20);
+        number("mesh_cache_mib", meshMiB, 0, 4096);
+        number("gpu_mesh_cache_mib", gpuMeshMiB, 0, 8192);
+        fresh.meshCacheBytes = static_cast<std::size_t>(meshMiB * (1u << 20));
+        fresh.gpuMeshCacheBytes = static_cast<std::size_t>(gpuMeshMiB * (1u << 20));
         into = fresh;
         return true;
     } catch (const std::exception& e) {

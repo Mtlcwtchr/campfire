@@ -44,6 +44,49 @@ struct FoliageOut {
     float4 weather : TEXCOORD6;
 };
 
+// The ground flora past the six imported grass views, in the order
+// tools/make_foliage_cards.py writes them (cards.json): layer 6 onwards.
+static const int kCardShortGrass = 6;
+static const int kCardSeedGrass = 7;
+static const int kCardFlowersWhite = 8;
+static const int kCardFlowersYellow = 9;
+static const int kCardFlowersPurple = 10;
+static const int kCardFern = 11;
+static const int kCardDryGrass = 12;
+static const int kCardReeds = 13;
+static const int kCardUndergrowth = 14;
+static const int kCardFlowersRed = 15;
+
+// Width and height of a card against the imported meadow grass at the same
+// scale. The imported views stand knee to hip high rather than at a man's
+// chest: a meadow seen on foot is a field the eye crosses, not a hedge in
+// front of the lens. Widths stay at or under one - the GPU cull's bounds
+// (grass_cluster_prepare.hlsl) assume the imported card's width.
+float2 foliageCardShape(float variant)
+{
+    const int layer = int(variant + 0.5);
+    if (layer < kCardShortGrass) return float2(1.0, 0.70);
+    if (layer == kCardShortGrass) return float2(0.90, 0.46);
+    if (layer == kCardSeedGrass) return float2(0.80, 0.78);
+    if (layer == kCardFern) return float2(1.00, 0.52);
+    if (layer == kCardDryGrass) return float2(0.90, 0.66);
+    if (layer == kCardReeds) return float2(0.70, 1.10);
+    if (layer == kCardUndergrowth) return float2(0.75, 0.36);
+    return float2(0.72, 0.56);   // flowers
+}
+
+// What a card's texel is as a surface. The imported views are a neutral olive
+// the climate's plant colour multiplies; the generated ones are drawn in a
+// temperate meadow's own colours, so only their green is moved by the climate
+// (relative to that meadow) and a petal, a seed head or a cattail keeps its own.
+float3 foliageCardAlbedo(float3 texel, float3 tint, float variant)
+{
+    if (variant < kCardShortGrass - 0.5) return texel * tint;
+    const float3 temperate = float3(0.40, 0.63, 0.19);
+    const float leafy = saturate((texel.g - max(texel.r, texel.b)) * 14.0);
+    return texel * lerp(float3(1.0, 1.0, 1.0), tint / temperate, leafy);
+}
+
 FoliageOut FoliageVS(FoliageVertexIn vertex, FoliageInstanceIn instance)
 {
     if (instance.tint.a <= 0.0) {
@@ -109,13 +152,14 @@ FoliageOut FoliageVS(FoliageVertexIn vertex, FoliageInstanceIn instance)
     const float tip = bend * profile + shiver * profile * up;
 
     // Mid-distance instances are wider clumps, never giant grass stalks.
-    const float height = min(instance.scale, 1.3) * 1.9;
+    const float2 shape = foliageCardShape(instance.variant);
+    const float height = min(instance.scale, 1.3) * 1.9 * shape.y;
     float3 p = instance.position;
 #ifndef FOLIAGE_PAGES
     if (morphing.y > 0.5) p = morphed(p, instance.climate.w);
 #endif
     const float lay = tip * 0.42;
-    p.xy += right * (vertex.corner.x * instance.scale) +
+    p.xy += right * (vertex.corner.x * instance.scale * shape.x) +
             direction * (lay * height) +
             sideways * (drift * profile * height * 0.16);
     // And a bent blade is a shorter blade - without this the grass stretches as
@@ -141,6 +185,9 @@ FoliageOut FoliageVS(FoliageVertexIn vertex, FoliageInstanceIn instance)
     const float pixelsPerMetre = perspective ?
         length(decider[0].xyz) * viewport.x * 0.5 / max(0.5, depthW) : camera.w;
     output.tint.a *= smoothstep(0.7, 3.0, instance.scale * pixelsPerMetre);
+    // Grass reach (GraphicsSettings::foliageDistance, fog.w): the far tier
+    // stops there, so it fades over the last fifth instead of ending in a line.
+    if (perspective && fog.w > 0.0) output.tint.a *= 1.0 - smoothstep(0.8 * fog.w, fog.w, depthW);
     output.lean = float2(bend, gust);
     output.worldXY = instance.position.xy;
     output.blade = float4(normalize(float3(-direction * (bend * up * 0.30), 1.0)), up);
@@ -151,6 +198,12 @@ FoliageOut FoliageVS(FoliageVertexIn vertex, FoliageInstanceIn instance)
 float4 FoliagePS(FoliageOut input) : SV_Target0
 {
     float4 texel = cardsTex.Sample(cardsSampler, input.uvLayer);
+    // The mip chain averages coverage with the empty card round it, and an
+    // alpha-tested clump read from a small level loses its blades: lift the
+    // coverage by the level it was read at, so a far clump stays a clump.
+    const float2 texels = input.uvLayer.xy * 256.0;
+    const float level = 0.5 * log2(max(max(dot(ddx(texels), ddx(texels)), dot(ddy(texels), ddy(texels))), 1.0));
+    texel.a = saturate(texel.a * (1.0 + level * 0.30));
     clip(texel.a - 0.08);
     // Screen-door coverage can write depth; blended unsorted cards cannot.
     const float threshold = frac(52.9829189 * frac(dot(floor(input.position.xy),
@@ -174,7 +227,7 @@ float4 FoliagePS(FoliageOut input) : SV_Target0
     clip(up+0.08-input.weather.x*0.65);
     const float3 normal = normalize(input.blade.xyz);
     const float root = lookRootOcclusion(up);
-    float3 pigment = landscapePigment(texel.rgb * input.tint.rgb, 1.0);
+    float3 pigment = landscapePigment(foliageCardAlbedo(texel.rgb, input.tint.rgb, input.uvLayer.z), 1.0);
     pigment=weatherVegetation(pigment,parametersPS[0].z,input.weather.y,input.weather.w);
     pigment=lerp(pigment,float3(0.76,0.80,0.82),
                  wxSmooth(0.01,0.25,input.weather.x)*wxSmooth(0.45,1.0,up)*0.8);

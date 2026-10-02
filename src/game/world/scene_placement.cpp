@@ -1,4 +1,6 @@
 #include "game/world/scene_placement.hpp"
+
+#include "engine/biomes/registry.hpp"
 #include <algorithm>
 #include <chrono>
 #include <iostream>
@@ -24,6 +26,17 @@ unsigned ScenePlacement::workerLimit() {
     return std::clamp(hardware / 2, 1u, 4u);
 }
 
+bool ScenePlacement::groundCurrent(const Region& r, const decor::Scatter& scatter) const {
+    const auto* edits = world_->edits();
+    if (!edits) return true;
+    // The region and the ecology cell around its edge: a site reads the
+    // slope over the cell it stands in.
+    constexpr std::int64_t reach = ecology::kCellMetres;
+    const core::WorldRect area{{core::Fixed::fromInt(r.minX - reach), core::Fixed::fromInt(r.minY - reach)},
+                               {core::Fixed::fromInt(r.maxX + reach), core::Fixed::fromInt(r.maxY + reach)}};
+    return edits->revisionIn(area) <= scatter.ground;
+}
+
 void ScenePlacement::collectFinishedJobs() {
     const auto delta = world_->ecology().read();
     for (auto job = jobs_.begin(); job != jobs_.end();) {
@@ -38,7 +51,11 @@ void ScenePlacement::collectFinishedJobs() {
                 auto& [region, scatter]=job->ready[job->next++];
                 ++stats_.collected;
                 if (scatter->revision != delta->region(double(region.minX), double(region.minY))) continue;
+                // Dug under while it was being placed: an older entry stays
+                // stale and is placed again.
+                if (!groundCurrent(region, *scatter)) continue;
                 cache_[region] = {std::move(scatter), clock_};
+                if (resident_.contains(region)) dirty_ = true;
             }
         } catch (const std::exception& e) {
             // Only a region still demanded may report; a pan past a failing
@@ -55,7 +72,7 @@ void ScenePlacement::collectFinishedJobs() {
 }
 
 void ScenePlacement::startJobs() {
-    if (!enabled_ || !error_.empty() || !missing_) return;
+    if (!enabled_ || !error_.empty() || (!missing_ && !stale_)) return;
     const auto workers = std::size_t(workerLimit());
     std::unordered_set<Region,RegionHash> assigned;
     for (const auto& job : jobs_) assigned.insert(job.regions.begin(), job.regions.end());
@@ -63,7 +80,8 @@ void ScenePlacement::startJobs() {
         const auto batch=std::min(limits_.regionsPerJob,limits_.startsPerUpdate-stats_.started);
         std::vector<Region> regions;
         for (const auto& region : order_) { // nearest-first priority order
-            if (cache_.contains(region) || assigned.contains(region)) continue;
+            const auto cached = cache_.find(region);
+            if ((cached != cache_.end() && !cached->second.stale) || assigned.contains(region)) continue;
             regions.push_back(region);
             assigned.insert(region);
             if (regions.size() == batch) break;
@@ -150,6 +168,13 @@ void ScenePlacement::updateDemand(std::vector<Region> regions, Region bounds, bo
                                      [&](const auto& r) { return wanted_.contains(r); }))
             job.cancel->store(true);
     collectFinishedJobs();
+    // The terrain categories' registry swapped (a live edit): every forest
+    // and every prop is placed again from the new one.
+    if (const auto generation = engine::biomes::activeGeneration(); generation != biomesGeneration_) {
+        biomesGeneration_ = generation;
+        for (auto& [r, entry] : cache_) entry.stale = true;
+        dirty_ = true;
+    }
     const auto delta = world_->ecology().read();
     if (delta->revision != ecologyRevision_) {
         std::erase_if(cache_, [&](const auto& pair) {
@@ -160,11 +185,26 @@ void ScenePlacement::updateDemand(std::vector<Region> regions, Region bounds, bo
         });
         ecologyRevision_ = delta->revision;
     }
+    if (const auto* edits = world_->edits(); edits && edits->revision() != groundRevision_) {
+        // Only what lies near where the ground moved is asked about.
+        std::vector<core::WorldRect> changed;
+        groundRevision_ = edits->changedSince(groundRevision_, changed);
+        const auto reach = core::Fixed::fromInt(ecology::kCellMetres);
+        for (auto& [r, entry] : cache_) {
+            if (entry.stale) continue;
+            const core::WorldRect area{{core::Fixed::fromInt(r.minX) - reach, core::Fixed::fromInt(r.minY) - reach},
+                                       {core::Fixed::fromInt(r.maxX) + reach, core::Fixed::fromInt(r.maxY) + reach}};
+            if (std::any_of(changed.begin(), changed.end(), [&](const auto& c) { return c.overlaps(area); }) &&
+                !groundCurrent(r, *entry.scatter))
+                entry.stale = true;
+        }
+    }
     missing_=0;
+    stale_=0;
     if (enabled_) for (const auto& r:wanted_) {
         const auto it=cache_.find(r);
         if (it==cache_.end()) ++missing_;
-        else it->second.used=clock_;
+        else { it->second.used=clock_; stale_+=it->second.stale; }
     }
     // Only the bounded admitted set is pinned. A warm fringe cannot grow with
     // the visible world or with the distance travelled in this session.

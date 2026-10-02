@@ -3,6 +3,7 @@
 #include <cmath>
 
 #include "game/generation/world_map_gen.hpp"
+#include "game/generation/terrain_foundation.hpp"
 #include "game/world/terrain_grid.hpp"
 #include "game/world/terrain_lod.hpp"
 #include "game/world/terrain_residency.hpp"
@@ -210,7 +211,7 @@ TEST(terrain_land_mask_marks_every_coarse_cell_touched_by_land) {
     LandMask64 mask(192, 128);
     CHECK_EQ(mask.width(), 3);
     CHECK_EQ(mask.height(), 2);
-    CHECK_EQ(mask.bytes(), std::size_t(8));
+    CHECK_EQ(mask.bytes(), sizeof(std::int32_t));   // one all-sea tile, no bits
 
     // A one-metre coastal sliver crossing x=64 keeps both 64-metre cells.
     mask.markWorldRect(63, 12, 65, 13);
@@ -219,6 +220,56 @@ TEST(terrain_land_mask_marks_every_coarse_cell_touched_by_land) {
     CHECK(!mask.land(2, 0));
     CHECK(!mask.land(0, 1));
     CHECK(!mask.land(-1, 0));
+}
+
+TEST(terrain_land_mask_holds_bits_only_where_a_tile_is_part_land) {
+    // 800 x 2000 km of sea: a table word per 4 km tile, and no bits at all.
+    LandMask64 sea(786432, 1966080);
+    CHECK(sea.bytes() < 400u * 1024);
+    CHECK(!sea.anyLandInWorldRect(0, 0, 786432, 1966080));
+    // A rectangle covering whole tiles holds no bits either; its edges do.
+    LandMask64 mask(65536, 65536);
+    mask.markWorldRect(4096, 4096, 3 * 4096, 2 * 4096);
+    CHECK_EQ(mask.bytes(), std::size_t(16 * 16) * sizeof(std::int32_t));
+    CHECK(mask.land(64, 64));
+    CHECK(mask.land(191, 127));
+    CHECK(!mask.land(192, 64));
+    CHECK(!mask.land(63, 64));
+    mask.markWorldRect(100, 100, 200, 130);
+    CHECK(mask.bytes() > std::size_t(16 * 16) * sizeof(std::int32_t));
+    CHECK(mask.land(1, 1));
+    CHECK(mask.land(3, 2));
+    CHECK(!mask.land(4, 2));
+    CHECK(!mask.land(1, 3));
+    // Queries across tile borders see land in any tile of the rectangle.
+    CHECK(mask.anyLandInWorldRect(3000, 3000, 5000, 5000));
+    CHECK(!mask.anyLandInWorldRect(300, 300, 4000, 4000));
+    CHECK(mask.anyLandInWorldRect(150, 120, 151, 121));
+    CHECK(!mask.anyLandInWorldRect(256, 100, 4096, 4096));
+}
+
+TEST(terrain_land_mask_places_a_coarse_foundation_at_its_own_step) {
+    // A foundation at 512 m (the reference world's): land at point 6 is 3 km
+    // out, not 384 m.
+    generation::WorldMapData world;
+    world.width = 8;
+    world.height = 1;
+    world.cells.resize(8);
+    for (auto& cell : world.cells) cell.sea = true;
+    auto foundation = std::make_shared<generation::TerrainFoundation>();
+    foundation->step = 512;
+    foundation->stepShift = 9;
+    foundation->columns = 9;
+    foundation->rows = 2;
+    for (auto& plane : foundation->heightDm) plane.assign(18, -600);
+    for (auto& plane : foundation->heightDm) plane[6] = 400;
+    world.terrainFoundation = foundation;
+    const auto mask = makeLandMask64(world);
+    CHECK(mask.land(6 * 512 / 64, 0));
+    CHECK(mask.land((5 * 512 + 1) / 64, 0));
+    CHECK(mask.land(7 * 512 / 64, 0));
+    CHECK(!mask.land(6, 0));
+    CHECK(!mask.land(4 * 512 / 64, 0));
 }
 
 TEST(terrain_land_mask_is_conservative_at_generated_coasts) {
@@ -334,3 +385,32 @@ TEST(terrain_detail_residency_never_evicts_a_page_used_by_a_morph) {
     CHECK(!pages.find(10).has_value());
 }
 
+TEST(terrain_detail_residency_hold_protects_without_counting_as_a_use) {
+    // The renderer holds every resident page while a plan is built against
+    // them. Held pages must survive; and holding must not make them all
+    // "recent", or the oldest page would no longer be the one let go.
+    PageResidency pages(3);
+    CHECK(pages.acquire(10, 1).has_value());   // oldest
+    CHECK(pages.acquire(20, 2).has_value());
+    CHECK(pages.acquire(30, 3).has_value());   // newest
+    CHECK(pages.hold(10));
+    CHECK(pages.hold(20));
+    CHECK(pages.hold(30));
+    CHECK(!pages.hold(99));                     // not resident: nothing to hold
+    CHECK(!pages.acquire(40, 4).has_value());   // everything held: nothing goes
+    CHECK(pages.unpin(10));
+    CHECK(pages.unpin(20));
+    CHECK(pages.unpin(30));
+    // Released, the order is as it was before the hold: 10 is still the oldest.
+    const auto next = pages.acquire(40, 5);
+    CHECK(next.has_value());
+    CHECK_EQ(next->replacedKey.value_or(0), std::int64_t(10));
+    // A hold stacks with a pin; each is undone on its own.
+    CHECK(pages.pin(20, 6));
+    CHECK(pages.hold(20));
+    CHECK(pages.unpin(20));                     // the hold
+    const auto after = pages.acquire(50, 7);
+    CHECK(after.has_value());
+    CHECK_EQ(after->replacedKey.value_or(0), std::int64_t(30));
+    CHECK(pages.find(20).has_value());          // the pin still holds it
+}

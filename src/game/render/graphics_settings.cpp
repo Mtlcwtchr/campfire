@@ -6,12 +6,13 @@
 namespace game {
 void GraphicsSettings::clampAll() {
     quality = std::clamp(quality, 0, 3);
-    antialiasing = std::clamp(antialiasing, 0, 1);
+    antialiasing = std::clamp(antialiasing, 0, 2);
     terrainTextures = std::clamp(terrainTextures, 0, 1);
     shadowSoftness = std::clamp(shadowSoftness, 0.5f, 3.0f);
     terrainBlend = std::clamp(terrainBlend, 0.5f, 12.0f);
     objectError = std::clamp(objectError, 1.0f, 16.0f);
     farTreesStart = std::clamp(farTreesStart, 400.0f, 6000.0f);
+    foliageDistance = std::clamp(foliageDistance, 150.0f, 8000.0f);
     resolution = std::clamp(resolution, 0, int(kResolutions.size()) - 1);
     vegetationMeshPixels = std::clamp(vegetationMeshPixels, 20.0f, 8000.0f);
     vegetationMeshKiloTriangles = std::clamp(vegetationMeshKiloTriangles, 5.0f, 8000.0f);
@@ -39,14 +40,20 @@ GraphicsSettings graphicsPreset(int quality, GraphicsSettings keep) {
     keep.cloudQuality = clouds[keep.quality];
     keep.shadowSoftness = soft[keep.quality];
     keep.farForest = keep.quality >= 1;
-    keep.antialiasing = keep.quality >= 1 ? 1 : 0;
+    static constexpr float foliage[] = {600, 1200, 2000, 3500};
+    keep.foliageDistance = foliage[keep.quality];
+    // Post-process edges at every preset. MSAA 4x stays a choice, not a
+    // default: measured on an M3 Pro at 1080p it cost 35-60 ms a frame
+    // (forest flight 4.6 ms without, 44 ms with) - four stage render passes
+    // each loading and resolving a four-sample colour and depth target.
+    keep.antialiasing = 2;
     keep.clampAll();
     return keep;
 }
 
 #define GRAPHICS_FIELDS(X) \
     X(quality) X(antialiasing) X(resolution) X(shadows) X(shadowSoftness) X(forestProxies) X(farForest) \
-    X(massClusters) X(objectError) X(vegetationMeshPixels) X(vegetationMeshKiloTriangles) X(farTrees) X(farTreesStart) \
+    X(massClusters) X(objectError) X(vegetationMeshPixels) X(vegetationMeshKiloTriangles) X(farTrees) X(farTreesStart) X(foliageDistance) \
     X(terrainBlend) X(terrainTextures) X(drawDistanceKm) X(fog) X(fogStart) X(sunElevation) X(sunAzimuth) \
     X(sunIntensity) X(ambient) X(exposure) X(grade) X(gradeStrength) X(skybox) X(skyRotation) X(clouds) X(cloudQuality) \
     X(cloudCoverage) X(cloudDensity) X(cloudAltitude)

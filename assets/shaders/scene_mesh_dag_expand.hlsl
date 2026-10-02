@@ -72,7 +72,19 @@ void ExpandCS(uint3 id : SV_DispatchThreadID) {
         if (isinf(loadFloat(clusters[local + 5])) && stackSize < 256)
             stack[stackSize++] = i;
     }
-    while (stackSize > 0) {
+    // Each family is expanded once. Every parent in a family's group pushes
+    // the same children, so in a DAG k parents a level make k^depth paths: a
+    // tree beside the eye, refined to its finest level, was hundreds of
+    // thousands of steps for one thread - seconds of GPU, a command buffer
+    // past its watchdog, and every frame after it black. Visiting a family
+    // twice only wrote the same output slots again (each cluster's slot is
+    // its own), so this selects exactly what it did. The step cap is a last
+    // guard for meshes with more families than the mask holds.
+    uint expanded[64];   // 2048 families
+    for (uint w = 0; w < 64; ++w) expanded[w] = 0;
+    uint steps = 0;
+    while (stackSize > 0 && steps < 32768) {
+        ++steps;
         const uint idLocal = stack[--stackSize];
         const uint local = (clusterFirst + idLocal) * 12;
         const float3 localCentre = float3(loadFloat(clusters[local + 0]),
@@ -97,6 +109,11 @@ void ExpandCS(uint3 id : SV_DispatchThreadID) {
         }
         const uint family = clusters[local + 8];
         if (family == kNoFamily) continue;
+        if (family < 2048u) {
+            const uint bit = 1u << (family & 31u);
+            if ((expanded[family >> 5] & bit) != 0u) continue;
+            expanded[family >> 5] |= bit;
+        }
         const uint range = (familyFirst + family) * 2;
         const uint childFirst = families[range + 0];
         const uint childCount = families[range + 1];

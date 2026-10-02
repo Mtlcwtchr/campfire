@@ -43,6 +43,8 @@ void GpuTerrain::reset() {
     resolved_.clear();
     meshes_.clear();
     leases_.clear(); persistent_.clear(); known_.clear();
+    inflight_.clear(); // the atlases go below, with every pin they had
+    stale_.clear(); groundSeen_ = 0; restream_ = false;
     staged_.clear();
     for (auto& atlas : atlases_) atlas.reset();
     table_.reset(); tableSampler_.reset();
@@ -62,13 +64,36 @@ bool GpuTerrain::ensure(engine::Device& device) {
     const auto& world = world_->worldMap();
     const int wide = (world.width * generation::kMetresPerCell + 511) / 512;
     const int high = (world.height * generation::kMetresPerCell + 511) / 512;
-    tableWidth_ = wide + 4; tableHeight_ = high + 4;
+    tableWidth_ = tableHeight_ = kTableSide;
+    // Kept from the world before, and only what it wrote cleared: allocating
+    // it afresh was a quarter of a second of page faults on every rebuild.
+    if (tableMirror_.size() != std::size_t(kTableSide) * kTableSide * kTableLayers)
+        tableMirror_.assign(std::size_t(kTableSide) * kTableSide * kTableLayers, {0, 0, 0, 0});
+    for (const auto& [texel, key] : tableOwner_) tableMirror_[texel] = {0, 0, 0, 0};
+    tableOwner_.clear();
+    tableUploaded_ = false;
+    // How many H64 pages the land needs, for the progress read-out: by 8 km
+    // squares first, so a world 2000 km a side of open sea is thousands of
+    // questions and not sixteen million.
     std::size_t land = 0;
-    for (int y = -2; y < high + 2; ++y)
-        for (int x = -2; x < wide + 2; ++x)
-            if (world_->pages().containsLand({x, y, 4})) ++land;
-    persistentTotal_ = land; // only H64 is permanent
-    const auto columns = static_cast<std::uint32_t>(std::ceil(std::sqrt(double(std::max<std::size_t>(1, land)))));
+    const auto& mask = world_->pages().landMask();
+    for (int sy = -1; sy * 16 < high + 2; ++sy)
+        for (int sx = -1; sx * 16 < wide + 2; ++sx) {
+            if (!mask.anyLandInWorldRect(sx * 8192 - 64, sy * 8192 - 64, sx * 8192 + 8192 + 64, sy * 8192 + 8192 + 64))
+                continue;
+            for (int y = std::max(-2, sy * 16); y < std::min(high + 2, sy * 16 + 16); ++y)
+                for (int x = std::max(-2, sx * 16); x < std::min(wide + 2, sx * 16 + 16); ++x)
+                    if (world_->pages().containsLand({x, y, 4})) ++land;
+        }
+    persistentTotal_ = land;
+    // H64 is held for the window around the camera, not for the world: the
+    // land of a world a thousand kilometres long is a million and a half of
+    // these, gigabytes on the card, for a view that reaches forty. A hundred
+    // and ninety-two a side covers any window at the widest draw distance
+    // over land that is not all land; past that, the farthest are let go.
+    constexpr std::uint32_t kCoarseSide = 192;
+    const auto columns = std::min(kCoarseSide,
+            static_cast<std::uint32_t>(std::ceil(std::sqrt(double(std::max<std::size_t>(1, land))))));
     constexpr std::array<int, 4> steps{4, 8, 16, 64};
     for (std::size_t i = 0; i < atlases_.size(); ++i) {
         const auto side = i == 0 ? 1u : i == 1 ? unsigned(config_.h8AtlasSide) :
@@ -85,8 +110,8 @@ bool GpuTerrain::ensure(engine::Device& device) {
     info.format = SDL_GPU_TEXTUREFORMAT_R32G32B32A32_FLOAT;
     info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
     info.width = tableWidth_; info.height = tableHeight_;
-    info.layer_count_or_depth = static_cast<std::uint32_t>(atlases_.size()); info.num_levels = 1;
-    gpuBytes_ += std::size_t(tableWidth_) * tableHeight_ * atlases_.size() * 16;
+    info.layer_count_or_depth = kTableLayers; info.num_levels = 1;
+    gpuBytes_ += std::size_t(tableWidth_) * tableHeight_ * kTableLayers * 16;
     info.sample_count = SDL_GPU_SAMPLECOUNT_1;
     table_ = device.makeTexture(info);
     SDL_GPUSamplerCreateInfo sampler{};
@@ -94,6 +119,7 @@ bool GpuTerrain::ensure(engine::Device& device) {
     sampler.address_mode_u = sampler.address_mode_v = sampler.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
     tableSampler_ = device.makeSampler(sampler);
     if (!table_ || !tableSampler_ || !climate_.ensure(device, world_->climate())) return false;
+    if (!biomes_.ensure(device, world_->climate())) return false;
     if (!vertices_ || !indices_ || gridCells_ != config_.chunkCells) {
         const auto grid = world::terrain::makeGridTopology(config_.chunkCells);
         vertices_ = device.uploadBuffer(SDL_GPU_BUFFERUSAGE_VERTEX, grid.vertices.data(), grid.vertices.size() * sizeof(world::terrain::GridVertex));
@@ -103,7 +129,7 @@ bool GpuTerrain::ensure(engine::Device& device) {
         gridCells_ = grid.cells;
     }
     if (!vertices_ || !indices_) return false;
-    const auto quant = world::streaming::hsimQuantisationFor(world);
+    const auto& quant = world_->pages().quantisation();
     low_ = static_cast<float>(quant.low.toDouble());
     range_ = static_cast<float>((quant.high - quant.low).toDouble());
     stream_ = std::make_unique<HeightPageStream>(world_->pages());
@@ -114,32 +140,88 @@ bool GpuTerrain::ensure(engine::Device& device) {
     residency_ = std::move(residency);
     activeH8AtlasSide_ = config_.h8AtlasSide;
     activeChunkMetres_ = config_.chunkMetres;
+    // Whatever was dug before now is in every page the stream will bake.
+    if (const auto* edits = world_->edits()) groundSeen_ = edits->revision();
     revision_ = 1;
     tableDirty_ = !publishTable(device);
     return !tableDirty_;
 }
 
 void GpuTerrain::protect(Key key, std::uint64_t serial) {
-    auto& atlas = *atlases_[dataset(key.level)];
+    auto& atlas = *atlases_[atlasOf(key.level)];
     if (leases_.empty() || leases_.back().serial != serial || leases_.back().plan)
         leases_.push_back({serial, {}, {}});
     if (!leases_.back().keys.contains(key) && atlas.pin(key, serial)) leases_.back().keys.insert(key);
 }
+
+void GpuTerrain::observeGround() {
+    const auto* edits = world_->edits();
+    if (!edits || edits->revision() == groundSeen_) return;
+    std::vector<core::WorldRect> changed;
+    groundSeen_ = edits->changedSince(groundSeen_, changed);
+    if (changed.empty()) return;
+    const auto& pages = world_->pages();
+    for (const auto key : known_) {
+        if (stale_.contains(key)) continue;
+        const auto reach = pages.reach(key);
+        if (std::any_of(changed.begin(), changed.end(), [&](const auto& area) { return area.overlaps(reach); }))
+            stale_.insert(key);
+    }
+    restream_ = true;
+}
 void GpuTerrain::retire(std::uint64_t completed) {
     while (!leases_.empty() && leases_.front().serial <= completed) {
-        for (const auto key : leases_.front().keys) atlases_[dataset(key.level)]->unpin(key);
+        for (const auto key : leases_.front().keys) atlases_[atlasOf(key.level)]->unpin(key);
         if (const auto& plan = leases_.front().plan)
-            for (auto key : plan->pins) atlases_[dataset(key.level)]->unpin(key);
+            for (auto key : plan->pins) atlases_[atlasOf(key.level)]->unpin(key);
         leases_.pop_front();
     }
     std::unordered_set<const world::terrain::AdaptiveMesh*> held;
     if (plan_) for (const auto& block : plan_->coverage) held.insert(block.mesh.get());
-    std::erase_if(meshes_,[&](const auto& entry) {
-        return !held.contains(entry.first) && entry.second.lastSerial <= completed;
-    });
+    // Buffers no cut draws stay on the card, oldest out first, within the
+    // config's budget: a mesh the CPU kept in its cache comes back drawn at
+    // once instead of uploaded again. They used to go at the first frame the
+    // cut stopped drawing them.
+    struct Idle { std::uint64_t serial; const world::terrain::AdaptiveMesh* key; std::size_t bytes; };
+    std::vector<Idle> idle;
+    std::size_t idleBytes = 0;
+    for (const auto& [key, buffers] : meshes_) {
+        const std::size_t bytes = key->vertices.size() * sizeof(world::terrain::AdaptiveVertex) +
+                                  key->indices.size() * sizeof(std::uint32_t);
+        if (held.contains(key) || buffers.lastSerial > completed) continue;
+        idle.push_back({buffers.lastSerial, key, bytes});
+        idleBytes += bytes;
+    }
+    if (idleBytes > config_.gpuMeshCacheBytes) {
+        std::sort(idle.begin(), idle.end(), [](const Idle& a, const Idle& b) { return a.serial < b.serial; });
+        for (const auto& i : idle) {
+            if (idleBytes <= config_.gpuMeshCacheBytes) break;
+            meshes_.erase(i.key);
+            idleBytes -= i.bytes;
+        }
+    }
+}
+
+bool GpuTerrain::requestPlan(const world::terrain::TerrainView& view) {
+    auto& surface = preparation_->surface;
+    if (!surface.request(view, residency_, planTime_, restartPlan_)) return false;
+    restartPlan_ = false;
+    // One plan in flight at a time (both callers wait for !busy()), so the
+    // previous hold - if a result was never collected - is this one's now.
+    releaseInflight();
+    inflight_.reserve(residency_->pages.size());
+    for (const auto key : residency_->pages)
+        if (atlases_[atlasOf(key.level)]->hold(key)) inflight_.push_back(key);
+    return true;
+}
+
+void GpuTerrain::releaseInflight() {
+    for (const auto key : inflight_) atlases_[atlasOf(key.level)]->unpin(key);
+    inflight_.clear();
 }
 
 bool GpuTerrain::accept(engine::Device& device, std::shared_ptr<const Plan> plan) {
+    lostPages_ = false;
     if (plan && (plan->view.stageFrom!=lastView_.stageFrom || plan->view.stageTo!=lastView_.stageTo)) return false;
     if (plan && plan_ && (plan_->view.stageFrom!=plan->view.stageFrom || plan_->view.stageTo!=plan->view.stageTo) &&
         (plan->blank || plan->deferredRegions || std::any_of(plan->coverage.begin(),plan->coverage.end(),
@@ -150,8 +232,13 @@ bool GpuTerrain::accept(engine::Device& device, std::shared_ptr<const Plan> plan
     // A perspective snapshot may lag the moving eye. Its complete cut is safe
     // to re-cull now only when ALL dependencies are still resident. An older
     // residency revision with additive arrivals is not lost page data.
-    if (!plan || tableDirty_ ||
-        (plan_ && plan->sequence <= plan_->sequence) || !plan->compatible(*residency_)) return false;
+    if (!plan || tableDirty_ || (plan_ && plan->sequence <= plan_->sequence)) return false;
+    if (!plan->compatible(*residency_)) {
+        lostPages_ = true;
+        if (std::getenv("ASR_TERRAIN_UNDERFOOT"))
+            std::fprintf(stderr, "underfoot plan refused: pins no longer resident -> restart from the roots\n");
+        return false;
+    }
     // One copy submission for all new immutable topology buffers. Never replace
     // a cut with partially uploaded geometry; the old cut and its fences survive.
     std::vector<MeshBuffers> uploaded;
@@ -183,13 +270,74 @@ bool GpuTerrain::accept(engine::Device& device, std::shared_ptr<const Plan> plan
     }
     std::size_t pinned = 0;
     for (auto key : plan->pins) {
-        auto& atlas = *atlases_[dataset(key.level)];
+        auto& atlas = *atlases_[atlasOf(key.level)];
         if (!atlas.find(key) || !atlas.pin(key, serial_)) {
             for (std::size_t i = 0; i < pinned; ++i)
-                atlases_[dataset(plan->pins[i].level)]->unpin(plan->pins[i]);
+                atlases_[atlasOf(plan->pins[i].level)]->unpin(plan->pins[i]);
+            lostPages_ = true;
             return false;
         }
         ++pinned;
+    }
+    // ASR_TERRAIN_UNDERFOOT=1: one line per accepted plan that changes the
+    // square under the eye - its tile, its built mesh, its stitched copy, its
+    // morph - and whether the cut was restarted or lost pages. Diagnostic only.
+    static const bool underfoot = std::getenv("ASR_TERRAIN_UNDERFOOT") != nullptr;
+    if (underfoot) {
+        const auto under = [&](const Plan* p) -> const Block* {
+            if (!p) return nullptr;
+            for (const auto& b : p->coverage)
+                if (lastX_ >= b.bounds.minX && lastX_ < b.bounds.maxX && lastY_ >= b.bounds.minY && lastY_ < b.bounds.maxY)
+                    return &b;
+            return nullptr;
+        };
+        const auto base = [](const Block* b) -> const void* {
+            return !b || !b->mesh ? nullptr : b->mesh->unstitched ? b->mesh->unstitched.get() : b->mesh.get();
+        };
+        const Block* was = under(plan_.get());
+        const Block* now = under(plan.get());
+        const bool tile = !was || !now || !(was->tile == now->tile);
+        const bool built = !tile && base(was) != base(now);
+        const bool stitched = !tile && !built && was->mesh != now->mesh;
+        const bool morph = !tile && was->parentMorph != now->parentMorph;
+        // How far the ground visibly travels while this plan's display
+        // transition plays, near the eye: |displayFrom - what is now shown|,
+        // and how far the plan's own morph phases move it.
+        double jump30 = 0, jump128 = 0;
+        std::size_t uploads = 0, nearUploads = 0;
+        for (const auto& b : plan->coverage) {
+            if (!b.mesh) continue;
+            const bool fresh = !meshes_.contains(b.mesh.get());
+            uploads += fresh;
+            const double cx = std::clamp(lastX_, b.bounds.minX, b.bounds.maxX) - lastX_;
+            const double cy = std::clamp(lastY_, b.bounds.minY, b.bounds.maxY) - lastY_;
+            if (cx * cx + cy * cy > 128.0 * 128.0) continue;
+            nearUploads += fresh;
+            const auto& m = *b.mesh;
+            for (const auto& v : m.vertices) {
+                if (!(v.skirt & 8)) continue;
+                const double dx = b.tile.x * double(b.metres()) + v.x * m.step - lastX_;
+                const double dy = b.tile.y * double(b.metres()) + v.y * m.step - lastY_;
+                const double d2 = dx * dx + dy * dy;
+                if (d2 > 128.0 * 128.0) continue;
+                const auto i = std::size_t(v.y) * (m.cells + 1) + v.x;
+                const double shown = (v.skirt & 2) ? v.edgeBed : std::lerp(double(m.bed[i]), double(v.parentBed), double(b.parentMorph));
+                const double moved = std::abs(double(v.displayFrom[0]) - shown);
+                jump128 = std::max(jump128, moved);
+                if (d2 <= 30.0 * 30.0) jump30 = std::max(jump30, moved);
+            }
+        }
+        if (tile || built || stitched || morph || jump30 > 0.01)
+            std::fprintf(stderr, "underfoot x=%.1f y=%.1f %s%s%s%s lod %d->%d tile %d,%d->%d,%d morph %.2f->%.2f "
+                         "step %.0f->%.0f interpolated=%d coverage=%zu missing=%zu built=%zu restart=%d "
+                         "moves30=%.3f moves128=%.3f uploads=%zu near-uploads=%zu\n",
+                         lastX_, lastY_, tile ? "TILE " : "", built ? "REBUILT " : "", stitched ? "RESTITCHED " : "",
+                         morph ? "MORPH " : "", was ? was->tile.lod : -1, now ? now->tile.lod : -1,
+                         was ? was->tile.x : 0, was ? was->tile.y : 0, now ? now->tile.x : 0, now ? now->tile.y : 0,
+                         was ? was->parentMorph : 0.0f, now ? now->parentMorph : 0.0f,
+                         was && was->mesh ? was->mesh->step : 0.0, now && now->mesh ? now->mesh->step : 0.0,
+                         int(plan->interpolated), plan->coverage.size(), plan->missing.size(), plan->meshesBuilt,
+                         int(restartPlan_), jump30, jump128, uploads, nearUploads);
     }
     // Keep the old snapshot AND its pins alive through its last GPU reader.
     if (plan_) leases_.push_back({lastDrawSerial_, {}, std::move(plan_)});
@@ -201,26 +349,71 @@ bool GpuTerrain::accept(engine::Device& device, std::shared_ptr<const Plan> plan
 }
 
 bool GpuTerrain::publishTable(engine::Device& device) {
-    const auto planeSize = std::size_t(tableWidth_) * tableHeight_;
-    std::vector<std::array<float, 4>> data(planeSize * atlases_.size());
+    const std::size_t side = kTableSide, plane = side * side;
+    const auto wrap = [](std::int64_t v) { return std::size_t(((v % std::int64_t(kTableSide)) + kTableSide) % kTableSide); };
+    const auto texelOf = [&](Key key, int layer) { return std::uint64_t(layer) * plane + wrap(key.y) * side + wrap(key.x); };
+    // What should be where now. Two pages on one texel (a wrap the side is too
+    // small for) keep the one nearer the camera; the other reads as absent.
+    std::unordered_map<std::uint64_t, std::pair<Key, std::array<float, 4>>> wanted;
+    wanted.reserve(known_.size());
+    const auto distance = [&](Key key) {
+        const double metres = world::streaming::pageMetresAtLevel(key.level);
+        const double dx = (key.x + 0.5) * metres - lastX_, dy = (key.y + 0.5) * metres - lastY_;
+        return dx * dx + dy * dy;
+    };
     for (auto it = known_.begin(); it != known_.end();) {
         const auto key = *it;
+        const auto address = atlases_[atlasOf(key.level)]->find(key);
+        if (!address) { stale_.erase(key); it = known_.erase(it); continue; }
         const int layer = dataset(key.level);
-        const auto address = atlases_[layer]->find(key);
-        if (!address) { it = known_.erase(it); continue; }
-        const int x = key.x + 2, y = key.y + 2;
-        if (x >= 0 && y >= 0 && x < int(tableWidth_) && y < int(tableHeight_))
-            data[layer * planeSize + y * tableWidth_ + x] = {address->uvOrigin[0], address->uvOrigin[1], address->uvPerMetre[0], address->uvPerMetre[1]};
+        // uv of the page's first sample, uv per metre (the atlases are
+        // square), and which turn of the wrap the page is on - a quarter past
+        // the integer, so an empty texel is never turn nought's
+        // (page_levels.hlsli, pageEntryFrom).
+        const auto turn = [](std::int64_t v) {
+            return std::int64_t(std::floor(double(v) / double(kTableSide)));
+        };
+        const std::array<float, 4> entry{address->uvOrigin[0], address->uvOrigin[1], address->uvPerMetre[0],
+                                         float(turn(key.x) * 1024 + turn(key.y)) + 0.25f};
+        const auto texel = texelOf(key, layer);
+        const auto [slot, fresh] = wanted.try_emplace(texel, key, entry);
+        if (!fresh && distance(key) < distance(slot->second.first)) slot->second = {key, entry};
         ++it;
+    }
+    // The texels that changed, and the rows they are in.
+    std::array<std::pair<std::size_t, std::size_t>, kTableLayers> rows;
+    rows.fill({side, 0});
+    const auto touch = [&](std::uint64_t texel, const std::array<float, 4>& value) {
+        tableMirror_[texel] = value;
+        const auto layer = std::size_t(texel / plane), row = std::size_t((texel % plane) / side);
+        rows[layer] = {std::min(rows[layer].first, row), std::max(rows[layer].second, row + 1)};
+    };
+    for (auto it = tableOwner_.begin(); it != tableOwner_.end();) {
+        if (wanted.contains(it->first)) { ++it; continue; }
+        touch(it->first, {0, 0, 0, 0});
+        it = tableOwner_.erase(it);
+    }
+    for (const auto& [texel, value] : wanted) {
+        if (tableMirror_[texel] == value.second) continue;
+        touch(texel, value.second);
+        tableOwner_[texel] = value.first;
     }
     engine::Device::Uploader upload(device);
     bool ok = true;
-    // Cycle once for the COMPLETE table, never for the height atlas. Previously
-    // submitted draws keep their old mapping until their fences signal.
-    for (std::uint32_t layer = 0; layer < atlases_.size(); ++layer)
-        ok = upload.refillRegion(table_.get(), data.data() + layer * planeSize, 0, 0,
-                                tableWidth_, tableHeight_, 16, layer, 0, layer == 0) && ok;
-    return upload.finish() && ok;
+    for (std::uint32_t layer = 0; layer < kTableLayers; ++layer) {
+        // The first time the whole of it (and cycled: nothing has read it yet);
+        // after that only the rows that changed, in submission order behind
+        // the draws that read the old ones.
+        const auto [from, to] = tableUploaded_ ? rows[layer] : std::pair<std::size_t, std::size_t>{0, side};
+        if (from >= to) continue;
+        ok = upload.refillRegion(table_.get(), tableMirror_.data() + layer * plane + from * side, 0,
+                                 std::uint32_t(from), std::uint32_t(side), std::uint32_t(to - from), 16, layer, 0,
+                                 !tableUploaded_ && layer == 0) && ok;
+    }
+    ok = upload.finish() && ok;
+    // A failed upload leaves the card behind the mirror: the whole of it next time.
+    tableUploaded_ = ok;
+    return ok;
 }
 
 void GpuTerrain::update(engine::Frame& frame, const client::Camera& camera) {
@@ -240,6 +433,7 @@ void GpuTerrain::update(engine::Frame& frame, const client::Camera& camera) {
             configWatch_.file().string().c_str(), configError.c_str());
     }
     if (!ensure(*frame.device)) { tableDirty_ = true; progress_.uploadFailed = true; return; }
+    biomes_.refresh(*frame.device);
     serial_ = frame.device->nextSubmission();
     retire(frame.device->completedSubmission());
     stream_->frozen(frozen_);
@@ -309,10 +503,24 @@ void GpuTerrain::update(engine::Frame& frame, const client::Camera& camera) {
         }
     }
     view.radius = radius_;
+    // An orthographic view has no fog to hide the edge: its window is what
+    // it shows, with a margin, and never more than a hundred and twenty
+    // kilometres of it.
+    view.window = window_ <= 0 ? 0.0 : camera.perspective() ? window_ : std::min(radius_ * 1.1 + 8192.0, 120000.0);
+    view.windowX = camera.centreX;
+    view.windowY = camera.centreY;
     const double lookAhead = std::min(radius_,config_.maxLookAheadMetres);
-    const double predictionScale = haveCamera_ && frame.step > 0 ? config_.lookAheadSeconds / frame.step : 0;
-    view.lookX = view.x + std::clamp((view.x - lastX_) * predictionScale, -lookAhead, lookAhead);
-    view.lookY = view.y + std::clamp((view.y - lastY_) * predictionScale, -lookAhead, lookAhead);
+    // Where the eye is going, from its velocity eased over a few frames: the
+    // raw step over one frame's time jumped by up to the whole look-ahead
+    // with every uneven frame, and every jump was a new view to plan.
+    if (haveCamera_ && frame.step > 0) {
+        const double ease = 0.15;
+        velocityX_ += ((view.x - lastX_) / frame.step - velocityX_) * ease;
+        velocityY_ += ((view.y - lastY_) / frame.step - velocityY_) * ease;
+    }
+    const auto snapped = [](double v) { return std::round(v / 16.0) * 16.0; };
+    view.lookX = view.x + snapped(std::clamp(velocityX_ * config_.lookAheadSeconds, -lookAhead, lookAhead));
+    view.lookY = view.y + snapped(std::clamp(velocityY_ * config_.lookAheadSeconds, -lookAhead, lookAhead));
     auto prediction = camera;
     prediction.centreX += view.lookX - view.x; prediction.centreY += view.lookY - view.y;
     prediction.viewProjection(view.prediction.data(), 0, 1);
@@ -323,12 +531,22 @@ void GpuTerrain::update(engine::Frame& frame, const client::Camera& camera) {
     // movement drains one complete snapshot before submitting the newest eye,
     // rather than invalidating every result just before collect().
     auto& surface = preparation_->surface;
-    if (displayAmount_ >= 1 && !surface.busy())
-        if (surface.request(view, residency_, planTime_, restartPlan_)) restartPlan_ = false;
+    // Asking here holds every resident page until the plan is collected, and
+    // the uploads below may need to let one go: with pages waiting for a slot
+    // the request waits until after them (the second call, further down).
+    if (displayAmount_ >= 1 && !surface.busy() && staged_.empty()) requestPlan(view);
     bool changed = false;
     if (auto completed = surface.collect()) {
         changed = accept(*frame.device,std::move(completed));
-        restartPlan_ = !changed;
+        // Accepted, its own pins now hold what it stands on; refused, nothing
+        // it stood on is wanted. Either way the snapshot is let go.
+        releaseInflight();
+        // Started again from the roots only when pages the plan stood on are
+        // gone. Every other refusal (an older plan, a mesh not built yet, a
+        // stage being prepared) keeps the cut it has and refines on from it:
+        // restarting on each of them dropped the whole view back to its
+        // roots and built it up again, over and over.
+        restartPlan_ = !changed && lostPages_;
     }
     if (plan_ && (changed || viewChanged)) {
         // Pins protect the complete accepted cut, not just its old viewport.
@@ -343,12 +561,15 @@ void GpuTerrain::update(engine::Frame& frame, const client::Camera& camera) {
     const auto nearer = [&](Key a, Key b) {
         return HeightPageStream::nearer(a, b, view.x, view.y);
     };
+    observeGround();
     auto arrived = stream_->collect();
     const bool arrivals = !arrived.empty();
     for (auto& page : arrived) staged_.push_back(std::move(page));
     if (changed || arrivals) std::stable_sort(staged_.begin(), staged_.end(), [&](const auto& a, const auto& b) {
         const auto ka = a.source->base.key, kb = b.source->base.key;
-        if ((ka.level == 4) != (kb.level == 4)) return ka.level == 4;
+        // The coarsest first: what a wide view is drawn from arrives before
+        // what refines it.
+        if (ka.level >= 4 || kb.level >= 4) if (ka.level != kb.level) return ka.level > kb.level;
         const bool wa = plan_ && plan_->demanded.contains(ka), wb = plan_ && plan_->demanded.contains(kb);
         if (wa != wb) return wa;
         return nearer(ka, kb);
@@ -365,18 +586,27 @@ void GpuTerrain::update(engine::Frame& frame, const client::Camera& camera) {
     std::vector<Key> uploaded;
     std::size_t bytes = 0;
     bool attempted = false;
+    const auto& store = world_->pages();
     for (auto it = staged_.begin(); it != staged_.end();) {
         const auto& page = *it;
         const auto key = page.source->base.key;
-        auto& atlas = *atlases_[dataset(key.level)];
+        auto& atlas = *atlases_[atlasOf(key.level)];
         const auto& demand=preparingStage_?preparingStage_:plan_;
-        if (!demand || !demand->wanted.contains(key) || atlas.find(key)) {
+        const bool resident = atlas.find(key).has_value();
+        const bool refresh = resident && stale_.contains(key);
+        if (!demand || !demand->wanted.contains(key) || (resident && !refresh)) {
+            it = staged_.erase(it); continue;
+        }
+        // Baked before the latest dig inside its reach: a picture of ground
+        // that is gone. Asked for again; what is drawn meanwhile stays.
+        if (!store.current(*page.source)) {
+            restream_ = true;
             it = staged_.erase(it); continue;
         }
         const auto cost = page.source->base.heightQuantized.size() * 34;
         if (bytes && bytes + cost > config_.uploadBytesPerFrame) break;
         attempted = true;
-        if (atlas.upload(upload, page, frame.index)) {
+        if (atlas.upload(upload, page, frame.index, refresh)) {
             protect(key, serial_); // includes provisional uploads: no same-batch eviction
             uploaded.push_back(key);
             bytes += cost;
@@ -391,10 +621,13 @@ void GpuTerrain::update(engine::Frame& frame, const client::Camera& camera) {
 #endif
     if (attempted) for (auto& atlas : atlases_) atlas->publishUploads(submitted);
     if (submitted) for (const auto key : uploaded) {
-        if (!atlases_[dataset(key.level)]->find(key)) continue;
+        if (!atlases_[atlasOf(key.level)]->find(key)) continue;
         known_.insert(key);
+        refreshed_ += stale_.erase(key);
         // H16/H8 are evictable after their last frame lease, just like meshes.
-        if (key.level == 4 && persistent_.insert(key).second) atlases_[dataset(key.level)]->pin(key, frame.index);
+        // Counted, not pinned for good: an H64 page is held by the plans that
+        // want it, like any other, and let go when the camera has left it.
+        if (key.level >= 4) persistent_.insert(key);
     }
     // Even a failed partial upload may have evicted an old mapping.
     tableDirty_ = tableDirty_ || attempted || !submitted;
@@ -411,7 +644,7 @@ void GpuTerrain::update(engine::Frame& frame, const client::Camera& camera) {
         next->surfaces.reserve(known_.size());
         fineResident_ = h8Resident_ = 0;
         for (auto key : known_) {
-            const auto& atlas = *atlases_[dataset(key.level)];
+            const auto& atlas = *atlases_[atlasOf(key.level)];
             if (!atlas.mayHaveWater(key)) next->dryPages.insert(key);
             if (auto surface = atlas.surface(key)) next->surfaces.emplace(key, std::move(surface));
             fineResident_ += key.level == 0;
@@ -424,24 +657,37 @@ void GpuTerrain::update(engine::Frame& frame, const client::Camera& camera) {
 #endif
     if (displayAmount_ >= 1 && !surface.busy() &&
         (restartPlan_ || !plan_ || plan_->dirty(view, residency_->revision)))
-        if (surface.request(view, residency_, planTime_, restartPlan_)) restartPlan_ = false;
+        requestPlan(view);
 
     // Queue replacement is also event-driven. GPU/staged pages must be removed
     // from an older worker snapshot before handing its requests to the stream.
-    const bool retry = frame.index % 60 == 0 && plan_ && (!plan_->missing.empty() || !plan_->preload.empty());
-    if (plan_ && (changed || arrivals || tableChanged || retry || preparingStage_)) {
+    const bool retry = frame.index % 60 == 0 && plan_ && (!plan_->missing.empty() || !plan_->preload.empty() ||
+                                                           !stale_.empty());
+    if (plan_ && (changed || arrivals || tableChanged || retry || preparingStage_ || restream_)) {
         std::unordered_set<Key> stagedKeys;
         for (const auto& page : staged_) stagedKeys.insert(page.source->base.key);
-        const auto queued = [&](Key key) { return known_.contains(key) || stagedKeys.contains(key); };
+        const auto queued = [&](Key key) {
+            return (known_.contains(key) && !stale_.contains(key)) || stagedKeys.contains(key);
+        };
         const auto& demand=preparingStage_?preparingStage_:plan_;
         auto requests = demand->missing, speculation = demand->preload;
         std::erase_if(requests, queued);
         std::erase_if(speculation, queued);
+        // Pages drawn over ground that has moved since, after everything
+        // missing outright: the old ground is still drawn, a hole is not.
+        std::vector<Key> refresh;
+        for (const auto key : stale_)
+            if (demand->wanted.contains(key) && !stagedKeys.contains(key)) refresh.push_back(key);
+        std::sort(refresh.begin(), refresh.end(), nearer);
+        for (const auto key : refresh) (demand->demanded.contains(key) ? requests : speculation).push_back(key);
         stream_->wants(requests, speculation);
+        restream_ = false;
     }
     missing_ = plan_ ? plan_->missing.size() : 0;
     const bool currentPlan = plan_ && plan_->view == view && plan_->residencyRevision == residency_->revision;
-    settled_ = currentPlan && displayAmount_ >= 1 && !tableDirty_ && !missing_ && !coarse_ && !plan_->morphing && !plan_->blank;
+    settled_ = currentPlan && displayAmount_ >= 1 && !tableDirty_ && !missing_ && !coarse_ && !plan_->morphing && !plan_->blank &&
+        !plan_->staleMeshes &&
+        std::none_of(stale_.begin(), stale_.end(), [&](Key key) { return plan_->wanted.contains(key); });
 #if ASR_ENABLE_PROFILING
     if (changed || tableChanged || frame.index % 6 == 0 || !progress_.initialized) {
         world::terrain::StreamingProgress status;

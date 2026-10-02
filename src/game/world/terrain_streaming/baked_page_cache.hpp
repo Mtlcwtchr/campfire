@@ -11,7 +11,7 @@ namespace world::streaming {
 // Bump the format for layout changes, the generation version for changes to
 // HeightField, GraphCarver, material/travel rules or parent refinement semantics.
 inline constexpr std::uint32_t kBakedPageCacheVersion = 2;       // + water estuary share
-inline constexpr std::uint32_t kBakedPageGenerationVersion = 12; // dry heads never over their ground, levees, estuaries
+inline constexpr std::uint32_t kBakedPageGenerationVersion = 13; // gully rock only on steep walls
 
 class BakedPageCache {
 public:
@@ -20,14 +20,20 @@ public:
                    std::uint16_t padding);
     // Worker-only. Bad/partial/foreign files leave `into` untouched. Cache I/O
     // failures are non-fatal: the store can always bake the missing page.
-    CacheResult read(TileKey key, BakedPage& into);
+    //
+    // `ground` is the fingerprint of the edits within the page's reach
+    // (BakedPage::ground). Nought is the generator's own ground, filed as it
+    // always was; anything else is filed beside it under its own name, so a
+    // dig never overwrites the page it was dug into and filling it back in
+    // finds the original again.
+    CacheResult read(TileKey key, BakedPage& into, std::uint64_t ground = 0);
     CacheResult write(const BakedPage& page);
 
 private:
     void prepare(); // fingerprint once, lazily on a worker, not the frame thread
     bool layout(TileKey key, BakedPage& page) const;
-    std::vector<std::uint8_t> prefix(TileKey key) const;
-    std::filesystem::path file(TileKey key);
+    std::vector<std::uint8_t> prefix(TileKey key, std::uint64_t ground) const;
+    std::filesystem::path file(TileKey key, std::uint64_t ground);
 
     const generation::WorldMapData& world_;
     const HydrologyGraph& graph_;

@@ -1,0 +1,51 @@
+{
+  "comment": "Extra foliage from the AncientSettlement UE project, exported by tools/export_ue_foliage.py (UE commandlet, read-only) and prepared by tools/prepare_ue_foliage.py into assets/models/ue_foliage/<asset_id>/ - the same layout tools/fetch_models.py writes for Poly Haven, so simplify_models.py and bake_model_impostors.py take them unchanged. Not CC0: original pack licences apply. Each asset is one species; every mesh in it is one variant. 'meshes' are exact package paths; 'folder' takes every StaticMesh under it whose name matches 'include' and none of 'exclude'.",
+  "assets": [
+    {"asset_id": "hornbeam_forest",   "role": "tree_broadleaf", "biomes": ["temperate_forest"],
+     "folder": "/Game/EuropeanHornbeam/Geometry/SimpleWind", "include": ["_Forest_"]},
+    {"asset_id": "hornbeam_field",    "role": "tree_broadleaf", "biomes": ["meadow", "forest_edge"],
+     "folder": "/Game/EuropeanHornbeam/Geometry/SimpleWind", "include": ["_Field_"]},
+    {"asset_id": "hornbeam_sapling",  "role": "sapling",        "biomes": ["temperate_forest", "forest_edge"],
+     "folder": "/Game/EuropeanHornbeam/Geometry/SimpleWind", "include": ["_Sapling_"]},
+    {"asset_id": "hornbeam_seedling", "role": "undergrowth",    "biomes": ["temperate_forest", "forest_edge"],
+     "folder": "/Game/EuropeanHornbeam/Geometry/SimpleWind", "include": ["_Seedling_"]},
+
+    {"asset_id": "lf_bush",    "role": "shrub",  "biomes": ["temperate_forest", "forest_edge", "meadow"],
+     "meshes": ["/Game/Light_Foliage/Meshes/SM_Bush_02", "/Game/Light_Foliage/Meshes/SM_Bush_03",
+                "/Game/Light_Foliage/Meshes/SM_Bush_04", "/Game/Light_Foliage/Meshes/SM_Bush_05"]},
+    {"asset_id": "lf_shrub",   "role": "shrub_large", "biomes": ["forest_edge", "meadow"],
+     "meshes": ["/Game/Light_Foliage/Meshes/SM_Shrub_01", "/Game/Light_Foliage/Meshes/SM_Shrub_02"]},
+    {"asset_id": "lf_flowers", "role": "flower", "biomes": ["meadow"],
+     "meshes": ["/Game/Light_Foliage/Meshes/SM_Flowers_01"]},
+    {"asset_id": "lf_grass",   "role": "grass",  "biomes": ["meadow", "forest_edge", "temperate_forest"],
+     "folder": "/Game/Light_Foliage/Meshes", "include": ["SM_Grass_"]},
+
+    {"asset_id": "ms_beech_fern",      "role": "undergrowth",  "biomes": ["temperate_forest", "conifer"],
+     "folder": "/Game/Fab/Megascans/Beech_Fern", "exclude": ["_LOD", "Billboard"]},
+    {"asset_id": "ms_wild_grass",      "role": "grass",        "biomes": ["meadow", "forest_edge"],
+     "folder": "/Game/Fab/Megascans/Wild_Grass", "exclude": ["_LOD", "Billboard"]},
+    {"asset_id": "ms_thatching_grass", "role": "grass",        "biomes": ["meadow", "swamp", "wastes"],
+     "folder": "/Game/Fab/Megascans/Thatching_Grass", "exclude": ["_LOD", "Billboard"]},
+    {"asset_id": "ms_wheat_grass",     "role": "grass",        "biomes": ["meadow", "steppe"],
+     "folder": "/Game/Fab/Megascans/Wheat_Grass", "exclude": ["_LOD", "Billboard"]},
+    {"asset_id": "ms_red_mushrooms",   "role": "mushroom",     "biomes": ["temperate_forest", "conifer"],
+     "folder": "/Game/Fab/Megascans/Spotted_Red_Mushrooms", "include": ["LOD0"]},
+    {"asset_id": "ms_bolete_mushrooms","role": "mushroom",     "biomes": ["temperate_forest", "conifer"],
+     "folder": "/Game/Fab/Megascans/Bolete_Mushrooms", "include": ["LOD0"]},
+    {"asset_id": "ms_forest_rock_small", "role": "rock",       "biomes": ["temperate_forest", "conifer", "mountain"],
+     "folder": "/Game/Fab/Megascans/Nordic_Forest_Rock_Small", "exclude": ["_LOD1", "_LOD2", "_LOD3", "Billboard"]},
+    {"asset_id": "ms_mossy_embankment", "role": "cliff",       "biomes": ["temperate_forest", "river"],
+     "folder": "/Game/Fab/Megascans/Mossy_Embankment", "exclude": ["_LOD1", "_LOD2", "_LOD3", "Billboard"]},
+
+    {"asset_id": "np_trident_maple", "role": "tree_broadleaf", "biomes": ["forest_edge", "settlement"],
+     "meshes": ["/Game/Nanite_Plants_Sample_Collection/Geometries/SM_3DGardenPlants_Acer_buergerianum_01_003_Free",
+                "/Game/Nanite_Plants_Sample_Collection/Geometries/SM_3DGardenPlants_Acer_buergerianum_02_002_Free"]},
+    {"asset_id": "np_abelia",        "role": "shrub_large",    "biomes": ["forest_edge", "settlement"],
+     "meshes": ["/Game/Nanite_Plants_Sample_Collection/Geometries/SM_Abelia_x_grandiflora_Nanite_Free_Sample"]},
+    {"asset_id": "np_ryegrass",      "role": "grass",          "biomes": ["meadow", "settlement"], "tris": 6000,
+     "meshes": ["/Game/Nanite_Plants_Sample_Collection/Geometries/SM_Free_Lolium_perenne_3DGardenPlants"]},
+    {"asset_id": "np_mondo_grass",   "role": "grass",          "biomes": ["forest_edge", "settlement"],
+     "meshes": ["/Game/Nanite_Plants_Sample_Collection/Geometries/SM_Free_Ophiopogon_japonicus_3DGardenPlants"]}
+  ]
+}
+

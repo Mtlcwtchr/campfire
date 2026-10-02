@@ -13,7 +13,7 @@ engine::PassPlace SkyPass::setup(engine::Device& device,engine::RenderPipeline& 
     wanted.vertexEntry="SkyVS";
     wanted.fragmentEntry="SkyPlainPS";
     wanted.blend=false;
-    wanted.depthTest=true;   // LESS_OR_EQUAL at the far plane: only empty pixels
+    wanted.depthTest=true;   // at the far plane (reversed depth: 0): only empty pixels
     wanted.depthWrite=false;
     auto plain=device.makePipeline(wanted);
     if (!plain) return {};

@@ -173,7 +173,7 @@ MaterialSample materialProjection(int layer, float2 uv, float2 dx, float2 dy,
 // classes, chosen per pixel by climate, water and slope (terrain.hlsl).
 // Metres one texture turn covers, from content/config/terrain_materials.json:
 // a variant keeps its own physical scale relative to its class.
-#define GROUND_LAYERS 16
+#include "terrain_layers.hlsli"   // GROUND_LAYERS, kLayerMetres
 #define LAYER_SAND_DUNE_ORANGE 2   // the class's own scan: dunes only
 #define LAYER_GRASS_DRY 6
 #define LAYER_FOREST_FLOOR 7
@@ -189,10 +189,8 @@ MaterialSample materialProjection(int layer, float2 uv, float2 dx, float2 dy,
 // fine band repeating every two turns (materialProjection's fineScale) one
 // repeat covers twice the scanned ground. At the scans' own size a 2 m repeat
 // was plainly visible as a grid close up; the scan's detail holds at 2x.
-// Classes 0..5 must equal content/config/ground.json metres_per_turn.
-static const float kLayerMetres[GROUND_LAYERS] = {
-    2.0, 2.07, 3.0, 3.0, 1.3, 2.0,
-    2.0, 3.0, 3.94, 2.0, 1.5, 2.53, 2.7, 3.0, 1.83, 2.0};
+// Classes 0..5 must equal content/config/ground.json metres_per_turn. Kept in
+// content/config/terrain/layers.json (terrain_layers.hlsli).
 
 // One layer of the array, laid at its class's (editable) scale adjusted by
 // the layer's own physical size, with the class's normal strength.

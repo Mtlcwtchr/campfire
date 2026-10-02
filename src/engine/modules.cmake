@@ -39,3 +39,45 @@ target_include_directories(asr_virtual_geometry PUBLIC ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(asr_virtual_geometry PRIVATE asr_warnings)
 add_library(Campfire::VirtualGeometry ALIAS asr_virtual_geometry)
 
+# The world on disk: chunk keys, chunk files of typed compressed blocks, atomic
+# writes and the world root's manifest. Knows nothing of what a block holds -
+# the game's persistent delta is one user of it, derived caches another.
+add_library(asr_world_store STATIC
+        ${CMAKE_CURRENT_LIST_DIR}/world_store/chunk_key.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/world_store/codec.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/world_store/chunk_file.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/world_store/atomic_file.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/world_store/world_root.cpp)
+target_include_directories(asr_world_store PUBLIC ${CMAKE_SOURCE_DIR}/src)
+target_include_directories(asr_world_store PRIVATE ${zstd_SOURCE_DIR}/lib)
+target_link_libraries(asr_world_store PUBLIC asr_core PRIVATE libzstd_static nlohmann_json asr_warnings)
+add_library(Campfire::WorldStore ALIAS asr_world_store)
+
+# The authored world (world_authoring_import_export_spec): 256 m rasters and
+# stable-id vectors in 32 km source chunks, and the package importer/exporter.
+find_package(ZLIB REQUIRED)
+add_library(asr_world_source STATIC
+        ${CMAKE_CURRENT_LIST_DIR}/world_source/png_io.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/world_source/schema.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/world_source/world_source.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/world_source/package_vectors.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/world_source/transfer.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/world_source/example_package.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/world_source/bake.cpp)
+target_include_directories(asr_world_source PUBLIC ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(asr_world_source PUBLIC asr_world_store nlohmann_json PRIVATE ZLIB::ZLIB asr_warnings)
+add_library(Campfire::WorldSource ALIAS asr_world_source)
+
+# Terrain categories and the biomes of the control layers
+# (doc/plan_ground_types_2026-10-01.md): the libraries and categories read
+# from content/config/terrain, their validator, the shader code and tables
+# made from them, the categorical field over the world, and the hand edits
+# to the details they place.
+add_library(asr_biomes STATIC
+        ${CMAKE_CURRENT_LIST_DIR}/biomes/registry.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/biomes/shader_code.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/biomes/category_field.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/biomes/detail_edits.cpp)
+target_include_directories(asr_biomes PUBLIC ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(asr_biomes PUBLIC asr_core nlohmann_json PRIVATE asr_warnings)
+add_library(Campfire::Biomes ALIAS asr_biomes)

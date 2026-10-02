@@ -29,15 +29,20 @@ public:
     [[nodiscard]] SDL_GPUTextureSamplerBinding fieldBinding() const {
         return {fields_.get(), sampler_.get()};
     }
+    // `replace`: the key is resident, but its ground has been dug since
+    // (edit_layer.hpp) - write the new page into the same slot, at the same
+    // address, so the table and every pin stay as they are. Draws already
+    // submitted read the old texels; the next one reads the new.
     [[nodiscard]] std::optional<Address> upload(engine::Device::Uploader& uploader,
-                                               const PackedHeightPage& page, std::uint64_t frame);
+                                               const PackedHeightPage& page, std::uint64_t frame,
+                                               bool replace = false);
 
     // Pin the draw's complete working set (including morph parents/children)
     // before acquiring other pages. Queued pages can be pinned too. Never cycle
     // an atlas: cycling a partial upload would lose its other resident pages.
     [[nodiscard]] std::optional<Address> upload(engine::Device::Uploader& uploader,
                                                const world::streaming::BaseTile& page,
-                                               std::uint64_t frame);
+                                               std::uint64_t frame, bool replace = false);
     // Call after uploader.finish(), with its result, on every atlas in that
     // batch. Only successfully submitted pages become visible through find().
     // Returned upload addresses are provisional until this publication.
@@ -48,6 +53,8 @@ public:
     std::shared_ptr<const world::terrain::SurfacePage> surface(Key key) const;
     bool pin(Key key, std::uint64_t frame);
     bool unpin(Key key);
+    // pin() without marking the page used: see PageResidency::hold. Undone by unpin().
+    bool hold(Key key);
     // A different world/version must not reuse the old world's page keys.
     void clear();
 

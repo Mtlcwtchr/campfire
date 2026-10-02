@@ -17,6 +17,7 @@
 // the first.
 #include <cstdint>
 #include <functional>
+#include <optional>
 
 #include "engine/core/fixed.hpp"
 #include "engine/core/geometry.hpp"
@@ -33,6 +34,7 @@ enum class BrushKind : std::uint8_t {
     Thermal,   // scree: nothing steeper than its angle of repose survives
     Hydraulic, // water's work: cut the steep, fill what lies below it
     Carve,     // a channel, for putting a river where one is wanted
+    Restore,   // back towards the generated ground: takes hand edits away
     Count,
 };
 
@@ -49,7 +51,22 @@ struct Brush {
     // the channel; ignored by the rest.
     double scaleMetres = 60;
     std::uint64_t seed = 1;
+    // For Flatten: the level to take the ground to - what was under the
+    // brush when the stroke began, so dragging a flatten uphill makes a
+    // terrace and not a ramp. Without it, the height under the middle of each
+    // dab.
+    std::optional<double> level;
 };
+
+// The spacing a brush reads and shapes the ground at, when it reads the
+// ground at all: a tenth of its radius or so, a power of two times the edit
+// layer's four metres, up to sixty-four. A smooth, a scree or an erosion
+// works on the shape the brush covers, not on the four-metre ripple of it -
+// at four metres a sixty-metre smooth did nothing anybody could see - and
+// the ground is read at a few hundred points a dab however wide the brush.
+double brushCellMetres(const Brush& brush);
+// Whether the brush reads the ground under it (the others only write).
+bool brushReadsGround(BrushKind kind);
 
 // The ground as it stands, INCLUDING whatever the layer already holds: a brush
 // reads what it can see, or two strokes over the same place fight each other.
@@ -57,7 +74,9 @@ using GroundAt = std::function<core::Fixed(core::Fixed x, core::Fixed y)>;
 
 // One application of a brush, at a point, for `seconds` of stroke. Returns how
 // many samples it wrote, which is what a test counts and a tool reports.
+// `existing` is what has been edited into this ground so far, for Restore to
+// take back; the others do not read it.
 std::size_t applyBrush(EditLayer& into, const GroundAt& ground, const Brush& brush,
-                       core::WorldPos at, double seconds);
+                       core::WorldPos at, double seconds, const EditLayer* existing = nullptr);
 
 } // namespace world

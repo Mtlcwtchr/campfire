@@ -18,12 +18,25 @@ LandMask64 makeLandMask64(const generation::WorldMapData& world) {
                           static_cast<std::size_t>(std::max(0, world.height));
     if (world.cells.size() != expected) return mask;
     if (world.terrainFoundation) {
+        // A foundation point stands for the ground a step either side of it
+        // (the lattice is read bilinearly), in world metres - its own step,
+        // which is 512 m on the reference world, not the 64 m this once
+        // assumed: land there was marked an eighth of the way to the origin.
         const auto& f=*world.terrainFoundation;
-        for (int y=0;y<f.rows;++y) for (int x=0;x<f.columns;++x) {
-            const auto i=std::size_t(y)*f.columns+x;
-            if (std::any_of(f.heightDm.begin(),f.heightDm.end(),[&](const auto& h){return h[i]>0;}))
-                mask.markWorldRect(x*64-64,y*64-64,x*64+65,y*64+65);
-        }
+        const std::int32_t step=f.step;
+        // Chunk by chunk of what each stage holds: the open sea floor is
+        // never above the water, and a stage holds nothing else there.
+        std::vector<std::uint8_t> above(std::size_t(f.columns)*f.rows,0);
+        for (const auto& plane:f.heightDm)
+            plane.visitChunks([&](std::size_t c,const auto& chunk) {
+                for (std::size_t k=0;k<chunk.size();++k) {
+                    const auto i=c*chunk.size()+k;
+                    if (i<above.size() && chunk[k]>0) above[i]=1;
+                }
+            },[](std::size_t) {});
+        for (int y=0;y<f.rows;++y) for (int x=0;x<f.columns;++x)
+            if (above[std::size_t(y)*f.columns+x])
+                mask.markWorldRect(x*step-step,y*step-step,x*step+step+1,y*step+step+1);
         return mask;
     }
     for (std::int32_t y = 0; y < world.height; ++y)

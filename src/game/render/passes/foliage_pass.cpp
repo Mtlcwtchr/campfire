@@ -1,9 +1,11 @@
 #include "game/render/passes/foliage_pass.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cmath>
 #include <cstdlib>
+#include <iostream>
 #if ASR_ENABLE_DIAGNOSTICS
 #include <nlohmann/json.hpp>
 #endif
@@ -18,6 +20,17 @@
 #include "game/render/terrain_data.hpp"
 
 namespace game {
+namespace {
+// The page fields and, after them, the terrain categories' plane and table
+// (t12, t13 of PageGrassVS, foliage_pages.hlsl).
+std::vector<SDL_GPUTextureSamplerBinding> withBiomes(const GpuTerrain& pages) {
+    auto out = pages.bindings();
+    if (out.empty()) return out;
+    const auto biomes = pages.biomeBindings();
+    out.insert(out.end(), biomes.begin(), biomes.end());
+    return out;
+}
+} // namespace
 
 FoliagePass::FoliagePass(const engine::MeshCache& cache, std::vector<std::string> cards,
                        SDL_GPUTextureSamplerBinding shadow, GpuTerrain* pages)
@@ -86,6 +99,13 @@ engine::PassPlace FoliagePass::setup(engine::Device& device, engine::RenderPipel
     wanted.depthWrite = true;
     engine::GraphicsPipeline graphics = device.makePipeline(wanted);
     if (!graphics) return {};
+    engine::GraphicsPipeline pebbles;
+    if (pages_) {
+        wanted.vertexEntry = "PebbleVS";
+        wanted.fragmentEntry = "PebblePS";
+        pebbles = device.makePipeline(wanted);
+        if (!pebbles) std::cerr << "Pebbles unavailable: their pipeline did not build\n";
+    }
 
     // Clamped, not repeating: a card is a picture with edges, and a blade that
     // wrapped would grow out of the other side of its own quad.
@@ -99,29 +119,64 @@ engine::PassPlace FoliagePass::setup(engine::Device& device, engine::RenderPipel
     sampler_ = device.makeSampler(sampler);
     if (!sampler_) return {};
 
-    std::vector<std::filesystem::path> layers;
+    // With a mip chain: a card read at one level from two hundred metres is a
+    // sparkle of single texels that swims with every step, and costs the
+    // texture cache a full-size read per pixel. The shader keeps the coverage
+    // of the smaller levels up (FoliagePS), so distant clumps do not thin out.
+    std::vector<std::vector<std::filesystem::path>> layers;
     layers.reserve(cardNames_.size());
-    for (const std::string& card : cardNames_) layers.push_back(device.assets() / card);
-    cards_ = device.loadArray(layers);
+    for (const std::string& card : cardNames_) layers.push_back({device.assets() / card});
+    cards_ = device.loadArrayMipped(layers, true);
     if (!cards_) return {};
 
     // The quad a blade is drawn on: standing on the ground, a unit wide and a
     // unit tall, with its origin at the foot so scaling makes it taller rather
     // than moving it.
-    const std::array<FoliageVertexGpu, 4> quad{{
-            {{-1, 0}, {0, 1}}, {{1, 0}, {1, 1}}, {{-1, 1}, {0, 0}}, {{1, 1}, {1, 0}},
-    }};
-    const std::array<std::uint16_t, 6> indices{{0, 2, 3, 0, 3, 1}};
+    //
+    // Four of them, one after another: a page root near the eye stands for a
+    // patch of turf and draws all four (PageGrassVS reads which one it is from
+    // the corner, offset by four a card); everything else draws the first six
+    // indices, the one card. A lawn out of the same roots, not four times the
+    // roots to build, cache and upload.
+    constexpr int kTurfCards = world::kTurfCards;
+    std::array<FoliageVertexGpu, 4 * kTurfCards> quad{};
+    std::array<std::uint16_t, 6 * kTurfCards> indices{};
+    for (int k = 0; k < kTurfCards; ++k) {
+        const float shift = 4.0f * float(k);
+        const std::array<FoliageVertexGpu, 4> card{{
+                {{-1 + shift, 0}, {0, 1}}, {{1 + shift, 0}, {1, 1}},
+                {{-1 + shift, 1}, {0, 0}}, {{1 + shift, 1}, {1, 0}},
+        }};
+        for (int v = 0; v < 4; ++v) quad[k * 4 + v] = card[v];
+        const std::array<std::uint16_t, 6> order{{0, 2, 3, 0, 3, 1}};
+        for (int i = 0; i < 6; ++i) indices[k * 6 + i] = std::uint16_t(k * 4 + order[i]);
+    }
     engine::Device::Uploader uploader(device);
     quad_ = uploader.add(SDL_GPU_BUFFERUSAGE_VERTEX, quad.data(), sizeof(quad));
     quadIndices_ = uploader.add(SDL_GPU_BUFFERUSAGE_INDEX, indices.data(), sizeof(indices));
+    // The pebble: a unit octahedron, x and y in the corner, z in u. Eight
+    // faces, 24 indices - exactly the grass draw's count (see the header).
+    static_assert(6 * world::kTurfCards == 24, "pebbles share the grass draw's index count");
+    if (pebbles) {
+        const std::array<FoliageVertexGpu, 6> stone{{
+                {{1, 0}, {0, 0}}, {{-1, 0}, {0, 0}}, {{0, 1}, {0, 0}},
+                {{0, -1}, {0, 0}}, {{0, 0}, {1, 0}}, {{0, 0}, {-1, 0}},
+        }};
+        const std::array<std::uint16_t, 24> faces{{
+                4, 2, 0, 4, 1, 2, 4, 3, 1, 4, 0, 3,
+                5, 0, 2, 5, 2, 1, 5, 1, 3, 5, 3, 0,
+        }};
+        pebble_ = uploader.add(SDL_GPU_BUFFERUSAGE_VERTEX, stone.data(), sizeof(stone));
+        pebbleIndices_ = uploader.add(SDL_GPU_BUFFERUSAGE_INDEX, faces.data(), sizeof(faces));
+    }
     uploader.finish();
     if (!quad_ || !quadIndices_) return {};
     if (gpuCulling_ && !culler_.setup(device,into)) return {};
 
     pipeline_ = into.take(std::move(graphics));
+    if (pebbles && pebble_ && pebbleIndices_) pebblePipeline_ = into.take(std::move(pebbles));
     bindings_ = into.take({{cards_.get(), sampler_.get()},shadow_});
-    if (pages_) vertexBindings_=into.takeVertex(pages_->bindings());
+    if (pages_) vertexBindings_=into.takeVertex(withBiomes(*pages_));
     return {engine::passOf(Pass::Foliage), engine::stageOf(Stage::World),
             static_cast<engine::PassOrder>(Order::Opaque)};
 }
@@ -141,11 +196,16 @@ void FoliagePass::collect(const engine::Frame& frame, engine::DrawQueue& queue) 
             windowX_=wx;windowY_=wy;
         }
         for (auto& [key,entry]:roots_) entry.used=false;
-        renderer_->replaceVertex(vertexBindings_,pages_->bindings());
+        renderer_->replaceVertex(vertexBindings_,withBiomes(*pages_));
         const double left=double(wx)*world::kGrassRegion-world::kGrassWindow;
         const double bottom=double(wy)*world::kGrassRegion-world::kGrassWindow;
         const auto cellFor=[](const auto& b,int base){return std::max(base,2<<std::clamp(b.tile.lod,0,6));};
-        const auto cost=[&](int step){double n=0;for (const auto& b:pages_->drawing()) n+=std::pow(std::ceil(double(b.metres())/cellFor(b,step)),2);return n;};
+        // A block counts for the far tier when any of it is within reach.
+        const auto within=[&](const auto& b){
+            const double m=double(b.metres()),ox=double(b.tile.x)*m,oy=double(b.tile.y)*m;
+            const double dx=std::max({ox-x_,0.0,x_-(ox+m)}),dy=std::max({oy-y_,0.0,y_-(oy+m)});
+            return dx*dx+dy*dy<=reach_*reach_;};
+        const auto cost=[&](int step){double n=0;for (const auto& b:pages_->drawing()) if (within(b)) n+=std::pow(std::ceil(double(b.metres())/cellFor(b,step)),2);return n;};
         while (cost(farStep_)>world::kGrassCandidateBudget && farStep_<16384) farStep_*=2;
         while (farStep_>8 && cost(farStep_/2)<world::kGrassCandidateBudget/2) farStep_/=2;
         const double t=std::clamp((pages_->vegetationPixelsPerMetre(frame,x_,y_)-1.0)/2.0,0.0,1.0);
@@ -162,6 +222,7 @@ void FoliagePass::collect(const engine::Frame& frame, engine::DrawQueue& queue) 
             if (!block.mesh) continue;
             const bool coarse=tier==1;
             if (!coarse && nearWeight<=0) continue;
+            if (coarse && !within(block)) continue;
             const int cell=coarse?cellFor(block,farStep_):world::kGrassCell;
             const auto ox=block.tile.x*block.metres(),oy=block.tile.y*block.metres();
             if (!coarse && (ox>=left+2*world::kGrassWindow || oy>=bottom+2*world::kGrassWindow ||
@@ -212,7 +273,7 @@ void FoliagePass::collect(const engine::Frame& frame, engine::DrawQueue& queue) 
         item.vertex[0]=quad_.get();item.instancesFromArena=true;
         item.vertexOffset[1]=at;
         item.vertexStreams=2;item.index=quadIndices_.get();item.indexSize=SDL_GPU_INDEXELEMENTSIZE_16BIT;
-        item.indexCount=6;item.instances=std::uint32_t(candidates_);
+        item.indexCount=6*world::kTurfCards;item.instances=std::uint32_t(candidates_);
         if (gpuCulling_) {
             if (!culler_.dispatch(frame,*renderer_,at,candidates_)) return;
             item.instancesFromArena=false;
@@ -227,6 +288,13 @@ void FoliagePass::collect(const engine::Frame& frame, engine::DrawQueue& queue) 
         item.own[9]=nearWeight;
         item.own[10]=float(x_);item.own[11]=float(y_);
         queue.push(item);ASR_DIAGNOSTIC(++draws_);
+        if (pebblePipeline_ && nearCandidates_) {
+            engine::DrawItem stones=item;
+            stones.pipeline=pebblePipeline_;
+            stones.vertex[0]=pebble_.get();stones.index=pebbleIndices_.get();
+            stones.indexCount=24;
+            queue.push(stones);ASR_DIAGNOSTIC(++draws_);
+        }
         std::erase_if(roots_,[](const auto& item){return !item.second.used;});
         return;
     }

@@ -12,6 +12,34 @@ FetchContent_Declare(EnTT
         EXCLUDE_FROM_ALL)
 FetchContent_MakeAvailable(EnTT)
 
+# zstd compresses the world's chunk files (engine/world_store). A pinned fetch
+# like EnTT and SDL, built static and without its command-line programs: the
+# engine needs the library, not a second copy of the zstd tool.
+set(ZSTD_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
+set(ZSTD_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+set(ZSTD_BUILD_STATIC ON CACHE BOOL "" FORCE)
+set(ZSTD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(ZSTD_BUILD_CONTRIB OFF CACHE BOOL "" FORCE)
+set(ZSTD_LEGACY_SUPPORT OFF CACHE BOOL "" FORCE)
+set(ZSTD_MULTITHREAD_SUPPORT OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(zstd
+        GIT_REPOSITORY https://github.com/facebook/zstd.git
+        GIT_TAG v1.5.7
+        GIT_SHALLOW TRUE
+        SOURCE_SUBDIR build/cmake
+        EXCLUDE_FROM_ALL)
+FetchContent_MakeAvailable(zstd)
+
+# meshoptimizer - offline only: tools/model_simplify reduces the multi-million
+# triangle source plants and rocks (assets/models/polyhaven) to import budgets.
+# Nothing in the engine links it.
+FetchContent_Declare(meshoptimizer
+        GIT_REPOSITORY https://github.com/zeux/meshoptimizer.git
+        GIT_TAG v1.1
+        GIT_SHALLOW TRUE
+        EXCLUDE_FROM_ALL)
+FetchContent_MakeAvailable(meshoptimizer)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -79,7 +107,8 @@ target_include_directories(nlohmann_json INTERFACE ${CMAKE_SOURCE_DIR}/third_par
 add_library(asr_core STATIC
         src/engine/core/fixed.cpp
         src/engine/core/geometry.cpp
-        src/engine/core/time.cpp)
+        src/engine/core/time.cpp
+        src/engine/core/profiler.cpp)
 target_include_directories(asr_core PUBLIC src)
 target_link_libraries(asr_core PRIVATE asr_warnings)
 include(src/engine/modules.cmake)
@@ -132,11 +161,18 @@ add_library(asr_generation STATIC
         src/game/generation/world_scale_policy.cpp
         src/game/generation/world_macro.cpp
         src/game/generation/land_coverage.cpp
+        src/game/generation/world_noise.cpp
+        src/game/generation/world_layers.cpp
+        src/game/generation/world_brush.cpp
+        src/game/generation/world_layout.cpp
+        src/game/generation/world_compose.cpp
+        src/game/generation/world_sketch.cpp
+        src/game/generation/world_import.cpp
         src/game/generation/world_map_gen.cpp)
 target_include_directories(asr_generation PUBLIC src)
 target_compile_definitions(asr_generation PRIVATE ASR_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-target_link_libraries(asr_generation PUBLIC asr_core asr_content asr_terrain_generator EnTT::EnTT
-        PRIVATE nlohmann_json asr_warnings)
+target_link_libraries(asr_generation PUBLIC asr_core asr_content asr_terrain_generator asr_biomes EnTT::EnTT
+        PRIVATE asr_world_source nlohmann_json asr_warnings)
 
 # ---------------------------------------------------------------------------
 # world - the ground as geometry: the height field, chunk meshes, cliffs.
@@ -164,6 +200,7 @@ add_library(asr_world STATIC
         src/game/world/terrain_streaming/baked_page_cache.cpp
         src/game/world/terrain_streaming/graph_carve.cpp
         src/game/world/terrain_streaming/hydrology_builder.cpp
+        src/game/world/terrain_streaming/hydrology_selection.cpp
         src/game/world/terrain_streaming/page_ground.cpp
         src/game/world/terrain_streaming/page_store.cpp
         src/game/world/terrain_streaming/hydrology_cache.cpp
@@ -180,8 +217,13 @@ target_sources(asr_world PRIVATE src/game/world/scene_scatter.cpp)
 target_sources(asr_world PRIVATE src/game/world/scene_entities.cpp)
 target_sources(asr_world PRIVATE src/game/world/terrain_source.cpp)
 target_sources(asr_world PRIVATE src/game/world/terrain_source_tree.cpp)
+# The persistent delta: the world's history over its generated base, saved
+# chunk by chunk under the world root (engine/world_store).
+target_sources(asr_world PRIVATE src/game/world/world_delta.cpp src/game/world/world_delta_codec.cpp
+        src/game/world/world_saves.cpp src/game/world/world_tools.cpp)
 target_link_libraries(asr_world PUBLIC asr_core asr_generation asr_geometry asr_render_systems
         PRIVATE nlohmann_json asr_warnings)
+target_link_libraries(asr_world PUBLIC asr_world_store)
 
 # ---------------------------------------------------------------------------
 # simulation - the headless world. Knows nothing about rendering or input.
@@ -223,6 +265,19 @@ target_link_libraries(sim_runner PRIVATE asr_simulation asr_warnings)
 add_executable(terrain_lint tools/terrain_lint.cpp)
 target_link_libraries(terrain_lint PRIVATE asr_world asr_warnings)
 
+# world_root_inspect - what a world root holds on disk: chunks, revisions,
+# blocks, journals, and whether each file is the one its manifest names.
+add_executable(world_root_inspect tools/world_root_inspect.cpp)
+target_link_libraries(world_root_inspect PRIVATE asr_world asr_warnings)
+
+# world_load_probe - what opening a world costs, pass by pass: generation,
+# the snapshot, the prebake of pages.
+add_executable(worldtool tools/worldtool.cpp)
+target_link_libraries(worldtool PRIVATE asr_world_source asr_biomes asr_warnings)
+
+add_executable(world_load_probe tools/world_load_probe.cpp)
+target_link_libraries(world_load_probe PRIVATE asr_world asr_generation asr_world_source asr_warnings)
+
 add_executable(terrain_resolution_probe tools/terrain_resolution_probe.cpp)
 target_link_libraries(terrain_resolution_probe PRIVATE asr_world nlohmann_json asr_warnings)
 
@@ -259,6 +314,25 @@ target_link_libraries(world_scale_probe PRIVATE asr_world asr_generation nlohman
 add_executable(scene_model_clusters tools/scene_model_clusters.cpp)
 target_link_libraries(scene_model_clusters PRIVATE asr_geometry nlohmann_json asr_warnings)
 
+# model_simplify - reduces the downloaded source models (trees, shrubs, ground
+# plants, deadwood, rocks) to per-role triangle budgets: solid parts by edge
+# collapse, scattered leaves/needles/blades by per-piece reduction and thinning
+# with coverage-matched growth. See doc/DECISIONS.md D168.
+# A build tree configured FETCHCONTENT_FULLY_DISCONNECTED without a populated
+# meshoptimizer simply has no model_simplify; nothing else depends on it.
+if(TARGET meshoptimizer)
+    add_executable(model_simplify tools/model_simplify.cpp)
+    target_link_libraries(model_simplify PRIVATE meshoptimizer nlohmann_json asr_warnings)
+else()
+    message(STATUS "meshoptimizer not populated: model_simplify is not built")
+endif()
+
+# impostor_bake - the impostor rasterizer of prepare_scene_models.py and the
+# depth code of bake_impostor_depth.py, natively and byte-identical; driven by
+# tools/bake_model_impostors.py. No dependencies.
+add_executable(impostor_bake tools/impostor_bake.cpp)
+target_link_libraries(impostor_bake PRIVATE asr_warnings)
+
 add_executable(content_validator tools/content_validator.cpp)
 target_link_libraries(content_validator PRIVATE asr_content asr_simulation asr_warnings)
 
@@ -289,9 +363,12 @@ if(ASR_BUILD_CLIENT OR ASR_BUILD_ENGINE_EDITOR)
             EXCLUDE_FROM_ALL)
     FetchContent_MakeAvailable(SDL3_image)
 
-    add_library(asr_engine_gui STATIC src/engine/ui/ui.cpp src/engine/editor/module_panel.cpp)
+    add_library(asr_engine_gui STATIC src/engine/ui/ui.cpp src/engine/ui/font.cpp src/engine/editor/module_panel.cpp
+            src/engine/ui/profiler_window.cpp)
     target_include_directories(asr_engine_gui PUBLIC src)
-    target_link_libraries(asr_engine_gui PUBLIC asr_representation asr_terrain_generator
+    # stb_truetype, vendored like the JSON reader (third_party/stb).
+    target_include_directories(asr_engine_gui PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
+    target_link_libraries(asr_engine_gui PUBLIC asr_core asr_representation asr_terrain_generator
             asr_virtual_geometry SDL3::SDL3-static PRIVATE asr_warnings)
     add_library(Campfire::Gui ALIAS asr_engine_gui)
     if(ASR_BUILD_CLIENT OR (ASR_BUILD_ENGINE_EDITOR AND ASR_ENGINE_EDITOR_GPU))
@@ -329,13 +406,18 @@ if(ASR_BUILD_CLIENT)
             src/game/render/passes/water_pass.cpp
             src/game/render/passes/weather_pass.cpp
             src/game/render/passes/grade_pass.cpp
+            src/game/render/passes/hold_pass.cpp
+            src/game/render/passes/sketch_pass.cpp
+            src/game/render/passes/highlight_pass.cpp
             src/game/render/passes/sky_pass.cpp src/game/render/passes/frustum_pass.cpp
             src/game/render/passes/menu_pass.cpp
             src/game/render/passes/sprite_pass.cpp
             src/game/client/explore_menu.cpp src/game/client/graphics_panel.cpp
+            src/game/client/world_editor.cpp src/game/client/world_editor_biomes.cpp
             src/game/render/calc/terrain_stream.cpp
             src/game/render/calc/terrain_collect.cpp
             src/game/render/climate_textures.cpp
+            src/game/render/biome_textures.cpp
             src/game/render/height_page_atlas.cpp
             src/game/render/height_page_stream.cpp
             src/game/render/gpu_terrain.cpp
@@ -348,10 +430,11 @@ if(ASR_BUILD_CLIENT)
         target_sources(asr_game_render PRIVATE src/game/render/world_renderer_diagnostics.cpp)
     endif()
     target_link_libraries(asr_game_render PUBLIC asr_engine_render asr_world asr_camera asr_virtual_geometry_gpu
-            asr_impostors_gpu PRIVATE nlohmann_json asr_warnings)
+            asr_impostors_gpu asr_world_source PRIVATE nlohmann_json asr_warnings)
 
     add_executable(asr_client
             src/game/client/main.cpp
+            src/engine/core/profiler_alloc.cpp
             src/game/client/renderer.cpp
             src/game/client/selection.cpp
             src/game/client/controls.cpp
@@ -360,6 +443,8 @@ if(ASR_BUILD_CLIENT)
             src/game/client/explorer.cpp
             src/game/client/explore_view.cpp
             src/game/client/explore_bench.cpp
+            src/game/client/client_ui.cpp
+            src/game/client/client_app.cpp
             src/game/ui/hud.cpp
             src/game/ui/editor.cpp
             src/game/ui/overlay.cpp
@@ -457,6 +542,13 @@ endif()
 # ---------------------------------------------------------------------------
 if(ASR_BUILD_TESTS)
     enable_testing()
+    if(TARGET asr_engine_gui)
+        # The interface layer on a software renderer: the face, typing, sliders.
+        add_executable(asr_ui_tests tests/main.cpp tests/test_ui.cpp)
+        target_link_libraries(asr_ui_tests PRIVATE asr_engine_gui asr_warnings)
+        add_test(NAME ui COMMAND asr_ui_tests)
+        set_tests_properties(ui PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+    endif()
     if(TARGET asr_engine_viewport)
         add_executable(asr_engine_viewport_tests tests/main.cpp tests/test_dag_viewport_gpu.cpp)
         target_link_libraries(asr_engine_viewport_tests PRIVATE asr_engine_viewport asr_engine_gui asr_warnings)
@@ -469,9 +561,10 @@ if(ASR_BUILD_TESTS)
     add_executable(asr_engine_module_tests tests/main.cpp tests/test_engine_modules.cpp
             tests/test_recursive_impostor.cpp tests/test_impostor_hierarchy.cpp
             tests/test_camera.cpp tests/test_camera_matrix.cpp
-            tests/test_plate_field.cpp tests/test_range_field.cpp tests/test_erosion_field.cpp)
+            tests/test_plate_field.cpp tests/test_range_field.cpp tests/test_erosion_field.cpp
+            tests/test_world_store.cpp tests/test_world_source.cpp tests/test_biomes.cpp)
     target_link_libraries(asr_engine_module_tests PRIVATE asr_representation asr_terrain_generator
-            asr_virtual_geometry asr_impostors asr_warnings)
+            asr_virtual_geometry asr_impostors asr_world_store asr_world_source asr_biomes asr_warnings)
     add_test(NAME engine_modules COMMAND asr_engine_module_tests)
     set_tests_properties(engine_modules PROPERTIES TIMEOUT 45)
     find_package(Python3 QUIET COMPONENTS Interpreter)
@@ -507,7 +600,8 @@ if(ASR_BUILD_TESTS)
     add_test(NAME smart_mesh_components COMMAND asr_smart_mesh_tests)
     set_tests_properties(smart_mesh_components PROPERTIES TIMEOUT 30)
     add_executable(asr_world_system_tests tests/main.cpp tests/test_world_system.cpp
-            tests/test_scene_entities.cpp tests/test_terrain_brush.cpp)
+            tests/test_scene_entities.cpp tests/test_terrain_brush.cpp tests/test_world_delta.cpp
+            tests/test_ground_edits.cpp tests/test_world_tools.cpp)
     target_link_libraries(asr_world_system_tests PRIVATE asr_world asr_warnings)
     add_test(NAME world_system COMMAND asr_world_system_tests)
     set_tests_properties(world_system PROPERTIES TIMEOUT 30)
@@ -536,6 +630,7 @@ if(ASR_BUILD_TESTS)
                 tests/test_weather.cpp
                 tests/test_water_bodies.cpp
                 src/game/client/explore_menu.cpp src/game/client/graphics_panel.cpp
+            src/game/client/world_editor.cpp src/game/client/world_editor_biomes.cpp
                 src/game/client/world_dials.cpp
                 src/game/client/explorer.cpp
                 src/game/client/renderer.cpp
@@ -594,6 +689,9 @@ if(ASR_BUILD_TESTS)
     target_link_libraries(asr_tests PRIVATE asr_simulation asr_world asr_camera nlohmann_json asr_warnings
             ${ASR_INSPECTOR_LIBS})
     target_sources(asr_tests PRIVATE tests/test_terrain_config.cpp)
+    target_sources(asr_tests PRIVATE tests/test_world_layout.cpp tests/test_world_layers.cpp tests/test_world_compose.cpp
+            tests/test_world_stages.cpp tests/test_world_import.cpp)
+    target_link_libraries(asr_tests PRIVATE asr_world_source)
     target_sources(asr_tests PRIVATE tests/test_scene_scatter.cpp)
     target_sources(asr_tests PRIVATE tests/test_world_scale.cpp tests/test_land_coverage.cpp
             tests/test_terrain_source.cpp)
@@ -608,6 +706,7 @@ if(ASR_BUILD_TESTS)
             tests/test_terrain_lod.cpp
             tests/test_terrain_height_pages.cpp
             tests/test_terrain_cut.cpp
+            tests/test_water_selection.cpp
             tests/test_tile_mesh.cpp)
     target_link_libraries(asr_terrain_tests PRIVATE asr_world nlohmann_json asr_warnings)
     target_sources(asr_terrain_tests PRIVATE tests/test_terrain_config.cpp)

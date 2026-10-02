@@ -25,6 +25,7 @@
 
 #include "engine/core/fixed.hpp"
 #include "game/world/height_field.hpp"
+#include "game/world/terrain_lod.hpp"
 #include "game/world/terrain_streaming/base_tile.hpp"
 #include "game/world/terrain_streaming/hydrology_graph.hpp"
 #include "game/world/terrain_streaming/tile_layout.hpp"
@@ -149,13 +150,21 @@ struct BakedPage {
     // H16-cell feature flags: 1 = river valley, 2 = surface bend, 4 = bank. Permanent
     // metadata, independent of camera LOD and of optional medium residual.
     std::vector<std::uint8_t> featureCells;
+    // The ground the page was baked over, when the world has edits
+    // (edit_layer.hpp). `groundRevision` is the layer's revision as the bake
+    // began: the page is current while nothing inside its reach is newer.
+    // `ground` is the fingerprint of what the layer held within that reach -
+    // nought for ground nobody touched - and is what names the page on disk
+    // and tells a mesh built from it apart from one built from other ground.
+    std::uint64_t groundRevision = 0, ground = 0;
 };
 
-// One worker's baker. The world and the graph must outlive it.
+// One worker's baker. The world and the graph must outlive it, and so must the
+// edit layer when there is one: its field reads what people dug.
 class BaseTileBaker {
 public:
     BaseTileBaker(const generation::WorldMapData& world, const HydrologyGraph& graph,
-                  HsimQuantisation quantisation);
+                  HsimQuantisation quantisation, const EditLayer* edits = nullptr);
 
     // `sampleMetres` has to divide the page and be a whole number of lattice
     // steps. An invalid request gives back a tile that fails BaseTile::valid,
@@ -175,6 +184,12 @@ public:
 
     [[nodiscard]] const HsimQuantisation& quantisation() const { return quantisation_; }
     [[nodiscard]] const HeightField& field() const { return field_; }
+    // Where the finer levels have pages at all (PageStore::containsLand). A
+    // page coarser than H64 spans many 512 m squares, and over a square that
+    // would have no page of its own the ground is what an absent page reads -
+    // the open sea's floor - so the coarse level and the fine one under it
+    // agree, and nothing rises out of the sea as the camera comes down.
+    void landMask(const terrain::LandMask64* mask) { landMask_ = mask; }
     // How many distinct catchments the macro map holds, after the dense remap.
     [[nodiscard]] std::size_t watershedCount() const { return watershedCount_; }
 
@@ -183,6 +198,7 @@ private:
     const HydrologyGraph& graph_;
     HsimQuantisation quantisation_;
     HeightField field_;
+    const terrain::LandMask64* landMask_ = nullptr;
     // Per macro cell, resolved once so a sample costs a lookup rather than a
     // search through the graph.
     std::vector<std::uint16_t> watershedOfCell_;

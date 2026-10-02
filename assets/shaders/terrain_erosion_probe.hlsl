@@ -1,4 +1,6 @@
 #include "terrain.hlsl"
+// terrain.hlsl no longer shades erosion itself; the probe still tests the helper.
+#include "terrain_erosion.hlsli"
 
 float4 TerrainErosionProbeVS(uint vertex : SV_VertexID) : SV_Position
 {

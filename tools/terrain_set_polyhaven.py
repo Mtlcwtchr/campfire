@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""The Poly Haven ground set the renderer's sixteen layers are built from.
+"""The Poly Haven ground set the renderer's layers are built from (sixteen in
+use; the rest fetched and packed for the authored regions' grounds).
 
 Adds (or refreshes) one catalogue entry per layer in
 content/config/terrain_materials.json, then:
@@ -37,6 +38,14 @@ SET = [
     (13, "mossy_rock", "cliff: mossy, wet climates"),
     (14, "cliff_side", "cliff: warm, arid"),
     (15, "mud_cracked_dry_riverbed_002", "marsh: dried and cracked"),
+    # The authored continent's own grounds (doc/references/maps, D165): fetched
+    # and packed, not yet among the renderer's layers.
+    (16, "moon_dusted_04", "wastes: grey dead powder"),
+    (17, "rubble", "wastes: grey grit and broken stone"),
+    (18, "mud_forest", "bog: dark peat"),
+    (19, "brown_mud_leaves_01", "bog: mossy mud under the swamp forest"),
+    (20, "burned_ground_01", "blight: craters dark with the black wind's power, charred ground"),
+    (21, "red_laterite_soil_stones", "laterite: red savanna and tropical soil"),
 ]
 
 

@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "game/world/terrain_cut.hpp"
+#include "game/world/terrain_streaming/tile_layout.hpp"
 #include "game/world/terrain_adaptive.hpp"
 #include "game/world/terrain_config.hpp"
 #include "game/world/terrain_detail.hpp"
@@ -26,6 +27,20 @@ struct TerrainView {
     std::array<float, 16> matrix{}, prediction{};
     TerrainConfig config;
     double x = 0, y = 0, lookX = 0, lookY = 0, radius = 0;
+    // How far from (x, y) the ground is kept at all, in metres: roots wholly
+    // past it ask for no pages and draw nothing (it is past the fog). Nought:
+    // the whole world, as it always was.
+    double window = 0;
+    // Where the window is centred: what the camera looks at, which from high
+    // above is far from where the eye is (x, y).
+    double windowX = 0, windowY = 0;
+    // A box wholly past the window.
+    bool beyondWindow(double minX, double minY, double maxX, double maxY) const {
+        if (!(window > 0)) return false;
+        const double dx = std::max({minX - windowX, 0.0, windowX - maxX}),
+                     dy = std::max({minY - windowY, 0.0, windowY - maxY});
+        return dx * dx + dy * dy > window * window;
+    }
     int width = 1, height = 1, target = 0;
     bool localDetail = false; // perspective camera close to the H16 ground
     generation::TerrainStage stageFrom = generation::TerrainStage::Final;
@@ -131,8 +146,9 @@ struct TerrainResidency {
             // Keep both morph endpoints, parent triangle corners and filtering
             // neighbours. An absent ocean entry returns cover=1 in the shader:
             // it must NOT be treated as an empty/dry dependency.
-            for (auto y = floorDiv(tile.y * side - halo, 512); y <= floorDiv((tile.y + 1) * side + halo, 512); ++y)
-                for (auto x = floorDiv(tile.x * side - halo, 512); x <= floorDiv((tile.x + 1) * side + halo, 512); ++x) {
+            const std::int64_t page = streaming::pageMetresAtLevel(level);
+            for (auto y = floorDiv(tile.y * side - halo, page); y <= floorDiv((tile.y + 1) * side + halo, page); ++y)
+                for (auto x = floorDiv(tile.x * side - halo, page); x <= floorDiv((tile.x + 1) * side + halo, page); ++x) {
                     const streaming::TileKey key{int(x), int(y), level};
                     if (!pages.contains(key) || !dryPages.contains(key)) return true;
                 }
@@ -182,6 +198,9 @@ struct TerrainPlan {
     std::size_t coarse = 0, morphing = 0, blank = 0;
     std::size_t rootsVisited = 0, rootsReused = 0;
     std::size_t meshesBuilt = 0, deferredRegions = 0;
+    // Squares drawn with a mesh of ground that has since been dug (a stale
+    // mesh is drawn until its replacement is built, never a hole instead).
+    std::size_t staleMeshes = 0;
     bool needsUpdate = false, capacityLimited = false;
     TerrainDetail::Stats detail;
 

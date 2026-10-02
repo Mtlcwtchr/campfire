@@ -1,6 +1,8 @@
 #include "game/world/terrain_plan.hpp"
 
 #include <chrono>
+#include <cstdio>
+#include <cstdlib>
 #include <limits>
 #include <mutex>
 #include <numeric>
@@ -20,8 +22,9 @@ using Clock = std::chrono::steady_clock;
 
 bool nearer(Key a, Key b, double x, double y) {
     const auto rank = [&](Key key) {
-        return std::tuple{focusDistanceSquared({key.x * 512.0, key.y * 512.0,
-            (key.x + 1) * 512.0, (key.y + 1) * 512.0}, x, y), -int(key.level), key.y, key.x};
+        const double metres = streaming::pageMetresAtLevel(key.level);
+        return std::tuple{focusDistanceSquared({key.x * metres, key.y * metres,
+            (key.x + 1) * metres, (key.y + 1) * metres}, x, y), -int(key.level), key.y, key.x};
     };
     return rank(a) < rank(b);
 }
@@ -42,7 +45,54 @@ struct Geometry {
     TerrainView view;
     bool sampleDetail = true;
     std::size_t meshBudget = std::numeric_limits<std::size_t>::max();
+    // For replacing meshes over moved ground (see mesh()).
+    std::size_t rebuildBudget = std::numeric_limits<std::size_t>::max();
     bool deferred = false;
+    // The ground each page stood on when this stage last looked at it
+    // (SurfacePage::version), and the residency it looked at.
+    std::unordered_map<Key, std::uint64_t> grounds;
+    std::uint64_t groundsSeen = std::numeric_limits<std::uint64_t>::max();
+    // Cached meshes built over ground that has moved since, by cache.
+    std::unordered_set<std::int64_t> staleMeshes, staleBaseMeshes;
+    // The plan each cached mesh was last used in. A mesh the cut no longer
+    // draws stays, least recently used out first, within the config's budget:
+    // it used to go the moment the cut stopped using it, so ground the eye had
+    // just left - a zoom out and back in, a turn of the head - was built again
+    // from nothing every time.
+    std::unordered_map<std::int64_t, std::uint64_t> lastUsed;
+    std::uint64_t plans = 0;
+    static std::size_t bytesOf(const AdaptiveMesh& m) {
+        return m.vertices.size() * sizeof(m.vertices[0]) + m.indices.size() * sizeof(m.indices[0]) +
+               (m.bed.size() + m.head.size() + m.prior.size()) * sizeof(float) + m.splits.size() + 256;
+    }
+    void trimCache(std::size_t budget) {
+        ++plans;
+        for (const auto id : meshUses) lastUsed[id] = plans;
+        struct Idle { std::uint64_t used; bool base; std::int64_t id; std::size_t bytes; };
+        std::vector<Idle> idle;
+        std::size_t idleBytes = 0;
+        const auto gather = [&](const auto& cache, bool base) {
+            for (const auto& [id, mesh] : cache) {
+                const auto bytes = bytesOf(*mesh);
+                if (meshUses.contains(id)) continue;
+                const auto it = lastUsed.find(id);
+                idle.push_back({it == lastUsed.end() ? 0 : it->second, base, id, bytes});
+                idleBytes += bytes;
+            }
+        };
+        gather(meshes, false);
+        gather(baseMeshes, true);
+        if (idleBytes > budget) {
+            std::sort(idle.begin(), idle.end(), [](const Idle& a, const Idle& b) { return a.used < b.used; });
+            for (const auto& i : idle) {
+                if (idleBytes <= budget) break;
+                (i.base ? baseMeshes : meshes).erase(i.id);
+                idleBytes -= i.bytes;
+            }
+        }
+        if (lastUsed.size() > 4 * (meshes.size() + baseMeshes.size()) + 1024)
+            std::erase_if(lastUsed, [&](const auto& e) { return !meshes.contains(e.first) && !baseMeshes.contains(e.first); });
+    }
     Geometry(const generation::WorldMapData& w,const streaming::PageStore& p,DataLodPolicy policy,bool samples=true)
         :world(w),pages(p),dataPolicy(policy),sampleDetail(samples) {
         if (policy.targeted && !policy.cameraBudget)
@@ -77,6 +127,42 @@ struct Geometry {
                 (!dataPolicy.chunkMetres[0] || entry.second->step==dataPolicy.stepAt(0));});
         }
     }
+    // Pages whose surface now stands on other ground than when this stage
+    // last looked (a dig, edit_layer.hpp). Every cached mesh built from one
+    // of them is a picture of ground that is gone: it is marked stale, drawn
+    // as it is until its replacement is built inside the mesh budget - a dig
+    // never opens a hole - and the rest of the world is not touched. A page
+    // that merely left and came back on the same ground is no change.
+    std::unordered_set<Key> observeGround(const TerrainResidency& residency) {
+        std::unordered_set<Key> changed;
+        if (residency.revision == groundsSeen) return changed;
+        groundsSeen = residency.revision;
+        for (const auto& [key, surface] : residency.surfaces) {
+            if (!surface) continue;
+            const auto [it, fresh] = grounds.try_emplace(key, surface->version);
+            if (fresh || it->second == surface->version) continue;
+            it->second = surface->version;
+            changed.insert(key);
+        }
+        if (changed.empty()) return changed;
+        const auto mark = [&](const auto& cache, std::unordered_set<std::int64_t>& stale) {
+            for (const auto& [id, mesh] : cache) {
+                const auto deps = dependencies.find(id);
+                if (deps != dependencies.end() &&
+                    std::any_of(deps->second.begin(), deps->second.end(), [&](Key key) { return changed.contains(key); }))
+                    stale.insert(id);
+            }
+        };
+        mark(meshes, staleMeshes);
+        mark(baseMeshes, staleBaseMeshes);
+        return changed;
+    }
+    [[nodiscard]] bool staleMesh(TileId tile) const { return staleMeshes.contains(tileKeyOf(tile)); }
+    // After the caches are trimmed: nothing is stale that is not cached.
+    void trimStale() {
+        std::erase_if(staleMeshes, [&](std::int64_t id) { return !meshes.contains(id); });
+        std::erase_if(staleBaseMeshes, [&](std::int64_t id) { return !baseMeshes.contains(id); });
+    }
     bool refine(TileId tile,const TerrainResidency& residency,const TerrainView& current,
                 bool children=false,bool cachedOnly=false) {
         const auto& box=bounds(tile).box;
@@ -87,14 +173,19 @@ struct Geometry {
         std::shared_ptr<const AdaptiveMesh> shape;
         if (cachedOnly) {
             if (const auto it=baseMeshes.find(tileKeyOf(tile));it!=baseMeshes.end()) shape=it->second;
-        } else shape=mesh(tile,residency,true);
+        } else shape=mesh(tile,residency,true,true);
         if (detail && tile.lod>1 && tile.lod<=3 &&
             current.lodMetresPerPixel(box)<(children?2.0:1.0) &&
             detail->hasFeatures(tile)) return true;
         return current.refineSurface(box,tile.lod,shape.get(),dataPolicy,children);
     }
 
-    std::shared_ptr<const AdaptiveMesh> mesh(TileId tile, const TerrainResidency& residency, bool baseOnly=false) {
+    // `probe`: asked whether a square could be drawn, or what shape it has,
+    // not for the mesh to draw - a mesh over moved ground answers that as
+    // well as its replacement would, and the rebuild budget goes to what is
+    // on screen.
+    std::shared_ptr<const AdaptiveMesh> mesh(TileId tile, const TerrainResidency& residency, bool baseOnly=false,
+                                             bool probe=false) {
         if (residency.surfaces.empty()) return {};
         for (auto ancestor = tile;; ancestor = parentTile(ancestor)) {
             meshUses.insert(tileKeyOf(ancestor));
@@ -102,17 +193,32 @@ struct Geometry {
         }
         const auto id = tileKeyOf(tile);
         auto& cache=baseOnly?baseMeshes:meshes;
-        if (const auto it = cache.find(id); it != cache.end()) return it->second;
-        for (auto key : keys(tile)) if (!residency.surfaces.contains(key)) return {};
-        if (!meshBudget) { deferred = true; return {}; }
+        auto& stale=baseOnly?staleBaseMeshes:staleMeshes;
+        // A mesh over ground that has since moved is rebuilt when the budget
+        // allows, and until then it is what is drawn: the old ground for a few
+        // frames, never a hole where a square was.
+        std::shared_ptr<const AdaptiveMesh> previous;
+        if (const auto it = cache.find(id); it != cache.end()) {
+            if (probe || !stale.contains(id)) return it->second;
+            previous = it->second;
+        }
+        for (auto key : keys(tile)) if (!residency.surfaces.contains(key)) return previous;
+        // Replacing a square already drawn has its own, larger allowance: it
+        // is bounded by the dig, not by the view, and every plan it waits
+        // for is a morph's worth of old ground on screen.
+        auto& budget = previous ? rebuildBudget : meshBudget;
+        if (!budget) { deferred = true; return previous; }
         std::shared_ptr<const AdaptiveMesh> parent;
         // A regional root has no morph parent. Climbing above it waits for
         // pages outside this cut's requested dependencies and can stall forever.
         if (!isRoot(tile) && tile.lod < int(kGeometryLevels) - 1) {
             parent = mesh(parentTile(tile), residency,baseOnly);
-            if (!parent) return {};
+            if (!parent) return previous;
+            // Rebuilt against a parent still on the old ground, it would morph
+            // towards ground that is gone. It waits for its parent.
+            if (previous && stale.contains(tileKeyOf(parentTile(tile)))) { deferred = true; return previous; }
         }
-        if (!meshBudget) { deferred = true; return {}; }
+        if (!budget) { deferred = true; return previous; }
         const auto side = metres(tile);
         const double ox = tile.x*side, oy = tile.y*side;
         const auto sourceLevel=dataLevel(tile);
@@ -202,11 +308,12 @@ struct Geometry {
                 }
                 return {h,head};
             }
-            const int px = int(std::floor(x/512)), py = int(std::floor(y/512));
+            const double pageMetres = streaming::pageMetresAtLevel(sourceLevel);
+            const int px = int(std::floor(x/pageMetres)), py = int(std::floor(y/pageMetres));
             const auto it = residency.surfaces.find({px,py,sourceLevel});
             if (it == residency.surfaces.end()) return {-60,0}; // sparse ocean entry
             const auto& p = *it->second;
-            const double gx=(x-px*512)/p.step+p.padding,gy=(y-py*512)/p.step+p.padding;
+            const double gx=(x-px*pageMetres)/p.step+p.padding,gy=(y-py*pageMetres)/p.step+p.padding;
             const int ix=std::clamp(int(std::floor(gx)),0,p.side-2),iy=std::clamp(int(std::floor(gy)),0,p.side-2);
             const auto i = std::size_t(iy)*p.side+ix;
             const double fx=gx-ix,fy=gy-iy;
@@ -309,8 +416,12 @@ struct Geometry {
             }
             result=std::move(annotated);
         }
-        --meshBudget;
-        return cache.emplace(id,std::move(result)).first->second;
+        --budget;
+        // Its children stay as they are: what they morph into is the parent's
+        // surface over their own square, and the pages under that are in
+        // their own dependencies - a child the dig reached is stale itself.
+        stale.erase(id);
+        return cache.insert_or_assign(id,std::move(result)).first->second;
     }
 
     std::uint8_t dataLevel(int lod) const {
@@ -356,15 +467,20 @@ struct Geometry {
         std::vector<Key> result;
         const auto side = metres(tile);
         // Includes parent triangle corners and their normal-sampling halo.
-        const auto halo = 2 * sampleMetresAt(std::min(6, tile.lod + 1));
+        const auto fineHalo = 2 * sampleMetresAt(std::min(6, tile.lod + 1));
         int previous = -1;
         for (int lod : {tile.lod, isRoot(tile) ? tile.lod : std::min(int(kGeometryLevels) - 1, tile.lod + 1)}) {
             const TileId source=lod==tile.lod?tile:parentTile(tile);
             const auto level = dataLevel(source);
             if (level == previous) continue;
             previous = level;
-            for (auto y = floorDiv(tile.y * side - halo, 512); y <= floorDiv((tile.y + 1) * side + halo, 512); ++y)
-                for (auto x = floorDiv(tile.x * side - halo, 512); x <= floorDiv((tile.x + 1) * side + halo, 512); ++x) {
+            const std::int64_t pageMetres = streaming::pageMetresAtLevel(level);
+            // A coarse page's normals and its parent's corners are read a
+            // triangle's step past the square: the neighbouring page with them.
+            const std::int64_t halo = level > 4 ? std::max<std::int64_t>(fineHalo,
+                2 * dataPolicy.stepAt(std::min(int(kGeometryLevels) - 1, tile.lod + 1))) : fineHalo;
+            for (auto y = floorDiv(tile.y * side - halo, pageMetres); y <= floorDiv((tile.y + 1) * side + halo, pageMetres); ++y)
+                for (auto x = floorDiv(tile.x * side - halo, pageMetres); x <= floorDiv((tile.x + 1) * side + halo, pageMetres); ++x) {
                     Key key{int(x), int(y), level};
                     if (pages.containsLand(key)) result.push_back(key);
                 }
@@ -455,6 +571,9 @@ struct TerrainPlanner::Impl {
         cutGeometry.prepare(view,std::clamp(plan.time-previousTime,0.0,0.1));
         cutGeometry.meshBudget = cutGeometry.dataPolicy.cameraBudget ? view.config.meshesPerPlan :
             std::numeric_limits<std::size_t>::max();
+        const std::size_t rebuildLimit = view.config.meshesPerPlan * 8;
+        cutGeometry.rebuildBudget = cutGeometry.dataPolicy.cameraBudget ? rebuildLimit :
+            std::numeric_limits<std::size_t>::max();
         const auto& resident = job.residency->pages;
         cutGeometry.meshUses.clear();
         const bool newView = !previousResidency || previousView != view || job.restart;
@@ -472,10 +591,59 @@ struct TerrainPlanner::Impl {
             changed(previousResidency->pages, resident, true);
             changed(resident, previousResidency->pages, false);
         }
-        if (job.restart) for (auto& region : regions) region.cut.clear();
+        // The same pages on other ground: their roots are cut again, over
+        // meshes built afresh.
+        for (const auto key : cutGeometry.observeGround(*job.residency))
+            if (auto it = dependents.find(key); it != dependents.end()) dirty.insert(it->second.begin(), it->second.end());
+        // Pages a cut stood on are gone (the atlas let them go, or a plan was
+        // refused because its pins were). Each square that has lost its pages
+        // falls back to its nearest ancestor that still has all of its own,
+        // and nothing else in the cut moves.
+        //
+        // This used to clear the region's whole cut. A world root is 65 km, so
+        // the atlas letting go of a few H8 pages a kilometre behind the eye -
+        // which it does on every walk - threw the square under the pawn from
+        // 8 m triangles to a 1 km slab at once, and walked it back down every
+        // level over the next seconds: the ground rebuilding under the feet.
+        const auto pagesReady = [&](TileId tile) {
+            for (const auto key : cutGeometry.keys(tile)) if (!resident.contains(key)) return false;
+            return true;
+        };
+        std::size_t foldedSquares = 0, clearedRegions = 0;
+        const auto fold = [&](Region& region) {
+            std::vector<TileId> standing;
+            for (const auto& block : region.cut.coverage()) standing.push_back(block.tile);
+            for (const auto parent : region.cut.activeParents()) standing.push_back(parent);
+            std::unordered_set<std::int64_t> collapsed;
+            for (const auto tile : standing) {
+                if (pagesReady(tile)) continue;
+                auto ancestor = tile;
+                while (!pagesReady(ancestor) && !cutGeometry.isRoot(ancestor) &&
+                       ancestor.lod < int(kGeometryLevels) - 1)
+                    ancestor = cutGeometry.parentTile(ancestor);
+                if (!pagesReady(ancestor)) {      // not even the root: nothing to stand on
+                    region.cut.clear();
+                    ++clearedRegions;
+                    return;
+                }
+                if (collapsed.insert(tileKeyOf(ancestor)).second) {
+                    region.cut.collapse(ancestor, [this](TileId t) { return cutGeometry.children(t); });
+                    ++foldedSquares;
+                }
+            }
+        };
+        if (job.restart) for (auto& region : regions) fold(region);
         // A discarded/stale plan may have advanced a transition whose pages
         // were never pinned by the renderer. Fall back rather than drawing it.
-        for (auto index : lost) regions[index].cut.clear();
+        else for (auto index : lost) fold(regions[index]);
+        static const bool underfoot = std::getenv("ASR_TERRAIN_UNDERFOOT") != nullptr;
+        if (underfoot && (job.restart || !lost.empty())) {
+            std::size_t gone = 0;
+            if (previousResidency) for (auto key : previousResidency->pages) gone += !resident.contains(key);
+            std::fprintf(stderr, "underfoot FOLD restart=%d lost-regions=%zu of %zu, pages gone=%zu, squares folded=%zu, "
+                         "regions cleared=%zu\n", int(job.restart), lost.size(), regions.size(), gone,
+                         foldedSquares, clearedRegions);
+        }
         const double dt = std::clamp(plan.time - previousTime, 0.0, 0.1);
         const auto priority = [&](TileId tile) {
             const double side = cutGeometry.metres(tile);
@@ -492,6 +660,7 @@ struct TerrainPlanner::Impl {
         for (const auto& region : regions)
             for (auto parent : region.cut.activeParents()) if (cutGeometry.streamedChildren(parent))
                 for (auto key : family(parent)) working[key.level].insert(key);
+        bool released = false;
         const auto reuse = [&](std::size_t index) {
             const auto& region = regions[index];
             const bool retryCapacity = region.limited && previousResidency != job.residency;
@@ -500,7 +669,27 @@ struct TerrainPlanner::Impl {
         };
         // Cached waiting families retain their admission even before their
         // first child is drawable. Don't give the same slots to another root.
-        for (std::size_t i = 0; i < regions.size(); ++i) if (reuse(i))
+        // Roots past the window hold nothing: no cut, no pages, no meshes. The
+        // ground there is past the fog, and a world a thousand kilometres long
+        // must not keep every page of itself for a view that sees forty.
+        const auto beyond = [&](std::size_t index) {
+            const auto& box = cutGeometry.bounds(regions[index].root).box;
+            return view.beyondWindow(box.minX, box.minY, box.maxX, box.maxY);
+        };
+        for (std::size_t i = 0; i < regions.size(); ++i) {
+            if (!beyond(i)) continue;
+            auto& region = regions[i];
+            if (region.required.empty() && region.cut.drawing().empty()) continue;
+            for (auto key : region.required)
+                if (auto it = dependents.find(key); it != dependents.end()) {
+                    it->second.erase(i);
+                    if (it->second.empty()) dependents.erase(it);
+                }
+            region.required.clear();
+            region.cut.clear();
+            released = true;
+        }
+        for (std::size_t i = 0; i < regions.size(); ++i) if (!beyond(i) && reuse(i))
             for (auto key : regions[i].required) if (key.level < 3) working[key.level].insert(key);
         std::vector<std::size_t> ordered(regions.size());
         std::iota(ordered.begin(), ordered.end(), 0);
@@ -514,9 +703,9 @@ struct TerrainPlanner::Impl {
                 const auto root = regions[index].root;
                 if (cutGeometry.visible(root, view)) cutGeometry.mesh(root, *job.residency);
             }
-        bool released = false;
         for (auto index : ordered) {
             auto& region = regions[index];
+            if (beyond(index)) continue;
             if (reuse(index)) {
                 ++plan.rootsReused;
             } else {
@@ -544,7 +733,7 @@ struct TerrainPlanner::Impl {
                     // while small camera-prioritized batches fill the cache.
                     if (fresh && it->second && cutGeometry.dataPolicy.cameraBudget &&
                         !job.residency->surfaces.empty())
-                        it->second = bool(cutGeometry.mesh(tile,*job.residency));
+                        it->second = bool(cutGeometry.mesh(tile,*job.residency,false,true));
                     return it->second;
                 };
                 const auto admit = [&](TileId parent) {
@@ -593,6 +782,7 @@ struct TerrainPlanner::Impl {
                                 cutGeometry.metres(block.tile)),
                         cutGeometry.mesh(block.tile,*job.residency),cutGeometry.dataPolicy.cellsAt(block.tile.lod),
                         cutGeometry.metres(block.tile)});
+                if (node.land && cutGeometry.staleMesh(block.tile)) ++plan.staleMeshes;
             }
             plan.needsUpdate = plan.needsUpdate || region.cut.needsUpdate();
             plan.needsUpdate = plan.needsUpdate || region.deferred;
@@ -612,17 +802,24 @@ struct TerrainPlanner::Impl {
             plan.detail=cutGeometry.detail->stats();
             plan.needsUpdate=plan.needsUpdate||cutGeometry.detail->transitioning();
         }
-        std::erase_if(cutGeometry.meshes,[&](const auto& entry) { return !cutGeometry.meshUses.contains(entry.first); });
-        std::erase_if(cutGeometry.baseMeshes,[&](const auto& entry) { return !cutGeometry.meshUses.contains(entry.first); });
-        if (cutGeometry.dataPolicy.cameraBudget) plan.meshesBuilt = view.config.meshesPerPlan-cutGeometry.meshBudget;
+        cutGeometry.trimCache(view.config.meshCacheBytes);
+        cutGeometry.trimStale();
+        // Squares still drawn over ground that has moved: not finished yet.
+        plan.needsUpdate = plan.needsUpdate || plan.staleMeshes > 0;
+        if (cutGeometry.dataPolicy.cameraBudget)
+            plan.meshesBuilt = view.config.meshesPerPlan-cutGeometry.meshBudget + rebuildLimit-cutGeometry.rebuildBudget;
         job.working = std::move(working);
         plan.stitchEdges(previousEdges);
         auto oldEdges = std::move(previousEdges);
         previousEdges = plan.coverage;
         if (!job.restart && sameStages && view.config.morphSeconds > 0) plan.interpolateFrom(oldEdges);
         plan.selectDrawing(view, plan.drawing);
+        // The coarsest first - H1024, H256, then H64, then the fine levels -
+        // so a wide view is covered by its coarse ground before any of it is
+        // refined, and nearer first within a level.
+        const auto rank = [](Key k) { return k.level >= 4 ? 8 - int(k.level) : 100 - int(k.level); };
         std::stable_sort(plan.missing.begin(), plan.missing.end(), [&](Key a, Key b) {
-            if ((a.level == 4) != (b.level == 4)) return a.level == 4;
+            if (rank(a) != rank(b)) return rank(a) < rank(b);
             return nearer(a, b, view.x, view.y);
         });
     }
@@ -630,6 +827,7 @@ struct TerrainPlanner::Impl {
     void analyze(Job& job) {
         const auto& view = job.view;
         viewGeometry.prepare(view,0);
+        viewGeometry.observeGround(*job.residency);
         if (!haveView || cachedView != view ||
             (!job.residency->surfaces.empty() && cachedResidencyRevision != job.residency->revision)) {
             haveView = false; // an allocation failure must not publish a partial cache
@@ -651,7 +849,10 @@ struct TerrainPlanner::Impl {
                             for (auto child : viewGeometry.children(tile)) self(self, child);
                         else apply(tile);
                     };
-                    for (const auto& region : regions) walk(walk, region.root);
+                    for (const auto& region : regions) {
+                        const auto& box = viewGeometry.bounds(region.root).box;
+                        if (!view.beyondWindow(box.minX, box.minY, box.maxX, box.maxY)) walk(walk, region.root);
+                    }
                     return;
                 }
                 // Never cache an unbounded ocean trail when the camera teleports.
@@ -689,8 +890,8 @@ struct TerrainPlanner::Impl {
             }
             cachedView = view;
             cachedResidencyRevision = job.residency->revision;
-            std::erase_if(viewGeometry.meshes,[&](const auto& entry) { return !viewGeometry.meshUses.contains(entry.first); });
-            std::erase_if(viewGeometry.baseMeshes,[&](const auto& entry) { return !viewGeometry.meshUses.contains(entry.first); });
+            viewGeometry.trimCache(view.config.meshCacheBytes / 4);
+            viewGeometry.trimStale();
             haveView = true;
         }
         job.targetTiles = cachedTiles;

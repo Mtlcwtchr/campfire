@@ -19,7 +19,7 @@ SkyOut SkyVS(uint id : SV_VertexID)
 {
     SkyOut o;
     const float2 p = float2(id == 2 ? 3.0 : -1.0, id == 1 ? 3.0 : -1.0);
-    o.position = float4(p, 1.0, 1.0);
+    o.position = float4(p, 0.0, 1.0);   // the far plane (reversed depth)
     o.ndc = p;
     return o;
 }
@@ -65,7 +65,7 @@ float3 skyColour(float3 d, float2 pixel, bool dome)
         const float sunScale = lookPS.w > 0.5 ? lookPS.x : 1.0;
         const float3 sunColour = (landscapeAtmosphere(landscapeSun()) * 0.3 + float3(0.85, 0.8, 0.7)) * sunScale;
         const float3 ambient = lerp(landscapeSkyRay(float3(0, 0, 1)), landscapeSkyRay(d), 0.5) * 0.9;
-        const float4 cloud = cloudsAlong(cameraPS.xyz, d, 60000.0, steps, skyHash(pixel + frac(viewportPS.z)),
+        const float4 cloud = cloudsAlong(cameraPS.xyz, d, 60000.0, steps, skyHash(pixel),
                                          landscapeSun(), sunColour, ambient, true);
         // Distant deck melts into the horizon like the world does.
         const float distance = max(0.0, (cloudLayer().base - cameraPS.z) / max(d.z, 0.02));

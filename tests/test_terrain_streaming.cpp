@@ -832,7 +832,11 @@ const generation::WorldMapData& waterPageFixture() {
         world.lakeRegionField.assign(world.cells.size(), -1);
         world.lakeLevelField.assign(world.cells.size(), 0);
         world.lakeDepthField.assign(world.cells.size(), 0);
-        const int lake = 31 * 64 + 21;
+        // The macro cell under the middle of the H64 basin carved below
+        // (columns 172..186, rows 260..274 at 64 m): the lake the graph knows
+        // has to stand in the hollow the foundation holds, whatever size a
+        // macro cell is.
+        const int lake = (17088 / generation::kMetresPerCell) * 64 + 11456 / generation::kMetresPerCell;
         world.lakeRegionField[lake] = lake;
         world.lakeLevelField[lake] = world.cells[lake].elevation = 5;
         world.lakeDepthField[lake] = 3;

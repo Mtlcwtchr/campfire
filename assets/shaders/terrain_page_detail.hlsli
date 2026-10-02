@@ -1,6 +1,7 @@
 #ifndef TERRAIN_PAGE_DETAIL_HLSLI
 #define TERRAIN_PAGE_DETAIL_HLSLI
 #include "noise.hlsli"
+#include "page_levels.hlsli"
 // Fragment-only page fields. t0 belongs to the material/water texture.
 // Geometry and pixel shading share data residency, not a sampling lattice.
 Texture2D<float> detailHeight4 : register(t1, space2);
@@ -37,16 +38,21 @@ float4 detailFields(float2 uv, int level, int plane)
     if (level == 2) return detailFields16.SampleLevel(detailFields16Sampler, float3(uv, plane), 0);
     return detailFields64.SampleLevel(detailFields64Sampler, float3(uv, plane), 0);
 }
+// The table entry of the page holding p at a dataset, and that page's corner.
+float4 detailEntryAt(float2 p, int level, out float2 origin)
+{
+    float2 page;
+    const float3 texel = pageTableTexel(p, level, ringReserved.xy, origin, page);
+    return pageEntryFrom(detailTable.SampleLevel(detailTableSampler, texel, 0), page, ringReserved.xy);
+}
 PageDetail pageDetailAt(float2 p, int level)
 {
     PageDetail s = (PageDetail)0;
     s.bed = -60.0; s.cover = 1.0; s.weights0.z = 1.0;
-    const float2 page = floor(p / 512.0), index = page + 2.0;
-    if (any(index < 0.0) || any(index >= ringReserved.xy)) return s;
-    const float4 entry = detailTable.SampleLevel(detailTableSampler,
-        float3((index + 0.5) / ringReserved.xy, level), 0);
+    float2 origin;
+    const float4 entry = detailEntryAt(p, level, origin);
     if (entry.z == 0.0) return s;
-    const float2 uv = entry.xy + (p - page * 512.0) * entry.zw;
+    const float2 uv = entry.xy + (p - origin) * entry.zw;
     float h;
     if (level == 0) h = detailHeight4.SampleLevel(detailHeight4Sampler, uv, 0);
     else if (level == 1) h = detailHeight8.SampleLevel(detailHeight8Sampler, uv, 0);
@@ -83,12 +89,10 @@ PageDetail pageDetail(float2 p)
 void pageWeightsAt(float2 p, int level, out float4 weights0, out float2 weights1)
 {
     weights0 = float4(0, 0, 1, 0); weights1 = 0;
-    const float2 page = floor(p / 512.0), index = page + 2.0;
-    if (any(index < 0.0) || any(index >= ringReserved.xy)) return;
-    const float4 entry = detailTable.SampleLevel(detailTableSampler,
-        float3((index + 0.5) / ringReserved.xy, level), 0);
+    float2 origin;
+    const float4 entry = detailEntryAt(p, level, origin);
     if (entry.z == 0.0) return;
-    const float2 uv = entry.xy + (p - page * 512.0) * entry.zw;
+    const float2 uv = entry.xy + (p - origin) * entry.zw;
     weights0 = detailFields(uv, level, 1);
     weights1 = detailFields(uv, level, 2).xy;
 }
@@ -131,27 +135,26 @@ PageWeights pageWeightsCubic(float2 p, int wanted)
 {
     PageWeights r = (PageWeights)0;
     r.w0 = float4(0, 0, 1, 0);
-    const float2 page = floor(p / 512.0), index = page + 2.0;
-    if (any(index < 0.0) || any(index >= ringReserved.xy)) return r;
     // The wanted level where this page has it, else the next coarser one it
     // does: the warped lookup can land in a neighbour page that lacks the
     // level, and a missing page used to read as solid sand.
-    int level = 3;
+    int level = kPageDatasets - 1;
     float4 entry = 0;
-    [unroll] for (int l = 0; l < 4; ++l) {
-        if (l < wanted) continue;
-        const float4 e = detailTable.SampleLevel(detailTableSampler,
-            float3((index + 0.5) / ringReserved.xy, l), 0);
-        if (e.z != 0.0) { entry = e; level = l; break; }
+    float2 pageCorner = 0;
+    [unroll] for (int l = 0; l < kPageDatasets; ++l) {
+        if (l < wanted || entry.z != 0.0) continue;
+        float2 corner;
+        const float4 e = detailEntryAt(p, l, corner);
+        if (e.z != 0.0) { entry = e; level = l; pageCorner = corner; }
     }
     if (entry.z == 0.0) return r;
-    const float step = level == 0 ? 4.0 : level == 1 ? 8.0 : level == 2 ? 16.0 : 64.0;
+    const float step = pageStepOf(level);
     // uv = (texel + 0.5) / size and uvPerMetre = 1 / (step * size): the
     // page's first interior texel, as an integer.
     const float2 size = 1.0 / (entry.zw * step);
     const int2 origin = int2(round(entry.xy * size - 0.5));
     // Texel centres sit at page-local multiples of the step.
-    const float2 local = (p - page * 512.0) / step;
+    const float2 local = (p - pageCorner) / step;
     const float2 base = floor(local), f = local - base;
     const float2 f2 = f * f, f3 = f2 * f, g = 1.0 - f;
     const float2 b[4] = {g * g * g / 6.0, (4.0 - 6.0 * f2 + 3.0 * f3) / 6.0,
@@ -186,12 +189,9 @@ float2 pageWeightWarp(float2 p, float step)
 // waterline. Only streaming a finer page in can change it, once.
 int finestResidentLevel(float2 p)
 {
-    const float2 page = floor(p / 512.0), index = page + 2.0;
-    if (any(index < 0.0) || any(index >= ringReserved.xy)) return (int)ringState.z;
-    [unroll] for (int level = 0; level < 4; ++level) {
-        const float4 entry = detailTable.SampleLevel(detailTableSampler,
-            float3((index + 0.5) / ringReserved.xy, level), 0);
-        if (entry.z != 0.0) return level;
+    [unroll] for (int level = 0; level < kPageDatasets; ++level) {
+        float2 origin;
+        if (detailEntryAt(p, level, origin).z != 0.0) return level;
     }
     return (int)ringState.z;
 }
@@ -209,9 +209,12 @@ BorderLevels borderLevels(float2 p)
     b.fine = finestResidentLevel(p);
     b.coarse = b.fine;
     b.toCoarse = 0.0;
-    const float band = 48.0;
-    const float2 local = p - floor(p / 512.0) * 512.0;
-    const float4 distance = float4(512.0 - local.x, local.x, 512.0 - local.y, local.y);
+    const float metres = pageMetresOf(b.fine);
+    // Wide enough for the page it is in: 48 m on the 512 m pages, a tenth of
+    // the page on the coarse ones - 48 m of an 8 km page was a seam.
+    const float band = max(48.0, metres * 0.094);
+    const float2 local = p - floor(p / metres) * metres;
+    const float4 distance = float4(metres - local.x, local.x, metres - local.y, local.y);
     const float2 direction[4] = {float2(1, 0), float2(-1, 0), float2(0, 1), float2(0, -1)};
     [unroll] for (int k = 0; k < 4; ++k) {
         if (distance[k] >= band) continue;
@@ -232,7 +235,11 @@ void pageBlurredWeights(float2 p, PageDetail centre, out float4 weights0, out fl
     // every data level (it used to scale with the level's step): a zoom that
     // changes level, or the morph between two, must not move every border
     // by metres - that was the swimming of transitions with zoom.
-    const float warpStep = 8.0;
+    // Except on the coarse datasets, whose texels are 256 m and 1024 m: an
+    // 8 m warp is nothing there, and the borders drew the texel grid. Those
+    // take half their own step - fixed by what is resident, not by the zoom.
+    const float dataStepHere = pageStepOf(levels.fine);
+    const float warpStep = dataStepHere > 64.0 ? dataStepHere * 0.5 : 8.0;
     const float2 warp = pageWeightWarp(p, warpStep);
     const float2 q = p + warp;
     // The warp's Jacobian, by a world-space difference well above float
@@ -258,17 +265,11 @@ void pageBlurredWeights(float2 p, PageDetail centre, out float4 weights0, out fl
 
 // Height-only reads for the shading stencil: never fetch water/material planes
 // at every neighbour. Its radius belongs to the DATA, not the triangle grid.
-float4 detailPageEntry(float2 page, int level)
-{
-    const float2 index = page + 2.0;
-    if (any(index < 0.0) || any(index >= ringReserved.xy)) return float4(0, 0, 0, 0);
-    return detailTable.SampleLevel(detailTableSampler,
-        float3((index + 0.5) / ringReserved.xy, level), 0);
-}
-float detailBedInPage(float2 p, int level, float2 page, float4 entry)
+// `origin` is the page's corner in metres (detailEntryAt).
+float detailBedInPage(float2 p, int level, float2 origin, float4 entry)
 {
     if (entry.z == 0.0) return -60.0;
-    const float2 uv = entry.xy + (p - page * 512.0) * entry.zw;
+    const float2 uv = entry.xy + (p - origin) * entry.zw;
     float h;
     if (level == 0) h = detailHeight4.SampleLevel(detailHeight4Sampler, uv, 0);
     else if (level == 1) h = detailHeight8.SampleLevel(detailHeight8Sampler, uv, 0);
@@ -280,23 +281,25 @@ float detailBedInPage(float2 p, int level, float2 page, float4 entry)
 
 float detailBedAt(float2 p, int level)
 {
-    const float2 page = floor(p / 512.0);
-    return detailBedInPage(p, level, page, detailPageEntry(page, level));
+    float2 origin;
+    const float4 entry = detailEntryAt(p, level, origin);
+    return detailBedInPage(p, level, origin, entry);
 }
-float detailStencilBed(float2 p, int level, float2 page, float4 entry)
+float detailStencilBed(float2 p, int level, float2 origin, float4 entry)
 {
     // Never extend a cached mapping over a page boundary: its neighbour can
     // be absent or occupy a completely different atlas slot.
-    if (all(floor(p / 512.0) == page)) return detailBedInPage(p, level, page, entry);
+    const float metres = pageMetresOf(level);
+    if (all(floor(p / metres) * metres == origin)) return detailBedInPage(p, level, origin, entry);
     return detailBedAt(p, level);
 }
 
 // xy = height gradient, z = normalized openness (positive at a crest).
 float3 pageShapeAt(float2 p, int level)
 {
-    const float step = level == 0 ? 4.0 : level == 1 ? 8.0 : level == 2 ? 16.0 : 64.0;
-    const float2 page = floor(p / 512.0);
-    const float4 entry = detailPageEntry(page, level);
+    const float step = pageStepOf(level);
+    float2 page;
+    const float4 entry = detailEntryAt(p, level, page);
     const float left = detailStencilBed(p - float2(step, 0), level, page, entry);
     const float right = detailStencilBed(p + float2(step, 0), level, page, entry);
     const float down = detailStencilBed(p - float2(0, step), level, page, entry);
@@ -345,14 +348,14 @@ float detailHeightLoad(int2 t, int level)
 float shoreDepthLevel(float2 p, int level, out bool ok)
 {
     ok = false;
-    const float step = level == 0 ? 4.0 : level == 1 ? 8.0 : level == 2 ? 16.0 : 64.0;
-    const float2 page = floor(p / 512.0);
-    const float4 entry = detailPageEntry(page, level);
+    const float step = pageStepOf(level);
+    float2 page;
+    const float4 entry = detailEntryAt(p, level, page);
     if (entry.z == 0.0) return 0.0;
     ok = true;
     const float2 size = 1.0 / (entry.zw * step);
     const int2 origin = int2(round(entry.xy * size - 0.5));
-    const float2 local = (p - page * 512.0) / step;
+    const float2 local = (p - page) / step;
     const float2 base = floor(local), f = local - base;
     const float2 f2 = f * f, f3 = f2 * f;
     const float2 w[4] = {-0.5 * f3 + f2 - 0.5 * f, 1.5 * f3 - 2.5 * f2 + 1.0,

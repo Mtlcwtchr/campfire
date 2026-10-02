@@ -5,6 +5,7 @@
 // headless run would produce from the same seed, so what you watch here and what
 // sim_runner reports are the same run.
 
+#include "engine/biomes/shader_code.hpp"
 #include <SDL3/SDL.h>
 #include <SDL3_image/SDL_image.h>
 
@@ -19,6 +20,7 @@
 
 #include "game/client/camera.hpp"
 #include "game/client/explorer.hpp"
+#include "game/client/client_app.hpp"
 #include "game/client/explore_view.hpp"
 #include "game/client/newgame_screen.hpp"
 #include "game/client/renderer.hpp"
@@ -112,6 +114,13 @@ void cycleBrushMode(ui::Hud& hud) {
 } // namespace
 
 int main(int argc, char** argv) {
+    // The terrain categories (content/config/terrain, engine/biomes) before
+    // any world is raised: the climate names categories by the registry's
+    // derive rules as it is made. The renderer writes their shader code.
+    {
+        const auto started = engine::biomes::startUp(engine::biomes::defaultDirectory());
+        for (const auto& problem : started.problems) std::cerr << "terrain categories: " << problem << "\n";
+    }
     std::uint64_t seed = 11;
     std::int32_t mapSize = 180;
     std::int32_t population = 24;
@@ -124,6 +133,9 @@ int main(int argc, char** argv) {
     // simulation, just the ground the world layer describes, at every scale
     // (D118).
     bool exploring = false;
+    // The game client: main menu, saved worlds, Explore and Edit (client_app.hpp).
+    bool clientApp = false;
+    client::ClientOptions clientOptions;
     std::int32_t worldCells = 0;
     std::string exploreAt;
     bool exploreTrace = false;
@@ -177,6 +189,9 @@ int main(int argc, char** argv) {
             else { std::cerr << "Expected --grid off|samples|mesh\n"; return 1; }
         }
         else if (a == "--object-mesh") exploreOptions.objectMesh = true;
+        else if (a == "--client") clientApp = true;
+        else if (a == "--client-worlds" && i + 1 < argc) clientOptions.worlds = argv[++i];
+        else if (a == "--client-tour" && i + 1 < argc) { clientApp = true; clientOptions.tour = argv[++i]; }
         else if (a == "--headless" && i + 1 < argc) {
             // WIDTHxHEIGHT. No window: nothing appears on the screen or in the
             // Dock, and frames are paced by the card instead of the display.
@@ -203,6 +218,18 @@ int main(int argc, char** argv) {
         else if (a == "--height-offset" && i + 1 < argc) exploreOptions.heightOffset = std::atof(argv[++i]);
         else if (a == "--draw-distance" && i + 1 < argc) exploreOptions.drawDistance = std::atof(argv[++i]);
         else if (a == "--no-fog") exploreOptions.fog = false;
+        // A world made in the editor, region by region (worlds/world.json).
+        else if (a == "--world-file" && i + 1 < argc) exploreOptions.worldFile = argv[++i];
+        // Start in Edit mode rather than Explore.
+        else if (a == "--edit") exploreOptions.editing = true;
+        // ... on this layer (the regions unless told).
+        else if (a == "--edit-layer" && i + 1 < argc) exploreOptions.editLayer = argv[++i];
+        // Dig into the settled ground (X,Y[,RADIUS[,METRES]]), unsaved: a probe.
+        else if (a == "--dig" && i + 1 < argc) exploreOptions.dig = argv[++i];
+        else if (a == "--eye" && i + 1 < argc) { exploreOptions.eye = argv[++i]; exploreOptions.cameraMode = client::Camera::Mode::Free; }
+        else if (a == "--graphics-file" && i + 1 < argc) exploreOptions.graphicsFile = argv[++i];
+        else if (a == "--shot-list" && i + 1 < argc) exploreOptions.shotList = argv[++i];
+        else if (a == "--clean") exploreOptions.clean = true;
         else if (a == "--weather" && i + 1 < argc) {
             const std::string name = argv[++i];
             for (std::size_t p = 0; p < world::weather::kPresets.size(); ++p)
@@ -232,6 +259,9 @@ int main(int argc, char** argv) {
                       << " [--yaw RADIANS] [--pitch RADIANS] [--height-offset METRES]"
                       << " [--draw-distance METRES] [--no-fog]"
                       << " [--headless WxH] [--bench FRAMES] [--bench-load FRAMES] [--bench-json FILE]"
+                      << " [--dig X,Y[,RADIUS[,METRES]]]"
+                      << "   the world, without the game in it\n"
+                      << "       campfire_client --client [--client-worlds DIR] [--client-tour DIR [--headless WxH]]"
                       << "   the world, without the game in it\n";
             return 0;
         }
@@ -271,10 +301,28 @@ int main(int argc, char** argv) {
 
     // Headless: never become a foreground application. Without this macOS
     // gives the process a Dock icon and may hand it focus on start.
-    if (exploring && exploreOptions.headlessWidth > 0) SDL_SetHint(SDL_HINT_MAC_BACKGROUND_APP, "1");
+    if ((exploring || clientApp) && exploreOptions.headlessWidth > 0) SDL_SetHint(SDL_HINT_MAC_BACKGROUND_APP, "1");
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         std::cerr << "SDL_Init failed: " << SDL_GetError() << "\n";
         return 1;
+    }
+
+    if (clientApp) {
+        clientOptions.headlessWidth = exploreOptions.headlessWidth;
+        clientOptions.headlessHeight = exploreOptions.headlessHeight;
+        SDL_Window* clientWindow = clientOptions.headlessWidth > 0
+                ? nullptr
+                : SDL_CreateWindow("Campfire", 1440, 900, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
+        if (!clientWindow && clientOptions.headlessWidth <= 0) {
+            std::cerr << "window creation failed: " << SDL_GetError() << "\n";
+            SDL_Quit();
+            return 1;
+        }
+        if (clientWindow) SDL_SetWindowMinimumSize(clientWindow, 960, 640);
+        const int outcome = client::runClientApp(clientWindow, resolveSprites(), clientOptions);
+        if (clientWindow) SDL_DestroyWindow(clientWindow);
+        SDL_Quit();
+        return outcome;
     }
 
     if (exploring) {

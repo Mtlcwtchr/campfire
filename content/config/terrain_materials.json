@@ -1210,5 +1210,155 @@
     "slope_preference": 0.0,
     "moisture_response": 0.8,
     "snow_compatibility": 0.7
+  },
+  {
+    "id": "ph_moon_dusted_04",
+    "group": "ph/moon_dusted_04",
+    "_comment": "layer 16 - wastes: grey dead powder",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "moon_dusted_04",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 0.56,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 1.0,
+    "normal_strength": 0.6,
+    "ao_strength": 0.5,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.6,
+    "slope_preference": 0.0,
+    "moisture_response": 0.8,
+    "snow_compatibility": 0.7
+  },
+  {
+    "id": "ph_rubble",
+    "group": "ph/rubble",
+    "_comment": "layer 17 - wastes: grey grit and broken stone",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "rubble",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 2.0,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 1.0,
+    "normal_strength": 0.6,
+    "ao_strength": 0.5,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.6,
+    "slope_preference": 0.0,
+    "moisture_response": 0.8,
+    "snow_compatibility": 0.7
+  },
+  {
+    "id": "ph_mud_forest",
+    "group": "ph/mud_forest",
+    "_comment": "layer 18 - bog: dark peat",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "mud_forest",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 2.35,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 1.0,
+    "normal_strength": 0.6,
+    "ao_strength": 0.5,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.6,
+    "slope_preference": 0.0,
+    "moisture_response": 0.8,
+    "snow_compatibility": 0.7
+  },
+  {
+    "id": "ph_brown_mud_leaves_01",
+    "group": "ph/brown_mud_leaves_01",
+    "_comment": "layer 19 - bog: mossy mud under the swamp forest",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "brown_mud_leaves_01",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 1.3,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 1.0,
+    "normal_strength": 0.6,
+    "ao_strength": 0.5,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.6,
+    "slope_preference": 0.0,
+    "moisture_response": 0.8,
+    "snow_compatibility": 0.7
+  },
+  {
+    "id": "ph_burned_ground_01",
+    "group": "ph/burned_ground_01",
+    "_comment": "layer 20 - blight: craters dark with the black wind's power, charred ground",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "burned_ground_01",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 1.0,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 1.0,
+    "normal_strength": 0.6,
+    "ao_strength": 0.5,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.6,
+    "slope_preference": 0.0,
+    "moisture_response": 0.8,
+    "snow_compatibility": 0.7
+  },
+  {
+    "id": "ph_red_laterite_soil_stones",
+    "group": "ph/red_laterite_soil_stones",
+    "_comment": "layer 21 - laterite: red savanna and tropical soil",
+    "source": {
+      "site": "polyhaven",
+      "asset_id": "red_laterite_soil_stones",
+      "license": "CC0",
+      "attribution_required": false
+    },
+    "world_scale": 2.0,
+    "tint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "saturation": 1.0,
+    "normal_strength": 0.6,
+    "ao_strength": 0.5,
+    "roughness_multiplier": 1.0,
+    "height_strength": 0.6,
+    "slope_preference": 0.0,
+    "moisture_response": 0.8,
+    "snow_compatibility": 0.7
   }
 ]

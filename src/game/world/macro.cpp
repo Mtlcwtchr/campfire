@@ -320,8 +320,7 @@ void MacroWorld::attach(const generation::WorldMapData* coarse) {
     block_.valid = false;   // its channels were built against the old threshold
     streamFlow_ = 255;
     largestFlow_ = 0;
-    surface_.clear();
-    wet_.clear();
+    drainage_.reset();
     if (coarse == nullptr) return;
 
     // Which channels hold water, decided by looking at the whole map once.
@@ -352,63 +351,111 @@ void MacroWorld::attach(const generation::WorldMapData* coarse) {
         chosen = static_cast<std::uint8_t>(size);
         if (running * kWetShareDenominator >= carved * kWetShareNumerator) break;
     }
-    streamFlow_ = std::max(chosen, kNarrowestWetFlow);
+    streamFlow_ = std::max({chosen, kNarrowestWetFlow, coarse->graphRiverFlow});
 
+    // Only the land has a head above nought or a course to follow; the sea is
+    // the fill of both fields. The walk runs over the land cells alone, in the
+    // order of their index, which is the order the dense walk visited them in
+    // (a sea cell only ever ended a path), so the answer is the same bytes.
     const auto count = coarse->cells.size();
-    surface_.resize(count);
-    wet_.resize(count);
-    std::vector<std::int32_t> next(count, -1), order;
-    std::vector<std::uint8_t> state(count, 0);
-    order.reserve(count);
-    for (std::size_t i = 0; i < count; ++i) {
+    auto drainage = std::make_shared<Drainage>();
+    drainage->surface.assign(count, core::kZero);
+    drainage->wet.assign(count, 0);
+    std::vector<std::uint32_t> land;
+    for (std::size_t i = 0; i < count; ++i)
+        if (!coarse->cells[i].sea) land.push_back(static_cast<std::uint32_t>(i));
+    if (land.empty()) { drainage_ = std::move(drainage); return; }
+    generation::CellField<std::int32_t> slot(count, -1);   // cell -> its place in `land`
+    for (std::size_t k = 0; k < land.size(); ++k) slot.set(land[k], static_cast<std::int32_t>(k));
+    const auto L = land.size();
+    std::vector<Fixed> surface(L);
+    std::vector<std::uint8_t> wet(L, 0);
+    std::vector<std::int32_t> next(L, -1);   // the cell it drains into, land or sea
+    std::vector<std::uint8_t> state(L, 0);
+    std::vector<std::int32_t> order;
+    order.reserve(L);
+    for (std::size_t k = 0; k < L; ++k) {
+        const std::size_t i = land[k];
         const auto& c = coarse->cells[i];
         const bool lake = i < coarse->lakeDepthField.size() && coarse->lakeDepthField[i] > 0 &&
                           i < coarse->lakeLevelField.size();
-        const int head = c.sea ? 0 : lake ? coarse->lakeLevelField[i] : c.elevation;
-        surface_[i] = Fixed::fromInt(std::max(0, head) * generation::kMetresPerElevationStep);
-        wet_[i] = !c.sea && (c.river || c.drainSize >= streamFlowIn(c));
+        const int head = lake ? coarse->lakeLevelField[i] : c.elevation;
+        surface[k] = Fixed::fromInt(std::max(0, head) * generation::kMetresPerElevationStep);
+        // The water layer's courses and dry ground, as the drainage graph
+        // keeps them (hydrology_builder.cpp).
+        const auto paint = i < coarse->waterPaintField.size()
+                ? static_cast<generation::WaterPaint>(coarse->waterPaintField[i]) : generation::WaterPaint::None;
+        wet[k] = paint != generation::WaterPaint::Dry &&
+                 (c.river || c.drainSize >= streamFlowIn(c) || paint == generation::WaterPaint::Course);
         const int dir = c.river && c.riverOut >= 0 ? c.riverOut : c.drainOut;
-        if (c.sea || dir < 0 || dir >= core::kNeighbourCount) continue;
+        if (dir < 0 || dir >= core::kNeighbourCount) continue;
         const auto down = core::neighbour({static_cast<int>(i % coarse->width),
                                            static_cast<int>(i / coarse->width)}, dir);
-        if (coarse->inBounds(down)) next[i] = down.y * coarse->width + down.x;
+        if (coarse->inBounds(down)) next[k] = down.y * coarse->width + down.x;
     }
-    // Iterative topological resolution: no recursive stack on continental rivers.
+    // Iterative topological resolution: no recursive stack on continental
+    // rivers. A path ends at the sea: its head is nought and adds nothing.
     std::vector<std::int32_t> path;
-    for (std::size_t i = 0; i < count; ++i) {
-        if (state[i] == 2) continue;
+    for (std::size_t k = 0; k < L; ++k) {
+        if (state[k] == 2) continue;
         path.clear();
-        auto at = static_cast<std::int32_t>(i);
+        auto at = static_cast<std::int32_t>(k);
         while (at >= 0 && state[at] == 0) {
             state[at] = 1;
             path.push_back(at);
-            at = next[at];
+            at = next[at] >= 0 ? slot[std::size_t(next[at])] : -1;
         }
         if (at >= 0 && state[at] == 1)
             throw std::invalid_argument("cyclic terrain drainage");
         for (auto it = path.rbegin(); it != path.rend(); ++it) {
             const auto n = *it;
-            if (next[n] >= 0) surface_[n] = std::max(surface_[n], surface_[next[n]]);
+            const auto below = next[n] >= 0 ? slot[std::size_t(next[n])] : -1;
+            if (below >= 0) surface[n] = std::max(surface[n], surface[below]);
             state[n] = 2;
             order.push_back(n);
         }
     }
     // Rainfall thresholds can start a stream, but cannot delete upstream water
     // on the next dry cell. Losses need an explicit water balance, not a flag.
-    for (auto it = order.rbegin(); it != order.rend(); ++it)
-        if (next[*it] >= 0 && wet_[*it]) wet_[next[*it]] = 1;
+    // A wet reach marks the sea cell it runs into, as the dense walk did.
+    for (auto it = order.rbegin(); it != order.rend(); ++it) {
+        if (next[*it] < 0 || !wet[*it]) continue;
+        const auto below = slot[std::size_t(next[*it])];
+        if (below >= 0) wet[below] = 1;
+        else drainage->wet.set(std::size_t(next[*it]), 1);
+    }
+    for (std::size_t k = 0; k < L; ++k) {
+        drainage->surface.set(land[k], surface[k]);
+        drainage->wet.set(land[k], wet[k]);
+    }
+    drainage_ = std::move(drainage);
+}
+
+std::shared_ptr<const MacroWorld::Resolved> MacroWorld::resolved() const {
+    if (!coarse_) return nullptr;
+    return std::make_shared<const Resolved>(Resolved{coarse_, streamFlow_, largestFlow_, drainage_});
+}
+
+void MacroWorld::attach(const generation::WorldMapData* coarse, std::shared_ptr<const Resolved> resolved) {
+    // Only for the map it was worked out on; anything else is worked out afresh.
+    if (!resolved || resolved->map != coarse || coarse == nullptr) { attach(coarse); return; }
+    coarse_ = coarse;
+    block_.valid = false;
+    streamFlow_ = resolved->streamFlow;
+    largestFlow_ = resolved->largestFlow;
+    drainage_ = resolved->drainage;
 }
 
 bool MacroWorld::wetAt(core::TilePos cell) const {
-    if (coarse_ == nullptr || !coarse_->inBounds(cell)) return false;
+    if (coarse_ == nullptr || !coarse_->inBounds(cell) || !drainage_) return false;
     const auto index = static_cast<std::size_t>(cell.y) * coarse_->width + cell.x;
-    return index < wet_.size() && wet_[index] != 0;
+    return index < drainage_->wet.size() && drainage_->wet[index] != 0;
 }
 
 core::Fixed MacroWorld::surfaceAt(core::TilePos cell) const {
-    if (coarse_ == nullptr || !coarse_->inBounds(cell)) return core::kZero;
+    if (coarse_ == nullptr || !coarse_->inBounds(cell) || !drainage_) return core::kZero;
     const auto index = static_cast<std::size_t>(cell.y) * coarse_->width + cell.x;
-    return index < surface_.size() ? surface_[index] : core::kZero;
+    return index < drainage_->surface.size() ? drainage_->surface[index] : core::kZero;
 }
 
 std::uint8_t MacroWorld::streamFlowIn(const generation::WorldCell& cell) const {
@@ -425,8 +472,8 @@ std::uint8_t MacroWorld::streamFlowIn(const generation::WorldCell& cell) const {
     // gully in a rainforest is a stream.
     const std::int32_t shift = 2 - (static_cast<std::int32_t>(cell.moisture) * 4) / 255;
     const std::int32_t want = static_cast<std::int32_t>(streamFlow_) + shift;
-    return static_cast<std::uint8_t>(
-            std::clamp<std::int32_t>(want, kNarrowestWetFlow, 15));
+    return static_cast<std::uint8_t>(std::clamp<std::int32_t>(
+            want, std::max(kNarrowestWetFlow, coarse_ ? coarse_->graphRiverFlow : std::uint8_t(0)), 15));
 }
 
 std::optional<Channel> MacroWorld::channelOf(core::TilePos at) const {
@@ -451,7 +498,7 @@ std::optional<Channel> MacroWorld::channelOf(core::TilePos at) const {
         const auto& c = coarse_->at(p);
         if (c.sea) return core::kZero;
         const auto index = static_cast<std::size_t>(p.y) * coarse_->width + p.x;
-        if (index < surface_.size()) return surface_[index];
+        if (drainage_ && index < drainage_->surface.size()) return drainage_->surface[index];
         // The lake retains its pre-erosion head. Starting its outlet at the
         // eroded cell elevation puts the outgoing river underneath the lake,
         // introducing an artificial step before the actual spill slope.
@@ -522,7 +569,7 @@ std::optional<Channel> MacroWorld::channelOf(core::TilePos at) const {
     // with the size of the map, so on a continent it marks only the trunks -
     // every river in the world came out between ninety and two hundred and
     // fifty metres wide, and there were no streams at all.
-    channel.wet = wet_[static_cast<std::size_t>(at.y) * coarse_->width + at.x] != 0;
+    channel.wet = wetAt(at);
     const auto widthOf = [&](core::TilePos p) {
         const auto& c = coarse_->at(p);
         Fixed width = halfWidthFor(c.drainSize);
@@ -586,7 +633,7 @@ std::optional<Channel> MacroWorld::channelOf(core::TilePos at) const {
     //
     // So a reach running into the sea keeps its own numbers to the end.
     const bool intoSea = into.sea;
-    const bool wetBelow = intoSea || wet_[static_cast<std::size_t>(down.y) * coarse_->width + down.x];
+    const bool wetBelow = intoSea || wetAt(down);
     const std::uint8_t below = intoSea ? cell.drainSize : into.drainSize;
     channel.halfWidthEnd = wetBelow ? (intoSea ? channel.halfWidth : widthOf(down)) : core::kZero;
     channel.depthEnd = depthFor(below);

@@ -104,14 +104,18 @@ GraphCarver::GraphCarver(const HydrologyGraph& graph, core::WorldRect area,
     // Standing water over its source lattice: connected Slopes nodes when
     // available, otherwise legacy macro-cell centres. The page index includes
     // interpolation support, so only locally relevant bodies need copying.
+    // Lakes flooded at different steps (a large one coarser: see
+    // refineLakesOnCarvedGround) share the finest of them; a node of a
+    // coarser one covers a block of these.
     cellMetres_ = Fixed::fromInt(graph.macroCellMetres > 0 ? graph.macroCellMetres : 1);
+    std::int32_t finest = 0;
     for (const auto id : wantedBodies) {
         const auto* body = waterBodyOf(graph, id);
         if (body == nullptr || body->kind != WaterBodyKind::Lake || body->basinStep <= 0) continue;
-        cellMetres_ = Fixed::fromInt(body->basinStep);
+        finest = finest == 0 ? body->basinStep : std::min(finest, body->basinStep);
         naturalBasins_ = true;
-        break;
     }
+    if (naturalBasins_) cellMetres_ = Fixed::fromInt(finest);
     // A natural basin's dilated edge is read two nodes past the window (see
     // shoreAt), and the index only promises one: a body standing just beyond
     // it still decides where the ground inside has to hold its water.
@@ -146,17 +150,25 @@ GraphCarver::GraphCarver(const HydrologyGraph& graph, core::WorldRect area,
             const WaterBody& body = *source;
             if (body.kind != WaterBodyKind::Lake) continue;
             const auto& samples = naturalBasins_ ? body.basinSamples : body.macroCells;
-            const auto begin = std::lower_bound(samples.begin(), samples.end(), firstCellY_,
+            // How many of this window's nodes one of the body's is, a side.
+            const std::int64_t factor =
+                    naturalBasins_ ? std::max<std::int64_t>(1, std::int64_t(body.basinStep) / metres) : 1;
+            const std::int64_t back = factor / 2;
+            const auto begin = std::lower_bound(samples.begin(), samples.end(), floorDiv(firstCellY_ + back, factor),
                     [](core::TilePos at, std::int64_t row) { return at.y < row; });
-            for (auto it = begin; it != samples.end() && it->y < firstCellY_ + cellsHigh_; ++it) {
+            for (auto it = begin; it != samples.end() && it->y * factor - back < firstCellY_ + cellsHigh_; ++it) {
                 const core::TilePos at = *it;
-                const std::int64_t x = at.x - firstCellX_, y = at.y - firstCellY_;
-                if (x < 0 || y < 0 || x >= cellsWide_ || y >= cellsHigh_) continue;
-                Basin& basin = basins_[static_cast<std::size_t>(y * cellsWide_ + x)];
-                basin.id = body.id;
-                basin.level = body.level;
-                basin.floor = naturalBasins_ ? core::kZero :
-                        body.macroCellFloor[static_cast<std::size_t>(it - samples.begin())];
+                for (std::int64_t by = 0; by < factor; ++by)
+                    for (std::int64_t bx = 0; bx < factor; ++bx) {
+                        const std::int64_t x = at.x * factor - back + bx - firstCellX_;
+                        const std::int64_t y = at.y * factor - back + by - firstCellY_;
+                        if (x < 0 || y < 0 || x >= cellsWide_ || y >= cellsHigh_) continue;
+                        Basin& basin = basins_[static_cast<std::size_t>(y * cellsWide_ + x)];
+                        basin.id = body.id;
+                        basin.level = body.level;
+                        basin.floor = naturalBasins_ ? core::kZero :
+                                body.macroCellFloor[static_cast<std::size_t>(it - samples.begin())];
+                    }
             }
         }
         // The footprint's own edge, one node out. Its nodes are the first dry

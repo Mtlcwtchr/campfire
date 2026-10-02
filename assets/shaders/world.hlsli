@@ -44,6 +44,7 @@ cbuffer SceneVertex : register(b0, space1)
     row_major float4x4 cullViewProjection;
     float4 cullCamera;
     float4 cullState;
+    float4 editor[35];   // world editor overlay (editor_overlay.hlsli); kSceneEditorVectors
 };
 
 cbuffer ScenePixel : register(b0, space3)
@@ -67,6 +68,7 @@ cbuffer ScenePixel : register(b0, space3)
     row_major float4x4 cullViewProjectionPS;
     float4 cullCameraPS;
     float4 cullStatePS;
+    float4 editorPS[35];
 };
 
 // Where a point of the world lands on the screen.
@@ -99,7 +101,7 @@ float4 project(float3 p)
 float4 projectBehind(float3 p)
 {
     float4 at = project(p);
-    at.z += 80.0 * extra.y;
+    at.z -= 80.0 * extra.y;   // reversed depth: farther is smaller
     return at;
 }
 

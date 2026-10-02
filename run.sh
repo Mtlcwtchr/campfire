@@ -3,12 +3,18 @@
 # Mirrors the CLion run configurations in .idea/runConfigurations.
 #
 #   ./run.sh                 the game
+#   ./run.sh client          the world client: main menu, your saved worlds,
+#                            Explore and Edit (worlds/ beside this script)
 #   ./run.sh game 42 180     the game on seed 42, 180-tile map
 #   ./run.sh explore        the 3D world explorer
+#   ./run.sh edit           the world editor (worlds/world.json, or a file given;
+#                           then e.g. --edit-layer continents)
 #   ./run.sh headless 200    a 200-day headless run with a report
 #   ./run.sh explain 5000    dump the demand table and every person at tick 5000
 #   ./run.sh validate        check the content tree
-#   ./run.sh test            the test suite
+#   ./run.sh test            the test suite (arguments filter tests by name)
+#   ./run.sh world-inspect   what a world root holds on disk (worlds/world, or a
+#                            root or layout given; then --ops lists every record)
 #   ./run.sh engine-editor   engine modules GUI with GPU viewport (no game)
 
 set -euo pipefail
@@ -31,7 +37,7 @@ if [ "$mode" = engine-editor ]; then
         GENERATOR=()
         command -v ninja >/dev/null 2>&1 && GENERATOR=(-G Ninja)
         SOURCES=()
-        for dep in entt sdl3 sdl3_image sdl3_shadercross; do
+        for dep in entt sdl3 sdl3_image sdl3_shadercross zstd; do
             source_dir="$PWD/cmake-build-relwithdebinfo/_deps/$dep-src"
             if [ -d "$source_dir" ]; then
                 upper="$(printf '%s' "$dep" | tr '[:lower:]' '[:upper:]')"
@@ -65,9 +71,17 @@ case "$mode" in
         nice cmake --build "$BUILD_DIR" -j 2 --target asr_client
         exec "$BUILD_DIR/campfire_client" --seed "${1:-11}" --map "${2:-140}" --pop "${3:-10}"
         ;;
+    client)
+        nice cmake --build "$BUILD_DIR" -j 2 --target asr_client
+        exec "$BUILD_DIR/campfire_client" --client "$@"
+        ;;
     explore)
         nice cmake --build "$BUILD_DIR" -j 2 --target asr_client
         exec "$BUILD_DIR/campfire_client" --explore "$@"
+        ;;
+    edit)
+        nice cmake --build "$BUILD_DIR" -j 2 --target asr_client
+        exec "$BUILD_DIR/campfire_client" --explore --edit --world-file "${1:-worlds/world.json}"
         ;;
     headless)
         nice cmake --build "$BUILD_DIR" -j 2 --target sim_runner
@@ -85,11 +99,15 @@ case "$mode" in
         ;;
     test)
         nice cmake --build "$BUILD_DIR" -j 2 --target asr_tests
-        exec "$BUILD_DIR/asr_tests"
+        exec "$BUILD_DIR/asr_tests" "$@"
+        ;;
+    world-inspect)
+        nice cmake --build "$BUILD_DIR" -j 2 --target world_root_inspect
+        exec "$BUILD_DIR/world_root_inspect" "${1:-worlds/world}" "${@:2}"
         ;;
     *)
         echo "unknown mode: $mode" >&2
-        sed -n '2,13p' "$0" >&2
+        sed -n '2,16p' "$0" >&2
         exit 2
         ;;
 esac

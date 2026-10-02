@@ -1,5 +1,6 @@
 #pragma once
 #include "game/generation/terrain_foundation.hpp"
+#include "game/generation/cell_field.hpp"
 // The world above the local map.
 //
 // GDD 4.2 asks for a macro pipeline - tectonics, climate, biomes, peoples - and
@@ -24,6 +25,14 @@
 namespace generation {
 
 class HybridTerrain;
+struct WorldLayout;
+struct ImportedGround;
+}
+namespace engine::biomes {
+class CategoryField;
+class DetailEdits;
+}
+namespace generation {
 
 struct SeasonParams {
     std::int32_t amplitude = 20;
@@ -198,39 +207,47 @@ struct WorldMapData {
     // persisted with the world, rather than reselected when a chunk is loaded.
     std::shared_ptr<const HybridTerrain> hybridTerrain;
     std::shared_ptr<const TerrainFoundation> terrainFoundation;
+    // The categorical control layers an import brought (engine/biomes): the
+    // ground's terrain category and the forest, water and decor biomes at
+    // 256 m, land only. Null: none painted - the climate names what it can
+    // by the registry's derive rules, the rest is the default category.
+    std::shared_ptr<const engine::biomes::CategoryField> categories;
+    // The hand edits to the details they place (source/details): kept apart
+    // from the maps, so repainting an id re-derives the rest.
+    std::shared_ptr<const engine::biomes::DetailEdits> details;
     TerrainStage terrainStage = TerrainStage::Final;
-    std::vector<std::int32_t> primaryHeightField;
+    CellField<std::int32_t> primaryHeightField;
     // PASS G1 — continental mask.
-    std::vector<std::int32_t> continentalField;
-    std::vector<std::int32_t> distanceToCoast;
-    std::vector<std::uint8_t> initialLandMask;
+    CellField<std::int32_t> continentalField;
+    CellField<std::int32_t> distanceToCoast;
+    CellField<std::uint8_t> initialLandMask;
     // PASS G2 — pseudo-tectonics.
-    std::vector<std::int32_t> upliftField;
-    std::vector<std::int32_t> riftField;
-    std::vector<std::int32_t> faultField;
-    std::vector<std::uint8_t> geologyRegion;
+    CellField<std::int32_t> upliftField;
+    CellField<std::int32_t> riftField;
+    CellField<std::int32_t> faultField;
+    CellField<std::uint8_t> geologyRegion;
     // PASS G3 — base macro height.
-    std::vector<std::int32_t> macroHeightField;
+    CellField<std::int32_t> macroHeightField;
     // PASS G4 — geology.
-    std::vector<RockType> rockTypeField;
-    std::vector<std::int32_t> erosionResistanceField;
-    std::vector<std::uint8_t> soilParentMaterialField;
-    std::vector<std::int32_t> permeabilityField;
+    CellField<RockType> rockTypeField;
+    CellField<std::int32_t> erosionResistanceField;
+    CellField<std::uint8_t> soilParentMaterialField;
+    CellField<std::int32_t> permeabilityField;
     // PASS G5 — thermal erosion.
-    std::vector<std::int32_t> thermallyRelaxedHeightField;
+    CellField<std::int32_t> thermallyRelaxedHeightField;
     // PASS G6 — hydraulic / fluvial erosion.
-    std::vector<std::int32_t> hydrologicallyCorrectedHeightField;
-    std::vector<std::int32_t> basinIdField;
-    std::vector<ClimateVector> spillPointField;
-    std::vector<std::int8_t> flowDirectionField;
-    std::vector<std::int32_t> flowAccumulationField;
-    std::vector<std::int32_t> riverDischargeField;
-    std::vector<std::uint8_t> riverSourceField;
-    std::vector<std::int32_t> lakeRegionField;
-    std::vector<std::int32_t> lakeLevelField;
+    CellField<std::int32_t> hydrologicallyCorrectedHeightField;
+    CellField<std::int32_t> basinIdField;
+    CellField<ClimateVector> spillPointField;
+    CellField<std::int8_t> flowDirectionField;
+    CellField<std::int32_t> flowAccumulationField;
+    CellField<std::int32_t> riverDischargeField;
+    CellField<std::uint8_t> riverSourceField;
+    CellField<std::int32_t> lakeRegionField;
+    CellField<std::int32_t> lakeLevelField;
     // Difference between the priority-flood lake surface and the original
     // basin floor, in elevation steps. Zero means this cell is not lake bed.
-    std::vector<std::int32_t> lakeDepthField;
+    CellField<std::int32_t> lakeDepthField;
 
     // Which recipe the country here was built to. A world used to be one
     // recipe everywhere, which is why every world came out the same world at a
@@ -239,7 +256,7 @@ struct WorldMapData {
     // plain between two rivers, a young continent with a cordillera down one
     // side, a scatter of islands - and the map says which is which so the
     // passes below can agree with the shape above them.
-    std::vector<std::int32_t> provinceField;
+    CellField<std::int32_t> provinceField;
 
     // How many basins came out holding water and how many came out dry. Worth
     // counting rather than guessing: the number of lakes is the loudest thing
@@ -247,41 +264,56 @@ struct WorldMapData {
     // pass that fills hollows, which must fill every one of them.
     std::int32_t lakesKept = 0;
     std::int32_t basinsDried = 0;
-    std::vector<std::uint8_t> waterfallField;
-    std::vector<std::int32_t> sedimentPotentialField;
-    std::vector<std::int32_t> erosionField;
-    std::vector<std::int32_t> floodplainPotentialField;
-    std::vector<std::int32_t> deltaPotentialField;
-    std::vector<std::int32_t> erodedHeightField;
+    // What was painted on the water layer at a cell (WaterPaint): the ground
+    // it shaped and the water it forced or kept out. Nought where nothing was
+    // painted - which is everywhere in a world nobody painted water on.
+    CellField<std::uint8_t> waterPaintField;
+    // How much of the drainage holds water, as a share of the generator's own
+    // (AuthoringDials::rivers): read again by the drainage graph, which decides
+    // which valleys are streams.
+    float riverShare = 1.0f;
+    // The least drainage (log2 of the macro cells passed, as drainSize) that
+    // a watercourse must gather to be one: nought, the world's own share rule.
+    // A world put together from many regions sets it (world_compose.cpp):
+    // there the share rule, scaled to a region, made a river of every gully
+    // on a continent, and a stream that small is the runtime's to draw from
+    // the drainage, not a course the graph has to fit.
+    std::uint8_t graphRiverFlow = 0;
+    CellField<std::uint8_t> waterfallField;
+    CellField<std::int32_t> sedimentPotentialField;
+    CellField<std::int32_t> erosionField;
+    CellField<std::int32_t> floodplainPotentialField;
+    CellField<std::int32_t> deltaPotentialField;
+    CellField<std::int32_t> erodedHeightField;
     // PASS C0-C5 — climate generation.
-    std::vector<std::int32_t> baseTemperatureField;
-    std::vector<ClimateVector> prevailingWindField;
-    std::vector<std::int32_t> windStrengthField;
-    std::vector<std::int32_t> windVariabilityField;
-    std::vector<std::int32_t> precipitationField;
-    std::vector<std::int32_t> airMoistureField;
-    std::vector<std::int32_t> rainShadowField;
-    std::vector<ClimateVector> oceanCurrentField;
-    std::vector<std::int32_t> seaSurfaceTemperatureBiasField;
-    std::vector<std::int32_t> coastalClimateBiasField;
-    std::vector<std::int32_t> temperatureField;
-    std::vector<std::int32_t> annualRainfallField;
-    std::vector<std::int32_t> humidityField;
-    std::vector<std::int32_t> seasonalityField;
-    std::vector<std::int32_t> winterRainField;
-    std::vector<std::int32_t> summerRainField;
-    std::vector<std::int32_t> drySeasonStrengthField;
+    CellField<std::int32_t> baseTemperatureField;
+    CellField<ClimateVector> prevailingWindField;
+    CellField<std::int32_t> windStrengthField;
+    CellField<std::int32_t> windVariabilityField;
+    CellField<std::int32_t> precipitationField;
+    CellField<std::int32_t> airMoistureField;
+    CellField<std::int32_t> rainShadowField;
+    CellField<ClimateVector> oceanCurrentField;
+    CellField<std::int32_t> seaSurfaceTemperatureBiasField;
+    CellField<std::int32_t> coastalClimateBiasField;
+    CellField<std::int32_t> temperatureField;
+    CellField<std::int32_t> annualRainfallField;
+    CellField<std::int32_t> humidityField;
+    CellField<std::int32_t> seasonalityField;
+    CellField<std::int32_t> winterRainField;
+    CellField<std::int32_t> summerRainField;
+    CellField<std::int32_t> drySeasonStrengthField;
     // PASS B0 — soil.
-    std::vector<SoilType> soilTypeField;
-    std::vector<std::int32_t> soilFertilityField;
-    std::vector<std::int32_t> soilDrainageField;
-    std::vector<std::int32_t> soilOrganicPotentialField;
+    CellField<SoilType> soilTypeField;
+    CellField<std::int32_t> soilFertilityField;
+    CellField<std::int32_t> soilDrainageField;
+    CellField<std::int32_t> soilOrganicPotentialField;
     // PASS B1 — biome suitability.
-    std::vector<std::uint8_t> primaryBiomeSuitabilityField;
-    std::vector<std::uint8_t> secondaryBiomeSuitabilityField;
-    std::vector<std::int32_t> biomeTransitionField;
+    CellField<std::uint8_t> primaryBiomeSuitabilityField;
+    CellField<std::uint8_t> secondaryBiomeSuitabilityField;
+    CellField<std::int32_t> biomeTransitionField;
     // PASS B2 — terrain material suitability.
-    std::vector<std::array<std::uint8_t, 6>> materialSuitabilityField;
+    CellField<std::array<std::uint8_t, 6>> materialSuitabilityField;
     // Which cell the played site sits in, and the corner of the block of cells
     // the local map refines.
     core::TilePos playedCell{0, 0};
@@ -322,7 +354,13 @@ inline constexpr std::int32_t kCellsPerLocalMap = 1;
 //
 // A local map is no longer a whole cell, then; it is a piece of one, and which
 // piece is the local generator's business (D116).
-inline constexpr std::int32_t kMetresPerCell = 540;
+//
+// Five hundred and twelve now, not five hundred and forty: a power of two, so a
+// cell is exactly one 512 m terrain page, a region (world_layout.hpp) is exactly
+// 256 cells and 256 pages, and every level of the page quadtree lands on a cell
+// line. The slopes it makes are five per cent steeper than at 540, which the
+// elevation step below leaves as it is.
+inline constexpr std::int32_t kMetresPerCell = 512;
 
 // What one step of WorldCell::elevation is worth, in metres.
 //
@@ -363,9 +401,11 @@ struct WorldSize {
     const char* label;
     std::int32_t cells;
 };
-// A cell is five hundred and forty metres, so these run from thirty-two
-// kilometres across to two thousand and forty-eight - each one twice the side,
-// and four times the area, of the one before it.
+// A cell is five hundred and twelve metres, so these run from thirty-two
+// kilometres across to two thousand and ninety-seven - each one twice the side,
+// and four times the area, of the one before it, and every one of them a power
+// of two in cells. From "small" up they are whole numbers of regions
+// (world_layout.hpp): one, two, four, eight and sixteen a side.
 //
 // They no longer cost the square of the side to hold. The foundation used to be
 // a sixty-four metre grid whatever the world was, which put a wall in front of
@@ -380,13 +420,13 @@ struct WorldSize {
 // enough to raise in a second and large enough to have a coast, a range and a
 // river system in it.
 inline constexpr WorldSize kWorldSizes[] = {
-        {"tiny", "Tiny", 60},          //    32 km
-        {"smaller", "Smaller", 120},   //    65 km
-        {"small", "Small", 238},       //   129 km
-        {"average", "Average", 474},   //   256 km
-        {"medium", "Medium", 948},     //   512 km
-        {"large", "Large", 1896},      //  1024 km
-        {"giant", "Giant", 3794},      //  2049 km
+        {"tiny", "Tiny", 64},          //    33 km
+        {"smaller", "Smaller", 128},   //    66 km
+        {"small", "Small", 256},       //   131 km, one region
+        {"average", "Average", 512},   //   262 km, 2 x 2 regions
+        {"medium", "Medium", 1024},    //   524 km, 4 x 4
+        {"large", "Large", 2048},      //  1049 km, 8 x 8
+        {"giant", "Giant", 4096},      //  2097 km, 16 x 16
 };
 inline constexpr std::size_t kWorldSizeCount = sizeof(kWorldSizes) / sizeof(kWorldSizes[0]);
 // What the PLAYER's new world starts at: the middle preset, two hundred
@@ -412,6 +452,76 @@ enum class Province : std::int32_t {
     Highlands = 3,   // broken upland, which is what the generator made throughout
 };
 inline constexpr std::int32_t kProvinceCount = 4;
+
+// Where a world lies on its planet: the latitude of its top edge and how many
+// kilometres of map a degree of latitude takes. A game world two thousand
+// kilometres across on a planet of any size is a strip of latitudes, and its
+// climate belts are whatever strip it is set to - squeezed (few kilometres to
+// the degree) for a world that should cross several of them, true to scale
+// (a hundred and eleven) for one that should not.
+//
+// Not fixed means the old rule, kept for worlds made under it: the world's
+// own height is the span of the belts, so a taller world moves them. Fixed,
+// a place's latitude is where it is, and a world that grows keeps its
+// climate where it was.
+struct Latitude {
+    bool fixed = false;
+    double northDegrees = 50.0;   // at the world's top edge; south is negative
+    double kmPerDegree = 6.0;
+    // The old rule, frozen as it was for a world of `legacyRows` rows: its
+    // strip of temperature (from, span, in the generator's 0..230) and the
+    // share of its height the winds were laid out by. Kept word for word, so
+    // a world frozen when it first grows makes its old regions bit for bit as
+    // before; nought once the degrees above are what is meant.
+    std::int32_t legacyFrom = 0, legacySpan = 0, legacyRows = 0;
+    // Rows (cells) the world has grown by at its top since this was set: the
+    // latitude belongs to the ground, so a row added in the north is further
+    // north, and what was there keeps the latitude it had.
+    std::int32_t rowOffset = 0;
+    bool operator==(const Latitude&) const = default;
+    // Degrees at a distance from the world's top edge.
+    double at(double metresFromTop) const { return northDegrees - metresFromTop / 1000.0 / kmPerDegree; }
+};
+// The legacy rule written as a fixed latitude, for a world of this size and
+// seed: the strip its climate belts spanned, so a world frozen to it keeps
+// its temperatures.
+Latitude legacyLatitude(std::int32_t widthCells, std::int32_t heightCells, std::uint64_t seed);
+
+// How far one run of the generator goes: the authoring pipeline's stages
+// (world_layout.hpp, RegionStage) as the generator sees them. Nothing past the
+// stage is worked out at all.
+enum class GenerationStage : std::uint8_t {
+    Full,      // everything
+    Primary,   // relief, coast and slopes; the climate is a neutral stand-in, no water, no peoples
+    Relief,    // everything but the water: the drainage shapes the ground, and is then taken away
+};
+
+// How the ground of a world made by hand is worked out from its paint (the
+// Coast & relief stage of the editor): the whole world's, since land is
+// painted without regard to regions.
+// What the water layer says of a cell. Painted, it is an instruction the
+// drainage pass keeps: a lake there (the ground is dug to hold one and it
+// never dries), a river course (a trough the water finds, and a river in it
+// however little collects), or dry ground (no lake and no stream, whatever
+// the rain). Unpainted, the generator decides as it always did.
+enum class WaterPaint : std::uint8_t { None, Dry, Course, Lake };
+inline WaterPaint waterPaintOf(float value, float cover) {
+    if (cover < 0.5f) return WaterPaint::None;
+    const float kind = value;   // the layer's own value, not premultiplied
+    return kind < 250.0f ? WaterPaint::Dry : kind < 750.0f ? WaterPaint::Course : WaterPaint::Lake;
+}
+
+struct AuthoringDials {
+    float coast = 1.0f;          // how torn the coast is: 0 the brush's own edge, 2 very broken
+    float coastKm = 20.0f;       // the size of its bays and headlands; inlets are a fifth of it
+    float relief = 1.0f;         // the primary relief noise, as a share of the generator's own
+    float minLandMetres = 4.0f;  // painted land never comes out lower than this
+    // The drainage (the Water stage): how many of the valleys carry water, and
+    // how readily a basin holds a lake, each as a share of the generator's own.
+    float rivers = 1.0f;
+    float lakes = 1.0f;
+    bool operator==(const AuthoringDials&) const = default;
+};
 
 struct WorldMapParams {
     std::uint64_t seed = 1;
@@ -464,6 +574,33 @@ struct WorldMapParams {
     std::shared_ptr<const TerrainFoundation> foundationSnapshot;
     // Which country the played cell is: the local generator has presets for it.
     Biome playedBiome = Biome::RiverValley;
+    // A world built region by region (world_layout.hpp). When set, the size
+    // above is the layout's, and each region's seed, sea share, erosion and
+    // rainfall - and whether it is generated at all - come from the layout,
+    // blended across a band at every region border. The plates, the climate
+    // and the rivers stay the world's. The dials above are then the world-wide
+    // averages the generator's world-level constants are taken from.
+    std::shared_ptr<const WorldLayout> layout;
+    // Where on the planet (see Latitude), and where in a bigger world this
+    // one is, in cells: a region generated on its own is a world of its own
+    // size placed at its region, and its latitude is its place's, not its
+    // own top edge's.
+    Latitude latitude;
+    std::int32_t originX = 0, originY = 0;
+    // How far to go, and whether this is a region made by hand under the
+    // staged pipeline: then its land is where it was painted, its coast made
+    // ragged and natural by noise, and its mountains are the painted ranges -
+    // the plates raise nothing of their own over it.
+    GenerationStage stage = GenerationStage::Full;
+    bool authored = false;
+    AuthoringDials authoring;
+    // An imported region (world_import.hpp): its ground is this skeleton, in
+    // metres from the run's own north-west corner, rather than paint and noise.
+    std::shared_ptr<const ImportedGround> imported;
+    // The foundation's step when not the budget's (0): a run whose lattice is
+    // laid into a coarser composite is built at the composite's step, not at
+    // sixty-four metres it would only be sampled down from.
+    std::int32_t foundationStep = 0;
 };
 
 // A named set of those parameters, loaded from content. The generator does not
@@ -487,6 +624,14 @@ std::int32_t siteSpacingFor(const WorldMapParams& params);
 std::int32_t siteCountFor(const WorldMapParams& params, std::int64_t landCells);
 
 WorldMapData generateWorldMap(const WorldMapParams& params);
+
+// How long each pass of generateWorldMap took, in milliseconds, in order -
+// for probes and the loading screen's log. Set on the thread that generates;
+// null (the default) records nothing and costs nothing.
+struct GenerationTimings {
+    std::vector<std::pair<std::string, double>> passes;
+};
+void setGenerationTimings(GenerationTimings* sink);
 
 bool saveWorldMapData(const WorldMapData& world, const std::filesystem::path& file);
 bool loadWorldMapData(const std::filesystem::path& file, WorldMapData& out);

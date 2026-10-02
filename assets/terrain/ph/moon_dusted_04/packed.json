@@ -1,0 +1,57 @@
+{
+  "id": "ph_moon_dusted_04",
+  "runtime_size": 2048,
+  "runtime_files": {
+    "albedo": "ph_moon_dusted_04_albedo.png",
+    "normal": "ph_moon_dusted_04_normal.png",
+    "properties": "ph_moon_dusted_04_properties.png"
+  },
+  "properties_channels": {
+    "r": "ao",
+    "g": "roughness",
+    "b": "height",
+    "a": "mask"
+  },
+  "mip_steps": [
+    2,
+    4,
+    8,
+    16
+  ],
+  "height_range_before_stretch": [
+    0.0095,
+    0.9927
+  ],
+  "had": {
+    "ao": true,
+    "rough": true,
+    "displacement": true,
+    "mask": false
+  },
+  "source": {
+    "site": "polyhaven",
+    "asset_id": "moon_dusted_04",
+    "asset_url": "https://polyhaven.com/a/moon_dusted_04",
+    "license": "CC0",
+    "authors": [
+      "Greg Zaal",
+      "Jenelle van Heerden",
+      "Rico Cilliers"
+    ],
+    "attribution_required": false,
+    "original_physical_metres": [
+      0.56,
+      0.56
+    ],
+    "runtime_world_scale": 0.56,
+    "resolution": "2k",
+    "files": {
+      "diffuse": "ph_moon_dusted_04_diffuse.png",
+      "normal": "ph_moon_dusted_04_normal.png",
+      "displacement": "ph_moon_dusted_04_displacement.png",
+      "rough": "ph_moon_dusted_04_rough.png",
+      "ao": "ph_moon_dusted_04_ao.png"
+    }
+  },
+  "world_scale": 0.56
+}

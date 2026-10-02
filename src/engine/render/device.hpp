@@ -15,9 +15,11 @@
 #include <SDL3_shadercross/SDL_shadercross.h>
 
 #include <filesystem>
+#include <functional>
 #include <cstdint>
 #include <deque>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace engine {
@@ -281,12 +283,44 @@ public:
     Texture loadDataArray(const std::vector<std::filesystem::path>& layers);
 
 private:
+    // What the loaders above do the first time they are asked for a set of
+    // files; after that the same files (by name, size and time) are the same
+    // texture, lent out (see keptTexture).
+    Texture loadMippedFromFiles(const std::vector<std::filesystem::path>& levels);
+    Texture loadArrayMippedFromFiles(const std::vector<std::vector<std::filesystem::path>>& layers,
+                                     bool generateMipmaps);
+    Texture loadArrayFromFiles(const std::vector<std::filesystem::path>& layers);
+    Texture loadDataArrayFromFiles(const std::vector<std::filesystem::path>& layers);
+    // The texture under `key`, loaded once and owned here; what is returned is
+    // borrowed (it releases nothing) and good until the device closes.
+    Texture keptTexture(std::uint64_t key, const std::function<Texture()>& load);
+    std::unordered_map<std::uint64_t, Texture> textures_;
+
     SDL_GPUShader* compile(const std::filesystem::path& file, const char* entry,
                            bool fragment);
     // The SPIR-V of one shader, whatever stage it is. Compiling HLSL is the
     // same for all three stages and only what is done with the result differs.
     void* compileSpirv(const std::filesystem::path& file, const char* entry,
                        SDL_ShaderCross_ShaderStage stage, std::size_t& size);
+    // What names one compiled shader: the text of every shader file there is
+    // (a shader is its includes too, and which ones it pulls in is the
+    // compiler's business), the file, the entry and the stage.
+    void* compileFromSource(const std::filesystem::path& file, const char* entry,
+                            SDL_ShaderCross_ShaderStage stage, std::size_t& size);
+    std::uint64_t shaderKey(const std::filesystem::path& file, const char* entry,
+                            SDL_ShaderCross_ShaderStage stage);
+
+    // Compiled SPIR-V, kept: compiling HLSL was ten seconds of a frozen
+    // window every time a world was opened, because a new world rebuilds the
+    // pipelines and every pipeline went back to the compiler. In memory for
+    // the session, and on disk (.cache/shaders beside the project) so the
+    // next session starts warm. A changed shader file is a different key.
+    std::unordered_map<std::uint64_t, std::vector<std::uint8_t>> spirv_;
+    std::filesystem::path shaderCache_;
+    // The digest of the shader folder, and what it was taken from: the
+    // files' names, sizes and times. Asked again at every compile, read
+    // again only when one of those moved.
+    std::uint64_t folderStamp_ = 0, folderDigest_ = 0;
 
     SDL_Window* window_ = nullptr;
 

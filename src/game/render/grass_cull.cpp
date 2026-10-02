@@ -26,7 +26,7 @@ bool GrassCuller::setup(engine::Device& device, engine::RenderPipeline& into) {
     compacted_ = device.makeBuffer(SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE |
                                    SDL_GPU_BUFFERUSAGE_VERTEX,
                                    kCapacity * sizeof(world::PageGrassRoot));
-    const engine::DrawArguments draw{6, 0, 0, 0, 0};
+    const engine::DrawArguments draw{6 * world::kTurfCards, 0, 0, 0, 0};
     const auto storage = SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE | SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_READ;
     ranks_ = device.makeBuffer(storage, kCapacity * sizeof(std::uint32_t));
     blocks_ = device.makeBuffer(storage, ((kCapacity + 255) / 256) * sizeof(std::uint32_t));

@@ -117,7 +117,7 @@ std::vector<Site> choose(const generation::WorldMapData& map,const HydrologyGrap
         const auto& p=segment.course[i];
         const double x=p.position.x.toDouble(), y=p.position.y.toDouble(), width=p.halfWidth.toDouble()*2;
         const double lx=x-std::floor(x/512)*512, ly=y-std::floor(y/512)*512;
-        if (x<0 || y<0 || x>=map.width*540 || y>=map.height*540 || lx<96 || lx>416 || ly<96 || ly>416 || width>64) continue;
+        if (x<0 || y<0 || x>=map.width*generation::kMetresPerCell || y>=map.height*generation::kMetresPerCell || lx<96 || lx>416 || ly<96 || ly>416 || width>64) continue;
         const auto& a=segment.course[i-1].position; const auto& b=segment.course[i+1].position;
         const double dx=(b.x-a.x).toDouble(), dy=(b.y-a.y).toDouble(), length=std::hypot(dx,dy);
         if (length>0) rivers.push_back({"river",x,y,width,-dy/length,dx/length});

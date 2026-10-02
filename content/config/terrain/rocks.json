@@ -1,0 +1,78 @@
+{
+ "_comment": "Rock on slopes: the face's texture layer, strata (bands up the face, metres apart, leaning by tilt), the soil that gathers at the foot (scree) and a tint.",
+ "rocks": [
+  {
+   "name": "grey_slate_strata",
+   "layer": "rock_face_03",
+   "strata": {
+    "metres": 3.5,
+    "tilt": 0.1
+   },
+   "scree": "slate_rubble",
+   "tint": [
+    0.9,
+    0.92,
+    0.95
+   ]
+  },
+  {
+   "name": "grey_crumbling_cliff",
+   "layer": "rock_face_03",
+   "strata": {
+    "metres": 2.0,
+    "tilt": 0.05
+   },
+   "scree": "grey_rubble",
+   "tint": [
+    0.9,
+    0.9,
+    0.92
+   ]
+  },
+  {
+   "name": "jagged_grey",
+   "layer": "rock_face_03",
+   "tint": [
+    0.86,
+    0.87,
+    0.9
+   ]
+  },
+  {
+   "name": "smooth_grey",
+   "layer": "rock_face_03",
+   "tint": [
+    0.95,
+    0.95,
+    0.97
+   ]
+  },
+  {
+   "name": "dark_volcanic",
+   "layer": "rock_face_03",
+   "strata": {
+    "metres": 5.0,
+    "tilt": 0.2
+   },
+   "tint": [
+    0.55,
+    0.52,
+    0.52
+   ]
+  },
+  {
+   "name": "warm_cliff",
+   "layer": "cliff_side",
+   "scree": "warm_scree"
+  },
+  {
+   "name": "peat_bank",
+   "layer": "mud_forest",
+   "tint": [
+    0.9,
+    0.88,
+    0.85
+   ]
+  }
+ ]
+}

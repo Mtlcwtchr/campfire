@@ -1,0 +1,25 @@
+{
+  "site": "polyhaven",
+  "asset_id": "moon_dusted_04",
+  "asset_url": "https://polyhaven.com/a/moon_dusted_04",
+  "license": "CC0",
+  "authors": [
+    "Greg Zaal",
+    "Jenelle van Heerden",
+    "Rico Cilliers"
+  ],
+  "attribution_required": false,
+  "original_physical_metres": [
+    0.56,
+    0.56
+  ],
+  "runtime_world_scale": 0.56,
+  "resolution": "2k",
+  "files": {
+    "diffuse": "ph_moon_dusted_04_diffuse.png",
+    "normal": "ph_moon_dusted_04_normal.png",
+    "displacement": "ph_moon_dusted_04_displacement.png",
+    "rough": "ph_moon_dusted_04_rough.png",
+    "ao": "ph_moon_dusted_04_ao.png"
+  }
+}

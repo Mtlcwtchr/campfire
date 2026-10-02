@@ -1,5 +1,5 @@
-// Max-depth pyramid. The depth target uses the normal [0,1] depth convention:
-// a larger value is farther, so a max reduction is conservative for occlusion.
+// Farthest-depth pyramid. Depth is reversed (Camera::viewProjection): a
+// smaller value is farther, so a min reduction is conservative for occlusion.
 
 Texture2D<float> depthSource : register(t0, space0);
 // This entry point binds only one read buffer. Keeping it at t0 is important
@@ -33,9 +33,9 @@ void BuildMipCS(uint3 id : SV_DispatchThreadID) {
     const uint2 c = min(base + uint2(0, 1), extent - 1);
     const uint2 d = min(base + uint2(1, 1), extent - 1);
     target[targetBase + id.y * width + id.x] =
-        max(max(source[sourceBase + a.y * sourceWidth + a.x],
+        min(min(source[sourceBase + a.y * sourceWidth + a.x],
                 source[sourceBase + b.y * sourceWidth + b.x]),
-            max(source[sourceBase + c.y * sourceWidth + c.x],
+            min(source[sourceBase + c.y * sourceWidth + c.x],
                 source[sourceBase + d.y * sourceWidth + d.x]));
 }
 

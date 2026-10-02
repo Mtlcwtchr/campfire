@@ -155,16 +155,23 @@ void Camera::viewProjection(float out[16], double depthCentre, double depthSpan)
         const double focal = 1.0 / std::tan(verticalFov * 0.5);
         const double right[3]{sy, -cy, 0}, up[3]{-cy * sp, -sy * sp, cp};
         const double forward[3]{-cy * cp, -sy * cp, -sp};
-        const double depth = farPlane / (farPlane - nearPlane);
+        // Reversed depth: one at the near plane, nought at the far one. A
+        // float's precision is relative, so depth that falls off as near / z
+        // keeps it the whole way out; the other way round - nought near, one
+        // far - it is all spent in the first metres, and at near 0.5 m and far
+        // 200 km two surfaces five kilometres off could not be told apart if
+        // they were three metres apart. That was the ground, the water and the
+        // morphing squares flickering against each other at every distance.
+        const double depth = nearPlane / (farPlane - nearPlane);
         for (int i = 0; i < 3; ++i) {
             row[i] = right[i] * focal * high / wide;
             row[4 + i] = up[i] * focal;
-            row[8 + i] = forward[i] * depth;
+            row[8 + i] = -forward[i] * depth;
             row[12 + i] = forward[i];
             row[3] -= row[i] * eye[i]; row[7] -= row[4 + i] * eye[i];
             row[11] -= row[8 + i] * eye[i]; row[15] -= forward[i] * eye[i];
         }
-        row[11] -= nearPlane * depth; // SDL clip depth is [0, w].
+        row[11] += farPlane * depth; // SDL clip depth is [0, w]: w at the near plane, 0 at the far.
     } else if (isometric) {
         // Classic 2:1 RTS dimetric: a metre along either ground axis moves half
         // a tile sideways and a quarter tile down, and a metre of height rises
@@ -233,7 +240,13 @@ void Camera::viewProjection(float out[16], double depthCentre, double depthSpan)
         row[10] = -2.0 * depthSpan;
         row[11] = depthSpan * (centreY + 2.0 * focusHeight) + 0.5 + depthCentre * depthSpan;
     }
-    if (!perspective()) row[15] = 1.0;
+    if (!perspective()) {
+        row[15] = 1.0;
+        // Reversed depth here too (nearer is larger), as the depth test is
+        // GREATER_OR_EQUAL for every view: one minus what it was.
+        for (int i = 8; i < 11; ++i) row[i] = -row[i];
+        row[11] = 1.0 - row[11];
+    }
     for (int i = 0; i < 16; ++i) out[i] = static_cast<float>(row[i]);
 }
 

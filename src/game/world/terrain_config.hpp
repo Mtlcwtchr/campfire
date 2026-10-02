@@ -32,6 +32,12 @@ struct TerrainConfig {
     // compiler.
     bool cullGround = true;
     std::size_t uploadBytesPerFrame = 8u << 20;
+    // Meshes kept after the cut stops drawing them, least recently used out
+    // first: coming back to ground just left (a zoom out and in, a turn of
+    // the head) takes them from here instead of building them again. The
+    // CPU's built meshes and the card's uploaded buffers, each its budget.
+    std::size_t meshCacheBytes = 256u << 20;
+    std::size_t gpuMeshCacheBytes = 512u << 20;
     bool operator==(const TerrainConfig&) const = default;
 };
 

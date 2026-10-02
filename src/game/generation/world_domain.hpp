@@ -36,8 +36,8 @@ struct PhysicalWorldSize {
 // once: the client ran at a quarter of these while the descriptors named the
 // full ones, because the H64 foundation could not hold a world this size.
 inline constexpr std::array<PhysicalWorldSize,7> kScaleWorldSizes{{
-    {"tiny",32400}, {"smaller",64800}, {"small",128520}, {"average",255960},
-    {"medium",511920}, {"large",1023840}, {"giant",2048760}}};
+    {"tiny",32768}, {"smaller",65536}, {"small",131072}, {"average",262144},
+    {"medium",524288}, {"large",1048576}, {"giant",2097152}}};
 WorldDomain scaleWorldPreset(std::string_view name = "medium");
 } // namespace generation
 

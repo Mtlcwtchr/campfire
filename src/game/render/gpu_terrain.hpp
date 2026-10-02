@@ -7,6 +7,7 @@
 
 #include "engine/render/frame.hpp"
 #include "engine/render/systems/terrain_gather.hpp"
+#include "game/render/biome_textures.hpp"
 #include "game/render/climate_textures.hpp"
 #include "game/render/height_page_atlas.hpp"
 #include "game/render/height_page_stream.hpp"
@@ -32,6 +33,9 @@ public:
         return plan_ && !tableDirty_ ? drawing_ : empty;
     }
     std::vector<SDL_GPUTextureSamplerBinding> bindings() const;
+    // The terrain categories (engine/biomes): the category plane and the
+    // biome table, for a fragment stage after its own textures.
+    std::vector<SDL_GPUTextureSamplerBinding> biomeBindings() const { return biomes_.bindings(); }
     std::array<float, 16> parameters(const Block& block) const;
     // The same layout for a draw that is no square of the cut - the open-sea
     // sheet - and reads the page atlas at whatever level is resident: the
@@ -72,6 +76,9 @@ public:
     std::uint32_t indexCount(const Block& block, bool water = false) const;
     // Diagnostic only: isolate seam walls without changing height data or LOD.
     void skirts(bool enabled) { skirts_ = enabled; }
+    // How far from the camera the ground is kept, in metres (TerrainView::
+    // window): the draw distance and a margin. Nought keeps the whole world.
+    void window(double metres) { window_ = metres; }
     bool skirts() const { return skirts_; }
     void cycleGrid() { grid_ = (grid_ + 1) % 3; }
     int grid() const { return grid_; } // 0 off, 1 height samples, 2 geometry cells
@@ -80,19 +87,38 @@ public:
         return requestedStage_==generation::TerrainStage::Final && stageTo_==requestedStage_ && stageAmount_>=1;
     }
     std::size_t missing() const { return missing_; }
+    // Pages on the card and in the table.
+    std::size_t resident() const { return known_.size(); }
     std::size_t coarse() const { return coarse_; }
+    // Resident pages drawn over ground that has been dug since, and how many
+    // such pages have been written over with their new ground so far.
+    std::size_t stale() const { return stale_.size(); }
+    std::size_t refreshed() const { return refreshed_; }
     int target() const { return target_; }
     double radius() const { return radius_; }
     const world::terrain::StreamingProgress& progress() const { return progress_; }
     bool settled() const { return settled_; }
+    // A plan has been made for this world: "nothing missing" means something.
+    bool planned() const { return plan_ != nullptr; }
     void frozen(bool value) { frozen_ = value; }
 private:
     // Stored page levels are 0/1/2/4; the four atlas layers are 0/1/2/3.
-    static int dataset(int dataLevel) { return dataLevel == 4 ? 3 : dataLevel; }
+    // The atlas a page level is held in: H4, H8, H16, and H64 for H64 and
+    // everything coarser (their pages have one shape).
+    static int atlasOf(int dataLevel) { return dataLevel >= 4 ? 3 : dataLevel; }
+    // The dataset a shader names it by: 0..3 as the atlases, 4 for H256, 5 for
+    // H1024 (terrain_pages.hlsli, page_levels.hlsli). The table holds 4 and 5
+    // in one layer, H1024 from half its width.
+    static int dataset(int dataLevel) {
+        return dataLevel == 8 ? 5 : dataLevel >= 5 ? 4 : dataLevel == 4 ? 3 : dataLevel;
+    }
     void protect(Key key, std::uint64_t serial);
     void retire(std::uint64_t completed);
     bool publishTable(engine::Device& device);
     bool accept(engine::Device& device, std::shared_ptr<const Plan> plan);
+    // What was dug since the last look (edit_layer.hpp): every resident page
+    // whose reach it touches is marked stale.
+    void observeGround();
 
     std::shared_ptr<world::WorldPreparation> preparation_;
     world::WorldBuilder::Snapshot world_;
@@ -126,7 +152,24 @@ public:
 private:
     std::shared_ptr<const world::terrain::TerrainResidency> residency_;
     std::array<std::unique_ptr<HeightPageAtlas>, 4> atlases_;
+    // Where each resident page's samples are in its atlas, a layer per
+    // dataset (H4, H8, H16, H64, H256, H1024 - page_levels.hlsli).
+    //
+    // Wrapped: a page is at its coordinates modulo the side, and the texel says
+    // which page it holds, so a page the table has no room for reads as absent
+    // rather than as a neighbour's ground. It was a grid of the whole world at
+    // 512 m for every dataset - 4004 x 4004 x 5 x 16 bytes, 1.3 GB, on a world
+    // 2000 km a side, zeroed and uploaded whole whenever a page arrived. The
+    // side covers 262 km of H64, a thousand of H256 and four thousand of
+    // H1024: more than any of them is ever wanted over.
+    static constexpr std::uint32_t kTableLayers = 6;
+    static constexpr std::uint32_t kTableSide = 512;
+    // What the table holds, as uploaded, and which rows of it a change touched.
+    std::vector<std::array<float, 4>> tableMirror_;
+    std::unordered_map<std::uint64_t, Key> tableOwner_;   // texel -> the page written there
+    bool tableUploaded_ = false;
     ClimateTextures climate_;
+    BiomeTextures biomes_;
     engine::Texture table_;
     engine::Sampler tableSampler_;
     engine::Buffer vertices_, indices_;
@@ -150,6 +193,13 @@ private:
     };
     std::deque<Lease> leases_;
     std::unordered_set<Key> persistent_, known_;
+    // Resident pages the ground under them has moved since they were
+    // uploaded. They are still drawn - their replacements stream in and are
+    // written over them in place - so a stroke never opens a hole.
+    std::unordered_set<Key> stale_;
+    std::uint64_t groundSeen_ = 0;
+    std::size_t refreshed_ = 0;
+    bool restream_ = false;
     std::vector<PackedHeightPage> staged_;
     float low_ = 0, range_ = 1;
     std::size_t missing_ = 0, coarse_ = 0;
@@ -157,9 +207,19 @@ private:
     double radius_ = 0, lastX_ = 0, lastY_ = 0;
     double planTime_ = 0;
     bool haveCamera_ = false, tableDirty_ = true, restartPlan_ = false;
+    bool lostPages_ = false;
+    // Every page of the residency snapshot the plan being built was handed:
+    // held from its request to its collection, so the atlas cannot let go of
+    // a page that plan will stand on. Without this the plan came back with a
+    // pin that was gone, was refused, and the cut was asked for again.
+    std::vector<Key> inflight_;
+    bool requestPlan(const world::terrain::TerrainView& view);
+    void releaseInflight();
+    double velocityX_ = 0, velocityY_ = 0;   // the eye's, eased, metres a second   // the last refused plan stood on pages no longer resident
     world::terrain::TerrainView lastView_;
     world::terrain::StreamingProgress progress_;
     std::size_t persistentTotal_ = 0, gpuBytes_ = 0;
+    double window_ = 0;
     std::size_t fineResident_ = 0, h8Resident_ = 0;
 };
 

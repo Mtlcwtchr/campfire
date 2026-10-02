@@ -53,12 +53,14 @@ bool occludedByHiZ(Cluster cluster) {
                         uint2(mipWidth - 1, mipHeight - 1));
     const uint2 b = min(uint2(maxUv * float2(mipWidth, mipHeight)),
                         uint2(mipWidth - 1, mipHeight - 1));
-    const float z = max(max(hiz[mipBase + a.y * mipWidth + a.x],
+    // Reversed depth: the farthest of the four is the smallest, and the
+    // cluster's nearest point the largest.
+    const float z = min(min(hiz[mipBase + a.y * mipWidth + a.x],
                             hiz[mipBase + a.y * mipWidth + b.x]),
-                        max(hiz[mipBase + b.y * mipWidth + a.x],
+                        min(hiz[mipBase + b.y * mipWidth + a.x],
                             hiz[mipBase + b.y * mipWidth + b.x]));
-    const float nearest = (clipZ - cluster.radius * length(rowZ.xyz)) / clipW;
-    return nearest > z + 1e-4;
+    const float nearest = (clipZ + cluster.radius * length(rowZ.xyz)) / clipW;
+    return nearest < z - 1e-4;
 }
 
 [numthreads(64, 1, 1)]

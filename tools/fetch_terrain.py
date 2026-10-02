@@ -26,6 +26,7 @@ tools/pack_terrain.py.
     python3 tools/fetch_terrain.py --only grass_lush soil_base
     python3 tools/fetch_terrain.py --water          # the OpenGameArt water set
     python3 tools/fetch_terrain.py --check          # say what is missing, take nothing
+    python3 tools/fetch_terrain.py --credits        # only rewrite CREDITS.md
 
 Every download is checked against the md5 the API gives, and a file already on
 disk with the right md5 is not fetched again - so this is safe to re-run and
@@ -235,6 +236,16 @@ def credits(materials, water):
     for m in sorted((m for m in materials if m["source"].get("site") == "polyhaven"), key=lambda x: x["id"]):
         lines.append("- `%s` - %s" % (m["id"], m["source"]["asset_id"]))
     lines.append("")
+    models = ROOT / "content/config/scene_model_sources.json"
+    if models.exists():
+        lines += ["Scene models from Poly Haven, fetched by `tools/fetch_models.py` from",
+                  "`content/config/scene_model_sources.json`:", ""]
+        for m in sorted(json.loads(models.read_text())["models"], key=lambda x: x["asset_id"]):
+            src = ROOT / "assets/models/polyhaven" / m["asset_id"] / "source.json"
+            authors = json.loads(src.read_text()).get("authors") if src.exists() else None
+            lines.append("- `%s` (%s)%s" % (m["asset_id"], m.get("role", "?"),
+                                             " - " + ", ".join(authors) if authors else ""))
+        lines.append("")
     imported = [m for m in materials if m["source"].get("site") == "unreal"]
     if imported:
         lines += ["## Imported AncientSettlement resources (not CC0)", "",
@@ -249,6 +260,16 @@ def credits(materials, water):
             for model in json.loads((scene / "provenance.json").read_text())["models"]:
                 lines.append("- `%s` - `%s`" % (model["role"], model["asset"]))
         lines.append("")
+    ue_foliage = ROOT / "content/config/ue_foliage_sources.json"
+    if ue_foliage.exists():
+        lines += ["## Foliage exported from the AncientSettlement UE project (not CC0)", "",
+                  "Original asset-pack licences apply (European Hornbeam, Light Foliage, Fab/Megascans,",
+                  "3D Garden Plants). Exported by `tools/export_ue_foliage.py` from",
+                  "`content/config/ue_foliage_sources.json`; not redistributed by this repository.", ""]
+        for entry in sorted(json.loads(ue_foliage.read_text())["assets"], key=lambda x: x["asset_id"]):
+            where = entry.get("folder") or ", ".join(m.split("/")[-1] for m in entry.get("meshes", []))
+            lines.append("- `%s` (%s) - `%s`" % (entry["asset_id"], entry.get("role", "?"), where))
+        lines.append("")
     (ROOT / "CREDITS.md").write_text("\n".join(lines))
     print("wrote CREDITS.md")
 
@@ -261,7 +282,12 @@ def main():
     ap.add_argument("--water", action="store_true", help="the OpenGameArt water set as well")
     ap.add_argument("--check", action="store_true", help="say what is missing and take nothing")
     ap.add_argument("--quiet", action="store_true")
+    ap.add_argument("--credits", action="store_true", help="only rewrite CREDITS.md, fetch nothing")
     args = ap.parse_args()
+
+    if args.credits:
+        credits(json.loads(MATERIALS.read_text()), json.loads(WATER.read_text()))
+        return 0
 
     materials = [m for m in json.loads(MATERIALS.read_text())
                  if m.get("source", {}).get("site") == "polyhaven"]

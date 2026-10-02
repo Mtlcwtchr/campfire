@@ -33,9 +33,10 @@ public:
     // pending queue each frame, so a moved focus never waits for an old FIFO.
     static bool nearer(Key a, Key b, double focusX, double focusY) {
         const auto rank = [&](Key key) {
-            const double x = key.x * 512.0, y = key.y * 512.0;
-            const double dx = focusX - std::clamp(focusX, x, x + 512.0);
-            const double dy = focusY - std::clamp(focusY, y, y + 512.0);
+            const double metres = world::streaming::pageMetresAtLevel(key.level);
+            const double x = key.x * metres, y = key.y * metres;
+            const double dx = focusX - std::clamp(focusX, x, x + metres);
+            const double dy = focusY - std::clamp(focusY, y, y + metres);
             return std::tuple{dx * dx + dy * dy, -int(key.level), key.y, key.x};
         };
         return rank(a) < rank(b);
