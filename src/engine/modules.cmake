@@ -82,6 +82,31 @@ target_include_directories(asr_biomes PUBLIC ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(asr_biomes PUBLIC asr_core nlohmann_json PRIVATE asr_warnings)
 add_library(Campfire::Biomes ALIAS asr_biomes)
 
+# The procedural environment (doc/plan_procedural_environment_2026-10-03.md):
+# fields, zones, feature recipes and their terrain operations, the planner,
+# historical drainage, scatter primitives, page masks, procedural feature
+# meshes, style tables and asset metadata. The mechanism only: which zones,
+# recipes and looks a world has is the game's.
+add_library(asr_environment STATIC
+        ${CMAKE_CURRENT_LIST_DIR}/environment/fields.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/environment/zones.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/environment/recipe_json.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/environment/terrain_ops.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/environment/drainage.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/environment/cover.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/environment/catalogue.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/environment/planner.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/environment/feature_layer.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/environment/masks.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/environment/scatter.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/environment/feature_mesh.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/environment/style.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/environment/asset_meta.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/environment/environment.cpp)
+target_include_directories(asr_environment PUBLIC ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(asr_environment PUBLIC asr_core nlohmann_json PRIVATE asr_warnings)
+add_library(Campfire::Environment ALIAS asr_environment)
+
 # The character animator: poses, clips, blend spaces, state machines, layers,
 # IK and procedural humanoid motion. Pure CPU, no dependencies.
 add_library(asr_animation STATIC

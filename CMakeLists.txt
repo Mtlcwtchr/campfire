@@ -707,6 +707,13 @@ if(ASR_BUILD_TESTS)
             tests/test_terrain_source.cpp)
     add_test(NAME unit COMMAND asr_tests)
 
+    # The procedural environment's mechanism alone: engine code, a synthetic
+    # world, no game - small enough to build and run on its own.
+    add_executable(asr_environment_tests tests/main.cpp tests/test_procedural_environment.cpp)
+    target_include_directories(asr_environment_tests PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+    target_link_libraries(asr_environment_tests PRIVATE asr_environment asr_warnings)
+    add_test(NAME environment COMMAND asr_environment_tests)
+
     add_executable(asr_terrain_tests
             tests/main.cpp
             tests/test_hybrid_terrain.cpp
