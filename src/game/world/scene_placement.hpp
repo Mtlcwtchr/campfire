@@ -18,6 +18,21 @@ struct ScenePlacementSnapshot {
     bool complete = false; // all admitted regions, not necessarily the whole visible world
     bool capacityLimited = false;
     decor::Scatter scatter; // Object::id remains seed/position-derived, not request-derived.
+    // The same objects by region, `parts[i]` the scatter of `regions[i]`,
+    // shared with the placement's cache (nothing copied). What the renderer
+    // reads: a region whose part is the same pointer as last time is the same
+    // objects, and nothing downstream has to look at it again. `scatter` holds
+    // the merged list only when the placement merges (Limits::merged); its
+    // counts (sampled, populations) are filled either way.
+    std::vector<std::shared_ptr<const decor::Scatter>> parts;
+    // Every object of every part in id order, merged on request (tools and
+    // tests; the renderer reads the parts).
+    [[nodiscard]] std::vector<decor::Object> mergedObjects() const;
+    [[nodiscard]] std::size_t objectCount() const {
+        std::size_t n = 0;
+        for (const auto& p : parts) n += p ? p->objects.size() : 0;
+        return n;
+    }
 };
 
 class ScenePlacement {
@@ -38,6 +53,9 @@ public:
         // While the admitted set is still filling, publish at most this often
         // (updates) instead of every update that admitted a region.
         std::uint64_t publishEvery=1;
+        // Whether a snapshot also carries every object in one list, in id
+        // order (tools, tests). Off, only `parts`.
+        bool merged=true;
         // What the game's streaming uses (tests keep the strict defaults).
         static Limits streaming() {
             Limits l;
@@ -49,6 +67,9 @@ public:
             l.lingerUpdates=240;
             l.publishEvery=6;
             l.publishesPerUpdate=32;
+            // The renderer reads the parts; the merged list of every object
+            // in view, rebuilt on each publication, is not needed there.
+            l.merged=false;
             return l;
         }
     };

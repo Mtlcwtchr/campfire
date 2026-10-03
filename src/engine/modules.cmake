@@ -81,3 +81,15 @@ add_library(asr_biomes STATIC
 target_include_directories(asr_biomes PUBLIC ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(asr_biomes PUBLIC asr_core nlohmann_json PRIVATE asr_warnings)
 add_library(Campfire::Biomes ALIAS asr_biomes)
+
+# The character animator: poses, clips, blend spaces, state machines, layers,
+# IK and procedural humanoid motion. Pure CPU, no dependencies.
+add_library(asr_animation STATIC
+        ${CMAKE_CURRENT_LIST_DIR}/animation/pose.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/animation/motion.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/animation/ik.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/animation/procedural.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/animation/animator.cpp)
+target_include_directories(asr_animation PUBLIC ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(asr_animation PRIVATE asr_warnings)
+add_library(Campfire::Animation ALIAS asr_animation)

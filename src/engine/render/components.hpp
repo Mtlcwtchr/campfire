@@ -46,6 +46,7 @@ struct SmartMeshRef {
 struct RenderTint {
     float tint = 1;
     float phase = 0;
+    float surface = 0;  // material response supplied by the scene (e.g. moss habitat)
 };
 
 // Decided by a visibility system, read by the gather. The gather never culls:

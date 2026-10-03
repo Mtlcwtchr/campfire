@@ -4,6 +4,24 @@
   {
    "name": "deadwood_mossy",
    "id": 1,
+   "decals": [
+    [
+     "animal_trails",
+     1.0
+    ],
+    [
+     "fallen_twigs",
+     1.0
+    ],
+    [
+     "forest_moss_patch",
+     1.0
+    ],
+    [
+     "fine_moss",
+     1.0
+    ]
+   ],
    "props": [
     [
      "fallen_log",
@@ -11,7 +29,11 @@
     ],
     [
      "mossy_stone",
-     4
+     5
+    ],
+    [
+     "fallen_trunk",
+     1.2
     ]
    ]
   },
@@ -38,13 +60,27 @@
   {
    "name": "stones_stumps",
    "id": 3,
+   "decals": [
+    [
+     "animal_trails",
+     0.65
+    ]
+   ],
    "props": [
     [
      "stones",
-     8
+     2
     ],
     [
      "stump",
+     1
+    ],
+    [
+     "rubble",
+     2
+    ],
+    [
+     "old_stump",
      1
     ]
    ]
@@ -60,6 +96,10 @@
     [
      "grey_boulder",
      6
+    ],
+    [
+     "rubble",
+     8
     ]
    ],
    "decals": [
@@ -122,12 +162,288 @@
     [
      "branches",
      20
+    ],
+    [
+     "red_mushrooms",
+     6
+    ],
+    [
+     "old_stump",
+     1
+    ]
+   ],
+   "decals": [
+    [
+     "animal_trails",
+     1.0
+    ],
+    [
+     "fallen_twigs",
+     0.8
+    ],
+    [
+     "forest_moss_patch",
+     0.6
+    ],
+    [
+     "fallen_leaves",
+     1.0
+    ]
+   ]
+  },
+  {
+   "name": "glade_stones",
+   "id": 9,
+   "props": [
+    [
+     "mossy_stone",
+     1
+    ],
+    [
+     "stones",
+     1.5
+    ],
+    [
+     "red_mushrooms",
+     4
+    ]
+   ],
+   "decals": [
+    [
+     "fine_moss",
+     0.6
+    ],
+    [
+     "animal_trails",
+     0.4
+    ]
+   ]
+  },
+  {
+   "name": "amber_litter",
+   "id": 10,
+   "props": [
+    [
+     "fallen_trunk",
+     2
+    ],
+    [
+     "old_stump",
+     2
+    ],
+    [
+     "branches",
+     25
     ]
    ],
    "decals": [
     [
      "fallen_leaves",
      1.0
+    ],
+    [
+     "fallen_twigs",
+     0.4
+    ]
+   ]
+  },
+  {
+   "name": "moor_stones",
+   "id": 11,
+   "props": [
+    [
+     "mossy_stone",
+     3
+    ],
+    [
+     "grey_boulder",
+     0.5
+    ],
+    [
+     "stones",
+     3
+    ]
+   ],
+   "decals": [
+    [
+     "forest_moss_patch",
+     1.0
+    ],
+    [
+     "fine_moss",
+     1.0
+    ]
+   ]
+  },
+  {
+   "name": "mycelium_logs",
+   "id": 12,
+   "props": [
+    [
+     "fallen_trunk",
+     8
+    ],
+    [
+     "old_stump",
+     8
+    ],
+    [
+     "red_mushrooms",
+     50
+    ],
+    [
+     "mushrooms",
+     40
+    ],
+    [
+     "mossy_stone",
+     6
+    ]
+   ],
+   "decals": [
+    [
+     "forest_moss_patch",
+     1.0
+    ],
+    [
+     "fine_moss",
+     1.0
+    ],
+    [
+     "fallen_twigs",
+     0.6
+    ]
+   ]
+  },
+  {
+   "name": "coast_driftwood",
+   "id": 13,
+   "props": [
+    [
+     "driftwood",
+     3
+    ],
+    [
+     "stones",
+     3
+    ]
+   ],
+   "decals": [
+    [
+     "animal_trails",
+     0.2
+    ]
+   ]
+  },
+  {
+   "name": "dry_ruins",
+   "id": 14,
+   "props": [
+    [
+     "dry_branches",
+     3
+    ],
+    [
+     "stones",
+     6
+    ],
+    [
+     "grey_boulder",
+     1.5
+    ],
+    [
+     "rubble",
+     6
+    ]
+   ],
+   "decals": [
+    [
+     "dry_tufts",
+     0.5
+    ],
+    [
+     "dust_streaks",
+     0.3
+    ]
+   ]
+  },
+  {
+   "name": "alpine_cliffs",
+   "id": 15,
+   "props": [
+    [
+     "cliff_face_grey",
+     1.6
+    ],
+    [
+     "cliff_face_warm",
+     0.6
+    ],
+    [
+     "grey_boulder",
+     3
+    ],
+    [
+     "rubble",
+     8
+    ],
+    [
+     "mossy_stone",
+     2
+    ],
+    [
+     "stones",
+     4
+    ]
+   ],
+   "decals": [
+    [
+     "slate_chips",
+     0.6
+    ],
+    [
+     "grey_stain",
+     0.3
+    ]
+   ]
+  },
+  {
+   "name": "river_stones",
+   "id": 16,
+   "props": [
+    [
+     "river_boulder",
+     3
+    ],
+    [
+     "river_slab",
+     12
+    ],
+    [
+     "river_cobble",
+     35
+    ],
+    [
+     "river_gravel",
+     70
+    ],
+    [
+     "mossy_stone",
+     25
+    ],
+    [
+     "stones",
+     30
+    ]
+   ],
+   "decals": [
+    [
+     "river_pebbles",
+     1.0
+    ],
+    [
+     "fine_moss",
+     0.5
     ]
    ]
   }

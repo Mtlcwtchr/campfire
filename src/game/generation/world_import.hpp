@@ -49,12 +49,19 @@ struct WorldLayout;
 // One region's skeleton, with two samples of margin at every side so it can
 // be interpolated to its edge.
 struct ImportedGround {
-    static constexpr std::int32_t kSampleMetres = 256;
     static constexpr std::int32_t kMargin = 2;
+    std::int32_t sampleMetres = 256;
     std::int32_t side = 0;                         // samples a side, margin included
     std::vector<std::int32_t> heightDm;            // decimetres, side x side
     // 0..255 each, side x side; empty when the source has no such mask.
     std::vector<std::uint8_t> erosion, moisture, forest, mountain;
+    // river_strength: painted main rivers, 0 none .. 255 a trunk. The drainage
+    // is given that much extra water on those cells (world_map_gen), so the
+    // painted course is where the big rivers run.
+    std::vector<std::uint8_t> river;
+    // temperature_bias: 0 colder .. 255 warmer, 128 as the climate makes it
+    // (about 10 degrees either way at the ends).
+    std::vector<std::uint8_t> temperature;
     // 255 where the source's water flags say lake (a basin with a bed the
     // drainage keeps and the generator holds water in); empty when none.
     std::vector<std::uint8_t> lake;

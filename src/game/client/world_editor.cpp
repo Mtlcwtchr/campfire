@@ -12,11 +12,17 @@
 #include "engine/core/progress.hpp"
 #include "engine/core/rng.hpp"
 #include "engine/world_source/transfer.hpp"
+#include "game/generation/world_procedural.hpp"
 
 namespace client {
 namespace {
 constexpr float kRow = 26, kLabelW = 132;
 constexpr std::size_t kUndoSteps = 40;
+
+std::int64_t importedSampleMetres(std::int32_t regionsX, std::int32_t regionsY) {
+    const auto side = std::max(regionsX, regionsY);
+    return side >= 16 ? 256 : side >= 8 ? 128 : 64;
+}
 
 std::string number(const char* format, double value) {
     char text[64];
@@ -144,7 +150,7 @@ void WorldEditor::open(std::vector<generation::WorldPreset> presets, std::filesy
     undo_.clear();
     unbuilt_ = false;
     ++sketchRevision_;
-    if (!layout_.imported) reopenSource();
+    reopenSource();
     regionsChanged();
 }
 
@@ -231,8 +237,11 @@ bool WorldEditor::reshape(std::int32_t west, std::int32_t east, std::int32_t nor
     // source chunks a side.
     if (engine::world_source::WorldSource::exists(sourceRoot())) {
         constexpr std::int64_t kChunksPerRegion = generation::kRegionMetres / 32768;
-        const engine::world_source::WorldExtent extent{double(layout_.widthMetres()), double(layout_.heightMetres()), 256,
-                                                       32768};
+        const auto source = engine::world_source::WorldSource::open(sourceRoot());
+        const double sampleMetres = source ? source->schema().world.sampleMetres
+                                           : double(importedSampleMetres(layout_.regionsX, layout_.regionsY));
+        const engine::world_source::WorldExtent extent{double(layout_.widthMetres()), double(layout_.heightMetres()),
+                                                       sampleMetres, 32768};
         std::string why;
         if (!engine::world_source::reshapeSource(sourceRoot(), west * kChunksPerRegion, north * kChunksPerRegion, extent,
                                                  &why))
@@ -1380,7 +1389,8 @@ namespace {
 namespace ws = engine::world_source;
 
 ws::WorldExtent extentOf(const generation::WorldLayout& layout) {
-    return {double(layout.widthMetres()), double(layout.heightMetres()), 256, 32768};
+    const double sampleMetres = double(importedSampleMetres(layout.regionsX, layout.regionsY));
+    return {double(layout.widthMetres()), double(layout.heightMetres()), sampleMetres, 32768};
 }
 std::array<double, 4> squareOf(std::int32_t rx, std::int32_t ry) {
     const double r = double(generation::kRegionMetres);
@@ -1391,6 +1401,48 @@ std::string reportLine(const ws::ImportReport& report, std::size_t regions, doub
            std::to_string(report.chunksWritten) + " chunks written, " + std::to_string(report.chunksRemoved) +
            " emptied, " + std::to_string(report.chunksUnchanged) + " unchanged (" + number("%.1f s)", seconds);
 }
+// Where maps go for these regions: stretched over the rectangle around them,
+// only their squares taking them (no mask at all when they are the whole
+// world: nothing beside it to blend into), the edge blended over `featherKm`.
+ws::ImportTarget importTargetOf(const generation::WorldLayout& layout,
+                                const std::vector<std::pair<std::int32_t, std::int32_t>>& regions, bool whole,
+                                double featherKm) {
+    ws::ImportTarget target;
+    target.world = extentOf(layout);
+    target.rastersOnly = true;
+    target.featherMetres = std::max(0.0, featherKm) * 1000.0;
+    std::array<double, 4> box{1e300, 1e300, -1e300, -1e300};
+    for (const auto& [rx, ry] : regions) {
+        const auto sq = squareOf(rx, ry);
+        if (!whole) target.mask.push_back(sq);
+        box = {std::min(box[0], sq[0]), std::min(box[1], sq[1]), std::max(box[2], sq[2]), std::max(box[3], sq[3])};
+    }
+    target.rect = box;
+    return target;
+}
+// A phase's rasters as the pictures the importer takes - moved, not copied.
+ws::GridRasters gridsOf(generation::SourceRasters&& rasters) {
+    ws::GridRasters grids;
+    if (!rasters.height.empty()) {
+        ws::Image image;
+        image.width = std::uint32_t(rasters.samplesX);
+        image.height = std::uint32_t(rasters.samplesY);
+        image.channels = 1;
+        image.bits = 16;
+        image.words = std::move(rasters.height);
+        grids.height = std::move(image);
+    }
+    if (!rasters.control.empty()) {
+        ws::Image image;
+        image.width = std::uint32_t(rasters.samplesX);
+        image.height = std::uint32_t(rasters.samplesY);
+        image.channels = 4;
+        image.bits = 8;
+        image.bytes = std::move(rasters.control);
+        grids.control = std::move(image);
+    }
+    return grids;
+}
 } // namespace
 
 std::filesystem::path WorldEditor::sourceRoot() const {
@@ -1398,7 +1450,18 @@ std::filesystem::path WorldEditor::sourceRoot() const {
     return file_.parent_path() / file_.stem() / "source";
 }
 
-void WorldEditor::reopenSource() { layout_.imported = generation::openImported(sourceRoot(), layout_); }
+void WorldEditor::reopenSource() {
+    const auto root = sourceRoot();
+    if (ws::WorldSource::exists(root)) {
+        const auto desired = extentOf(layout_);
+        if (auto existing = ws::WorldSource::open(root); existing &&
+            existing->schema().world.sampleMetres != desired.sampleMetres) {
+            std::string why;
+            if (!ws::resampleSource(root, desired, &why)) std::cerr << "world source resample: " << why << "\n";
+        }
+    }
+    layout_.imported = generation::openImported(root, layout_);
+}
 
 void WorldEditor::selectRegions() {
     if (layer_ >= 0) chooseLayer(-1);
@@ -1424,17 +1487,7 @@ void WorldEditor::importMaps(const ImportRequest& request) {
     if (whole)
         for (std::int32_t y = 0; y < layout_.regionsY; ++y)
             for (std::int32_t x = 0; x < layout_.regionsX; ++x) regions.emplace_back(x, y);
-    ws::ImportTarget target;
-    target.world = extentOf(layout_);
-    target.rastersOnly = true;
-    target.featherMetres = std::max(0.0, request.featherKm) * 1000.0;
-    std::array<double, 4> box{1e300, 1e300, -1e300, -1e300};
-    for (const auto& [rx, ry] : regions) {
-        const auto sq = squareOf(rx, ry);
-        if (!whole) target.mask.push_back(sq);
-        box = {std::min(box[0], sq[0]), std::min(box[1], sq[1]), std::max(box[2], sq[2]), std::max(box[3], sq[3])};
-    }
-    target.rect = box;
+    const ws::ImportTarget target = importTargetOf(layout_, regions, whole, request.featherKm);
     const auto root = sourceRoot();
     // New heights make the drained height stale; regions elsewhere that are
     // at their drainage or further need it made again before they are built.
@@ -1466,6 +1519,7 @@ void WorldEditor::importMaps(const ImportRequest& request) {
         }
         const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - began).count();
         job.ok = report.has_value();
+        if (job.ok) job.packageStage = report->stage;
         job.line = job.ok ? "Imported into " + reportLine(*report, regions.size(), seconds) : "Import failed: " + why;
         if (job.ok && report->seaGrey >= 0) job.line += "; coast at grey " + std::to_string(report->seaGrey);
         if (job.ok) job.opened = generation::ImportedSource::open(root, rebake);
@@ -1495,6 +1549,101 @@ void WorldEditor::clearImport() {
         job.ok = report.has_value();
         job.line = job.ok ? "Cleared " + reportLine(*report, regions.size(), seconds) : "Clear failed: " + why;
         if (job.ok) job.opened = generation::ImportedSource::open(root, rebake);
+        return job;
+    });
+}
+
+void WorldEditor::generateHeights(const GenerateRequest& request) {
+    if (importing()) return;
+    endStroke();
+    auto regions = selection();
+    // Nothing selected is the whole world: one planet, its plates and its
+    // continents running across every region.
+    const bool whole = regions.empty();
+    const generation::RegionList asked = regions;
+    if (whole)
+        for (std::int32_t y = 0; y < layout_.regionsY; ++y)
+            for (std::int32_t x = 0; x < layout_.regionsX; ++x) regions.emplace_back(x, y);
+    const ws::ImportTarget target = importTargetOf(layout_, regions, whole, request.featherKm);
+    const auto root = sourceRoot();
+    // New heights make the drained height stale, exactly as an import does.
+    const bool rebake = drainedElsewhere(regions);
+    const auto sampleMetres = std::int32_t(extentOf(layout_).sampleMetres);
+    generation::ProceduralHeights dials;
+    dials.settings = request.settings;
+    dials.seed = request.seed;
+    dials.ownSeeds = request.ownSeeds;
+    // The thread runs on a copy: the person may go on painting meanwhile.
+    const generation::WorldLayout layout = layout_;
+    status("generating heights for " + (whole ? std::string("the whole world") : std::to_string(regions.size()) + " region(s)") +
+           " ...");
+    importLine_ = "Generating heights ...";
+    jobLabel_ = "Generating heights";
+    job_ = std::async(std::launch::async, [layout, asked, dials, sampleMetres, target, root, regions, rebake] {
+        Job job;
+        job.regions = regions;
+        job.heights = true;
+        const auto began = std::chrono::steady_clock::now();
+        std::string why;
+        auto rasters = generation::generateSourceHeights(layout, asked, dials, sampleMetres, &why);
+        if (!rasters) {
+            job.line = "Generation failed: " + why;
+            return job;
+        }
+        const double samples = double(rasters->samplesX) * double(rasters->samplesY);
+        const double land = samples > 0 ? 100.0 * double(rasters->landSamples) / samples : 0.0;
+        const std::int32_t highest = rasters->highestMetres;
+        const auto report = ws::importGrids(gridsOf(std::move(*rasters)), root, target, &why);
+        const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - began).count();
+        job.ok = report.has_value();
+        job.line = job.ok ? "Generated heights into " + reportLine(*report, regions.size(), seconds) + number("; land %.0f%%", land) +
+                                    ", highest " + std::to_string(highest) + " m"
+                          : "Generation failed: " + why;
+        if (job.ok) job.opened = generation::ImportedSource::open(root, rebake);
+        return job;
+    });
+}
+
+void WorldEditor::generateControls(const GenerateRequest& request) {
+    if (importing()) return;
+    endStroke();
+    if (!ws::WorldSource::exists(sourceRoot())) {
+        status("no heights yet: import or generate them first");
+        return;
+    }
+    // The selection, or everywhere the source holds heights.
+    const generation::RegionList asked = selection();
+    generation::ProceduralControls dials;
+    dials.seed = request.seed;
+    dials.rainfallPercent = request.settings.rainfallPercent;
+    dials.erosionPasses = request.settings.erosionPasses;
+    dials.variation = request.variation;
+    const generation::WorldLayout layout = layout_;
+    const auto root = sourceRoot();
+    const double featherKm = request.featherKm;
+    status("working out control maps ...");
+    importLine_ = "Control maps ...";
+    jobLabel_ = "Control maps";
+    job_ = std::async(std::launch::async, [layout, asked, dials, root, featherKm] {
+        Job job;
+        const auto began = std::chrono::steady_clock::now();
+        std::string why;
+        auto rasters = generation::generateSourceControls(root, layout, asked, dials, &why);
+        if (!rasters) {
+            job.line = "Control maps failed: " + why;
+            return job;
+        }
+        // Only the regions that hold heights take them: a control map is
+        // laid over the ground, never where there is none.
+        job.regions = rasters->regions;
+        const ws::ImportTarget target = importTargetOf(layout, rasters->regions, false, featherKm);
+        const auto report = ws::importGrids(gridsOf(std::move(*rasters)), root, target, &why);
+        const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - began).count();
+        job.ok = report.has_value();
+        job.line = job.ok ? "Control maps for " + reportLine(*report, job.regions.size(), seconds)
+                          : "Control maps failed: " + why;
+        // The height is as it was, so whatever drainage was baked still is.
+        if (job.ok) job.opened = generation::ImportedSource::open(root);
         return job;
     });
 }
@@ -1659,7 +1808,17 @@ void WorldEditor::update() {
         for (const auto& [rx, ry] : job.regions)
             if (layout_.at(rx, ry).generated || layout_.at(rx, ry).source >= 0) generated.emplace_back(rx, ry);
         if (!generated.empty()) generation::clearRegions(layout_, generated);
-        for (const auto& [rx, ry] : job.regions) layout_.at(rx, ry).stage = generation::RegionStage::Primary;
+        // Taken back to their heights alone - those the heights reached. A
+        // region the new heights left all sea keeps the stage it had: there
+        // is nothing in it to work out.
+        for (const auto& [rx, ry] : job.regions)
+            if (job.opened && job.opened->holds(rx, ry)) layout_.at(rx, ry).stage = generation::RegionStage::Primary;
+        // And as far as the package asked: its maps carry the climate and the
+        // drainage (temperature_bias, moisture_bias, river_strength, lakes).
+        if (const auto asked = generation::stageNamed(job.packageStage);
+            asked && *asked != generation::RegionStage::Primary && *asked != generation::RegionStage::Full)
+            for (const auto& [rx, ry] : job.regions)
+                if (job.opened && job.opened->holds(rx, ry)) layout_.at(rx, ry).stage = *asked;
     }
     // A control map alone changes what the regions are built from and not
     // how far they are taken.
@@ -1671,4 +1830,3 @@ void WorldEditor::update() {
 }
 
 } // namespace client
-

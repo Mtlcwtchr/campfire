@@ -153,7 +153,9 @@ std::array<double, 2> WaterPass::sheetCentre(const engine::Frame& frame) {
         x += dx * t;
         y += dy * t;
     }
-    constexpr double kSnap = 0.5;
+    // Match the sheet's one-metre core lattice. A half-cell snap resampled
+    // every vertex when walking, even though the wave clock stayed unchanged.
+    constexpr double kSnap = 1.0;
     return {std::floor(x / kSnap) * kSnap, std::floor(y / kSnap) * kSnap};
 }
 
@@ -208,9 +210,11 @@ void WaterPass::collect(const engine::Frame& frame, engine::DrawQueue& queue) {
             item.bindings = pageFragmentBindings_;
             item.vertexBindings = pageBindings_;
             item.vertex[0] = drawn.vertices;
+            item.vertexOffset[0] = drawn.vertexOffset;   // pooled page (GpuTerrain)
             item.vertexStreams = 1;
             item.index = drawn.indices;
             item.indexSize = SDL_GPU_INDEXELEMENTSIZE_32BIT;
+            item.firstIndex = drawn.firstIndex;
             item.indexCount = drawn.waterIndices; // surface only
             item.hasOwnData = item.ownToVertex = true;
             std::copy(drawn.parameters.begin(), drawn.parameters.end(), item.own);

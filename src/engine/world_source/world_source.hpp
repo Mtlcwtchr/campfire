@@ -6,8 +6,8 @@
 //   <root>/metadata.world          the schema, which block type each layer is,
 //                                  and every chunk there is with its layers'
 //                                  hashes - the commit, written last
-//   <root>/chunks/+0001_-0002.wchunk   one 32 km square (128 x 128 samples at
-//                                  256 m), a block per layer (world_store's
+//   <root>/chunks/+0001_-0002.wchunk   one 32 km square (128, 256 or 512
+//                                  samples per side), a block per layer
 //                                  chunk container, kind Source)
 //   <root>/indexes/vectors.idx     stable id -> kind, bounds, chunks it touches
 //   <root>/indexes/regions.idx     categorical layer -> id -> chunks, bounds
@@ -106,18 +106,19 @@ Bounds boundsOf(const Feature& feature);
 // value for all of them.
 struct Tile {
     std::uint8_t channels = 1;
+    std::uint16_t side = 128;               // samples per side; 32 768 m / sample_m
     std::vector<std::uint16_t> values;    // dense, or empty when uniform
     std::vector<std::uint16_t> uniform;   // one per channel when uniform
     [[nodiscard]] bool isUniform() const { return values.empty(); }
     [[nodiscard]] std::uint16_t at(std::int64_t x, std::int64_t y, std::uint8_t channel) const {
-        return isUniform() ? uniform[channel] : values[std::size_t((y * kChunkSamples + x) * channels + channel)];
+        return isUniform() ? uniform[channel] : values[std::size_t((y * side + x) * channels + channel)];
     }
     // Dense, from whatever it is.
     void expand();
     // Back to one value where it is one.
     void settle();
 };
-Tile defaultTile(const RasterDesc& layer);
+Tile defaultTile(const RasterDesc& layer, std::int64_t side = kChunkSamples);
 
 // ---- the store ---------------------------------------------------------------------
 
@@ -148,6 +149,7 @@ public:
     [[nodiscard]] static bool exists(const std::filesystem::path& root);
 
     [[nodiscard]] const Schema& schema() const { return schema_; }
+    [[nodiscard]] std::int64_t chunkSamples() const { return schema_.world.samplesPerChunk(); }
     [[nodiscard]] const std::filesystem::path& root() const { return root_; }
     // A raster layer the package brings and the source has not had yet.
     bool addRaster(const RasterDesc& layer, std::string* why = nullptr);
@@ -176,6 +178,9 @@ public:
     [[nodiscard]] const RegionIndex& regions() const { return regions_; }
 
     // Sample coordinates to the chunk holding them, and back.
+    [[nodiscard]] ChunkKey chunkAtSample(std::int64_t sx, std::int64_t sy) const {
+        return {ChunkLevel::SourceChunk, world_store::floorDiv(sx, chunkSamples()), world_store::floorDiv(sy, chunkSamples())};
+    }
     [[nodiscard]] static ChunkKey chunkOfSample(std::int64_t sx, std::int64_t sy) {
         return {ChunkLevel::SourceChunk, world_store::floorDiv(sx, kChunkSamples), world_store::floorDiv(sy, kChunkSamples)};
     }

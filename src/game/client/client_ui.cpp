@@ -579,14 +579,16 @@ void ClientUi::editPanel(ui::Ui& ui, const ClientView& view, ClientActions& out)
     const float bottom = H - kStatus - 12;
     toolsRect_ = {x, y, w, bottom - y};
     ui.panel(toolsRect_);
-    // The stages in the order a world is made, two rows of them: the shape of
-    // the world first, then the ground by hand and what stands on it.
+    // The stages in the order a world is made, rows of them: the shape of
+    // the world first, then the ground by hand and what stands on it, then
+    // how the ground is painted.
     static constexpr const char* names[kEditTabs] = {"1 Size", "2 Land", "3 Coast", "4 Mountains",
-                                                     "5 Climate", "6 Sculpt", "7 Objects", "8 Import"};
+                                                     "5 Climate", "6 Sculpt", "7 Objects", "8 Import",
+                                                     "9 Ground"};
     const float tw4 = std::floor((w - 12) / 4.0f);
+    constexpr int kTabRows = (kEditTabs + 3) / 4;
     for (int i = 0; i < kEditTabs; ++i) {
-        const bool top = i < 4;
-        const Rect r{x + 6 + float(i % 4) * tw4, y + 6 + (top ? 0.0f : 34.0f), tw4, 30};
+        const Rect r{x + 6 + float(i % 4) * tw4, y + 6 + float(i / 4) * 34.0f, tw4, 30};
         if (ui.tab(id("edit.tab", i), r, names[i], int(tab) == i)) {
             tab = EditTab(i);
             out.tab = tab;
@@ -596,7 +598,7 @@ void ClientUi::editPanel(ui::Ui& ui, const ClientView& view, ClientActions& out)
     // them; at its foot, what the last change was (the world's shape: what
     // the editor says; the ground: what Undo would take back).
     const float foot = ui.textHeight(0.8f) + 24;
-    const float top = y + 6 + 34 + 30 + 8;
+    const float top = y + 6 + float(kTabRows - 1) * 34.0f + 30 + 8;
     const ui::Rect frame{x + 4, top, w - 8, bottom - foot - top};
     const ui::Rect content = ui.beginScroll(id("edit.scroll", int(tab)), frame);
     float cy = content.y + 6;
@@ -610,12 +612,22 @@ void ClientUi::editPanel(ui::Ui& ui, const ClientView& view, ClientActions& out)
         case EditTab::Terrain: terrainTools(ui, cx, cy, cw); break;
         case EditTab::Objects: objectTools(ui, cx, cy, cw); break;
         case EditTab::Import: importTab(ui, view, cx, cy, cw, out); break;
+        case EditTab::Ground: ground.draw(ui, cx, cy, cw); break;
     }
     ui.endScroll(cy + 6);
-    const std::string last = shapeTab(tab)
+    const std::string last = tab == EditTab::Ground
+            ? (ground.status().empty() ? std::string("Changes are saved as they are made") : ground.status())
+            : shapeTab(tab)
             ? (view.shape.status.empty() ? std::string("Nothing changed yet") : view.shape.status)
             : view.undoLabel.empty() ? "Nothing to undo yet" : "Last change: " + view.undoLabel;
     ui.text(x + 16, bottom - 14 - ui.textHeight(0.8f), ui.fit(last, w - 32, 0.8f), t.labelSoft, 0.8f);
+    // The Ground tab's choosing window, beside the panel and over the world.
+    if (tab == EditTab::Ground) {
+        const float left = x + w + 12;
+        ground.drawWindows(ui, {left, y, float(ui.width()) - left - 12, bottom - y});
+    } else if (ground.browsing()) {
+        ground.closeWindows();
+    }
 }
 
 namespace {
@@ -846,13 +858,89 @@ void ClientUi::importTab(ui::Ui& ui, const ClientView& view, float x, float& y, 
     y += 38;
     if (!shape.importLine.empty()) y += ui.paragraph(x, y, w, shape.importLine, t.label, 0.85f) + 8;
 
+    // The same maps, made by the generator: at any time, into the selection
+    // or the whole world, one layer at a time - the heights, then the control
+    // maps over whatever heights there are - and then the stages below, as
+    // for an import.
+    section(ui, x, y, w, "OR GENERATE THEM");
+    y += ui.paragraph(x, y, w, "Instead of importing: the generator makes the maps, layer by layer. 1 Heights - "
+                               "continents, plates, relief and weathering, no climate and no water. 2 Control maps - "
+                               "moisture, forest, mountains and erosion, worked out from the heights there are "
+                               "(generated or imported). Then drainage and water below.",
+                      t.labelSoft, 0.82f) + 8;
+    {
+        auto& g = generateForm;
+        const auto* presets = view.presets;
+        const int presetCount = presets ? int(presets->size()) : 0;
+        // The dials a preset stands for, taken when it is chosen.
+        const auto takePreset = [&](int index) {
+            g.preset = index;
+            if (index < 0 || index >= presetCount) return;
+            const auto& p = (*presets)[std::size_t(index)].params;
+            g.seaPercent = float(p.seaPercent);
+            g.erosionPasses = float(p.erosionPasses);
+            g.rainPercent = float(p.rainfallPercent);
+        };
+        if (g.preset < 0 && presetCount > 0) takePreset(0);
+        if (presetCount > 0) {
+            ui.text(x, y + 6, "Preset", t.label, 0.9f);
+            const float bw = 26, lx = x + 70, lw = w - 70 - 2 * bw - 8;
+            if (ui.button(id("gen.preset", 0), {lx, y, bw, 26}, "<", presetCount > 1))
+                takePreset((g.preset + presetCount - 1) % presetCount);
+            const auto& preset = (*presets)[std::size_t(std::clamp(g.preset, 0, presetCount - 1))];
+            ui.textCentred({lx + bw + 4, y, lw, 26}, preset.label.empty() ? preset.name : preset.label, t.accent, 0.9f);
+            if (ui.button(id("gen.preset", 1), {lx + bw + lw + 8, y, bw, 26}, ">", presetCount > 1))
+                takePreset((g.preset + 1) % presetCount);
+            y += 34;
+        }
+        ui.text(x, y, "Seed", t.label, 0.9f);
+        y += ui.textHeight(0.9f) + 4;
+        {
+            const float bw = 64;
+            ui.textField(id("gen.seed"), {x, y, w - bw - 6, 28}, g.seed, "a number or any word", 64);
+            if (ui.button(id("gen.seed.new"), {x + w - bw, y, bw, 28}, "New")) {
+                std::random_device rd;
+                g.seed = std::to_string(((std::uint64_t(rd()) << 32) | rd()) % 1000000000ull);
+            }
+            y += 36;
+        }
+        ui.checkbox(id("gen.own"), {x, y, w, 26}, "Each region its own seed", g.ownSeeds);
+        y += 32;
+        sliderRow(ui, id("gen.sea"), x, y, w, "Sea", std::to_string(int(std::lround(g.seaPercent))) + " %", g.seaPercent,
+                  0, 100, false);
+        sliderRow(ui, id("gen.erosion"), x, y, w, "Weathering", std::to_string(int(std::lround(g.erosionPasses))) + " passes",
+                  g.erosionPasses, 0, 12, false);
+        sliderRow(ui, id("gen.rain"), x, y, w, "Rain", std::to_string(int(std::lround(g.rainPercent))) + " %", g.rainPercent,
+                  20, 250, false);
+        sliderRow(ui, id("gen.variation"), x, y, w, "Control maps wander",
+                  std::to_string(int(std::lround(g.variation))) + " %", g.variation, 0, 200, false);
+        const std::string target = shape.selectedRegions > 0
+                                           ? std::to_string(shape.selectedRegions) +
+                                                 (shape.selectedRegions == 1 ? " region" : " regions")
+                                           : std::string("the whole world");
+        const bool idle = !shape.importing && !shape.building;
+        if (ui.button(id("gen.heights"), {x, y, w, 36}, shape.importing ? "Working ..." : "1  Generate heights into " + target,
+                      t.accent, t.ink, idle)) {
+            g.featherKm = f.featherKm;
+            out.shape.generateHeights = g;
+        }
+        y += 42;
+        const std::string over = shape.selectedRegions > 0 ? " (selected)" : " (all with heights)";
+        if (ui.button(id("gen.controls"), {x, y, w, 30}, "2  Generate control maps" + over,
+                      idle && shape.importedRegions > 0)) {
+            g.featherKm = f.featherKm;
+            out.shape.generateControls = g;
+        }
+        y += 38;
+    }
+
     // An import is the heights and the masks. What is worked out from them
     // is asked for a stage at a time, so a big import is looked at before
     // anything is drained or any river is fitted to it.
-    section(ui, x, y, w, "WORK OUT THE IMPORTED GROUND");
-    y += ui.paragraph(x, y, w, "An import brings heights and control maps only. Take the selected imported regions "
-                               "(or all of them) further one step at a time. Drainage breaches the heights' hollows "
-                               "and works out valleys and climate; water adds rivers and lakes on top.",
+    section(ui, x, y, w, "WORK OUT THE GROUND");
+    y += ui.paragraph(x, y, w, "Imported or generated, the heights and control maps come alone. Take the selected "
+                               "regions (or all of them) further one step at a time: 3 drainage breaches the heights' "
+                               "hollows and works out valleys and climate; 4 water adds rivers and lakes on top.",
                       t.labelSoft, 0.82f) + 8;
     {
         const auto& s = shape.importedStages;
@@ -862,10 +950,10 @@ void ClientUi::importTab(ui::Ui& ui, const ClientView& view, float x, float& y, 
     }
     const bool canStage = shape.importedRegions > 0 && !shape.importing && !shape.building;
     const std::string scope = shape.selectedRegions > 0 ? " (selected)" : " (all imported)";
-    if (ui.button(id("import.stage.drain"), {x, y, w, 30}, "Drainage & climate" + scope, canStage))
+    if (ui.button(id("import.stage.drain"), {x, y, w, 30}, "3  Drainage & climate" + scope, canStage))
         out.shape.importStage = generation::RegionStage::Relief;
     y += 36;
-    if (ui.button(id("import.stage.water"), {x, y, w, 30}, "Rivers & lakes" + scope, canStage))
+    if (ui.button(id("import.stage.water"), {x, y, w, 30}, "4  Rivers & lakes" + scope, canStage))
         out.shape.importStage = generation::RegionStage::Water;
     y += 36;
     if (ui.button(id("import.stage.heights"), {x, y, w, 30}, "Back to heights only" + scope, canStage))
@@ -1009,6 +1097,7 @@ void ClientUi::statusBar(ui::Ui& ui, const ClientView& view) {
                        : tab == EditTab::Size    ? "Add or take away regions at any side: nothing is computed"
                        : tab == EditTab::Coast   ? "Set the coast and the ground, then work out the sketched land"
                        : tab == EditTab::Import  ? "Left mouse: select a region    Alt: take it away    Enter: build"
+                       : tab == EditTab::Ground  ? "Changes reach the picture within a second    Presets keep whole sets"
                                                  : "Left mouse: paint    Alt: take away    [ ]: size    Enter: build    Ctrl+Z: undo";
     const float room = W - ui.textWidth(where, 0.85f) - 48;
     ui.textRight(W - 12, ty, ui.fit(keys, room, 0.85f), t.labelSoft, 0.85f);
@@ -1025,7 +1114,7 @@ void ClientUi::hints(ui::Ui& ui, const ClientView& view) {
     const float alpha = float(std::clamp((kFor - shown) / kFade, 0.0, 1.0));
     const auto& t = ui.theme();
     const std::string text =
-            "Right mouse: look    WASD: move    Q / E: down / up    Wheel: zoom    V: view    Tab: edit    Esc: menu";
+            "WASD: run    Shift: sprint    Alt: walk    Space: jump    Mouse: look    V: 3rd / 1st / map    C: free camera    Tab: edit    Esc: menu";
     const float w = std::min(float(ui.width()) - 24, ui.textWidth(text, 0.9f) + 40);
     const Rect pill{std::round((float(ui.width()) - w) * 0.5f), float(ui.height()) - 64, w, 36};
     ui.roundRect(pill, t.barTop.withAlpha(0.88f * alpha), 18);

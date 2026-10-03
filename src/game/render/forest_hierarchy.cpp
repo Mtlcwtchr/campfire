@@ -249,19 +249,7 @@ void ForestHierarchy::update(const engine::Frame& frame,const Inputs& in) {
     const double reach=in.drawDistance;
     const int top=engine::render::kHierarchyLevels-1;
     const double topCell=cellOf({0,0,top});
-    std::vector<ImpostorKey> roots;
-    const double x0=std::max(in.bounds.minX,ex-reach),x1=std::min(in.bounds.maxX,ex+reach);
-    const double y0=std::max(in.bounds.minY,ey-reach),y1=std::min(in.bounds.maxY,ey+reach);
-    if (x0<x1 && y0<y1) {
-        for (double y=std::floor(y0/topCell)*topCell;y<y1;y+=topCell)
-            for (double x=std::floor(x0/topCell)*topCell;x<x1;x+=topCell) roots.push_back(engine::render::hierarchyKey(top,x+1,y+1));
-    }
-    // Nearest first, so a visit budget cuts the far edge rather than a side.
-    std::sort(roots.begin(),roots.end(),[&](const auto& a,const auto& b) {
-        const auto d=[&](const ImpostorKey& k){const double c=topCell*.5,dx=double(k.x)+c-ex,dy=double(k.y)+c-ey;return dx*dx+dy*dy;};
-        return d(a)!=d(b)?d(a)<d(b):a<b;
-    });
-    const auto* m=engine::cullMatrix(frame.scene);
+const auto* m=engine::cullMatrix(frame.scene);
     const auto frustum=[&](double minX,double minY,double minZ,double maxX,double maxY,double maxZ) {
         for (int plane=0;plane<4;++plane) {
             const int row=plane<2?0:4;const double sign=plane%2?-1:1;
@@ -272,6 +260,31 @@ void ForestHierarchy::update(const engine::Frame& frame,const Inputs& in) {
         }
         return true;
     };
+    // The roots: only those within reach and in the frustum, each with its
+    // distance worked out once. Over a map view the reach is the continent -
+    // tens of thousands of two-kilometre cells - and sorting all of them every
+    // frame, distance recomputed in the comparison, was the costliest thing
+    // the far forest did on the frame thread.
+    std::vector<std::pair<double,ImpostorKey>> near;
+    const double x0=std::max(in.bounds.minX,ex-reach),x1=std::min(in.bounds.maxX,ex+reach);
+    const double y0=std::max(in.bounds.minY,ey-reach),y1=std::min(in.bounds.maxY,ey+reach);
+    if (x0<x1 && y0<y1) {
+        for (double y=std::floor(y0/topCell)*topCell;y<y1;y+=topCell)
+            for (double x=std::floor(x0/topCell)*topCell;x<x1;x+=topCell) {
+                const auto key=engine::render::hierarchyKey(top,x+1,y+1);
+                const double kx=double(key.x),ky=double(key.y);
+                const double gx=std::max({kx-ex,0.0,ex-kx-topCell}),gy=std::max({ky-ey,0.0,ey-ky-topCell});
+                if (gx*gx+gy*gy>reach*reach ||
+                    !frustum(kx,ky,in.bounds.low,kx+topCell,ky+topCell,in.bounds.high+60)) continue;
+                const double c=topCell*.5,dx=kx+c-ex,dy=ky+c-ey;
+                near.push_back({dx*dx+dy*dy,key});
+            }
+    }
+    // Nearest first, so a visit budget cuts the far edge rather than a side.
+    std::sort(near.begin(),near.end());
+    std::vector<ImpostorKey> roots;
+    roots.reserve(near.size());
+    for (const auto& [d,key]:near) roots.push_back(key);
     std::vector<ImpostorKey> resident;
     // Key -> slot for what is complete on the GPU, once per frame: the cut
     // asks it for every visited node, and a scan of every slot each time was

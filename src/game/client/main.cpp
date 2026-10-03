@@ -230,10 +230,16 @@ int main(int argc, char** argv) {
         else if (a == "--graphics-file" && i + 1 < argc) exploreOptions.graphicsFile = argv[++i];
         else if (a == "--shot-list" && i + 1 < argc) exploreOptions.shotList = argv[++i];
         else if (a == "--clean") exploreOptions.clean = true;
+        else if (a == "--character") exploreOptions.character = true;
+        else if (a == "--character-view" && i + 1 < argc) { exploreOptions.character = true; exploreOptions.characterView = std::atoi(argv[++i]); }
+        else if (a == "--character-distance" && i + 1 < argc) { exploreOptions.character = true; exploreOptions.characterDistance = std::atof(argv[++i]); }
+        else if (a == "--character-turn" && i + 1 < argc) exploreOptions.characterTurn = std::atof(argv[++i]);
+        else if (a == "--character-run" && i + 1 < argc) { exploreOptions.character = true; exploreOptions.characterRun = std::atof(argv[++i]); }
         else if (a == "--weather" && i + 1 < argc) {
             const std::string name = argv[++i];
             for (std::size_t p = 0; p < world::weather::kPresets.size(); ++p)
                 if (name == world::weather::kPresets[p]) exploreWeather = int(p);
+            if (name == "off") exploreWeather = -1;   // the weather window's "Weather: off"
         }
         else if (a == "--scene-view-back" && i + 1 < argc) exploreOptions.sceneViewBack = std::atof(argv[++i]);
         else if (a == "--graphics-panel" && i + 1 < argc) exploreOptions.graphicsTab = std::atoi(argv[++i]);
@@ -339,7 +345,7 @@ int main(int argc, char** argv) {
                                                    resolveSprites(), shotPath, shotZoom,
                                                    exploreAt, exploreFlight, exploreClose,
                                                    exploreTrace, shotFrame, exploreMenu,
-                                                    exploreCrowd, shotTime, "none", 0.0, exploreWeather, {},
+                                                    exploreCrowd, shotTime, "none", double(shotDay), exploreWeather, {},
                                                     {18.0f, 32.0f, 21.0f, 9.0f}, exploreOptions);
         if (gpuWindow) SDL_DestroyWindow(gpuWindow);
         SDL_Quit();

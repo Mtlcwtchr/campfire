@@ -19,6 +19,7 @@
 #if defined(__APPLE__)
 #include <mach/mach.h>
 #include <mach/thread_act.h>
+#include <mach/mach_vm.h>
 #endif
 
 namespace engine::profile {
@@ -81,7 +82,10 @@ std::uint64_t residentBytes() {
 // One thread's look, in the sampler's own preallocated buffers.
 struct Look {
     std::uint64_t id = 0;
-    pthread_t pthread = nullptr;
+    // From the kernel (THREAD_EXTENDED_INFO), not from the thread's pthread:
+    // a thread that is exiting has a pthread already freed, and reading it is
+    // a crash in the profiler - the engine starts and ends threads all the time.
+    char name[64]{};
     std::int64_t time = 0;
     bool waiting = false;
     std::uint32_t depth = 0;
@@ -100,9 +104,9 @@ std::size_t sampleOnce(std::uint64_t mainId, std::vector<Look>& looks) {
     for (mach_msg_type_number_t i = 0; i < count && used < looks.size(); ++i) {
         const thread_act_t t = list[i];
         if (t == self) continue;
-        thread_basic_info_data_t basic{};
-        mach_msg_type_number_t basicCount = THREAD_BASIC_INFO_COUNT;
-        if (thread_info(t, THREAD_BASIC_INFO, reinterpret_cast<thread_info_t>(&basic), &basicCount) != KERN_SUCCESS)
+        thread_extended_info_data_t basic{};
+        mach_msg_type_number_t basicCount = THREAD_EXTENDED_INFO_COUNT;
+        if (thread_info(t, THREAD_EXTENDED_INFO, reinterpret_cast<thread_info_t>(&basic), &basicCount) != KERN_SUCCESS)
             continue;
         thread_identifier_info_data_t ident{};
         mach_msg_type_number_t identCount = THREAD_IDENTIFIER_INFO_COUNT;
@@ -110,18 +114,14 @@ std::size_t sampleOnce(std::uint64_t mainId, std::vector<Look>& looks) {
             continue;
         Look& look = looks[used++];
         look.id = ident.thread_id;
-        look.pthread = pthread_from_mach_thread_np(t);
-        look.waiting = basic.run_state != TH_STATE_RUNNING;
+        std::memcpy(look.name, basic.pth_name, sizeof look.name);
+        look.name[sizeof look.name - 1] = 0;
+        look.waiting = basic.pth_run_state != TH_STATE_RUNNING;
         look.depth = 0;
         look.time = now();
         // A waiting thread is only counted as waiting - unless it is the main
         // one: what the frame waits on (the GPU, a lock) is the question.
         if (look.waiting && look.id != mainId) continue;
-        std::uintptr_t low = 0, high = 0;
-        if (look.pthread) {
-            high = std::uintptr_t(pthread_get_stackaddr_np(look.pthread));
-            low = high - pthread_get_stacksize_np(look.pthread);
-        }
         if (thread_suspend(t) != KERN_SUCCESS) continue;
         arm_thread_state64_t state{};
         mach_msg_type_number_t stateCount = ARM_THREAD_STATE64_COUNT;
@@ -129,9 +129,24 @@ std::size_t sampleOnce(std::uint64_t mainId, std::vector<Look>& looks) {
             constexpr std::uintptr_t kAddress = 0x0000FFFFFFFFFFFFull;   // no pointer signatures
             look.stack[look.depth++] = std::uintptr_t(arm_thread_state64_get_pc(state)) & kAddress;
             std::uintptr_t fp = std::uintptr_t(arm_thread_state64_get_fp(state)) & kAddress;
-            if (!low) {
-                low = std::uintptr_t(arm_thread_state64_get_sp(state)) & kAddress;
-                high = low + (8u << 20);
+            // The walk stays inside the mapping the stack pointer is in, as
+            // the kernel reports it: a stopped thread's stack cannot go away
+            // under it, and nothing outside it is read.
+            std::uintptr_t low = 0, high = 0;
+            {
+                mach_vm_address_t at = std::uintptr_t(arm_thread_state64_get_sp(state)) & kAddress;
+                mach_vm_size_t size = 0;
+                vm_region_basic_info_data_64_t region{};
+                mach_msg_type_number_t regionCount = VM_REGION_BASIC_INFO_COUNT_64;
+                mach_port_t object = MACH_PORT_NULL;
+                const mach_vm_address_t sp = at;
+                if (mach_vm_region(mach_task_self(), &at, &size, VM_REGION_BASIC_INFO_64,
+                                   reinterpret_cast<vm_region_info_t>(&region), &regionCount, &object) == KERN_SUCCESS &&
+                    at <= sp && (region.protection & VM_PROT_READ)) {
+                    low = std::uintptr_t(sp);
+                    high = std::uintptr_t(at + size);
+                }
+                if (object != MACH_PORT_NULL) mach_port_deallocate(mach_task_self(), object);
             }
             while (look.depth < kMaxDepth && fp >= low && fp + 16 <= high && (fp & 7) == 0) {
                 const auto* record = reinterpret_cast<const std::uintptr_t*>(fp);
@@ -166,8 +181,7 @@ void samplerLoop(Profiler& p) {
                     if (index > 0xFFFE) continue;
                     p.threadIndex.emplace(look.id, std::uint16_t(index));
                     Profiler::Known k{look.id, {}};
-                    char name[64]{};
-                    if (look.pthread) pthread_getname_np(look.pthread, name, sizeof name);
+                    const char* name = look.name;
                     k.info.main = look.id == p.mainId.load();
                     k.info.name = k.info.main ? std::string("main") : name[0] ? std::string(name) : "thread " + std::to_string(index);
                     p.threads.push_back(std::move(k));

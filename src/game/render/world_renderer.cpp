@@ -97,7 +97,7 @@ void WorldRenderer::holdThePicture() {
 
 void WorldRenderer::forgetTheWorld() {
     runner_.reset(); // pass destructors drain their workers while the lease is valid
-    collect_ = nullptr; sprites_ = nullptr; models_ = nullptr; foliage_ = nullptr; farTrees_ = nullptr; render_ = nullptr;
+    collect_ = nullptr; sprites_ = nullptr; models_ = nullptr; foliage_ = nullptr; farTrees_ = nullptr; character_ = nullptr; render_ = nullptr;
     cache_.clear();
     climate_ = {};
     shadows_.reset();
@@ -157,20 +157,24 @@ bool WorldRenderer::synchronize() {
     // Layer order is the shader's (terrain_layers.hlsli, GROUND_LAYERS): the
     // six blended classes first, then their climate/water/slope variants, then
     // the terrain categories' own grounds - the texture catalogue of
-    // content/config/terrain/layers.json (engine/biomes). All Poly Haven scans
-    // (CC0), see tools/terrain_set_polyhaven.py.
+    // content/config/terrain/layers.json (engine/biomes). Each source retains
+    // its provenance; an explicit stem also admits downloaded Fab textures.
     std::vector<std::string> maps;
     {
         std::vector<std::string> names;
         if (const auto registry = engine::biomes::active())
-            for (const auto& layer : registry->textureLayers()) names.push_back(layer.name);
+            for (const auto& layer : registry->textureLayers()) {
+                names.push_back(layer.name);
+                maps.push_back(layer.path.empty() ? "../terrain/ph/" + layer.name + "/ph_" + layer.name : "../" + layer.path);
+            }
         if (names.size() < std::size(engine::biomes::kBuiltInLayers)) {
+            maps.clear();
             names.assign(std::begin(engine::biomes::kBuiltInLayers), std::end(engine::biomes::kBuiltInLayers));
             for (const char* own : {"moon_dusted_04", "rubble", "mud_forest", "brown_mud_leaves_01", "burned_ground_01",
                                     "red_laterite_soil_stones"})
                 names.push_back(own);
         }
-        for (const auto& asset : names) maps.push_back("../terrain/ph/" + asset + "/ph_" + asset);
+        if (maps.empty()) for (const auto& asset : names) maps.push_back("../terrain/ph/" + asset + "/ph_" + asset);
     }
     auto* terrain = &collect_->gpuTerrain();
     drawing->add(std::make_unique<TerrainPass>(cache_, std::move(materials), maps, climate_, world_->climate(), shadows_->binding(), terrain))
@@ -204,7 +208,8 @@ bool WorldRenderer::synchronize() {
     // tools/make_foliage_cards.py. Without them the layers repeat the grass,
     // so the shader's indices always exist.
     {
-        constexpr std::size_t kFloraCards = 10;
+        // 10 drawn by make_foliage_cards.py, then 6 species from make_flower_cards.py.
+        constexpr std::size_t kFloraCards = 16, kDrawnCards = 10;
         const auto flora = device_.assets() / "../generated/foliage_cards";
         std::ifstream input(flora / "cards.json");
         const auto list = input ? nlohmann::json::parse(input, nullptr, false) : nlohmann::json();
@@ -216,6 +221,9 @@ bool WorldRenderer::synchronize() {
                 if (name.empty() || name.has_parent_path() || !std::filesystem::is_regular_file(flora / name)) break;
                 cards.push_back("../generated/foliage_cards/" + name.string());
             }
+        // Only the drawn ones so far: the species layers repeat the white flowers.
+        if (cards.size() == kDrawnCards)
+            while (cards.size() < kFloraCards) cards.push_back(cards[2]);
         if (cards.size() != kFloraCards) {
             std::cerr << "ground flora cards missing (run tools/make_foliage_cards.py); grass stands in\n";
             cards.clear();
@@ -238,6 +246,7 @@ bool WorldRenderer::synchronize() {
     foliage_ = drawing->add(std::make_unique<FoliagePass>(cache_, std::move(grass), shadows_->binding(), terrain));
     models_ = drawing->add(std::make_unique<SceneModelsPass>(preparation_->placement, shadows_->binding(), terrain));
     farTrees_ = drawing->add(std::make_unique<FarTreesPass>(shadows_->binding(), terrain));
+    character_ = drawing->add(std::make_unique<CharacterPass>(shadows_->binding()));
     const auto& map=world_->worldMap();
     const double worldWidth=double(map.width)*generation::kMetresPerCell;
     const double worldHeight=double(map.height)*generation::kMetresPerCell;
@@ -280,6 +289,16 @@ void WorldRenderer::pollBiomes() {
     const auto now = std::chrono::steady_clock::now();
     if (now - biomesPolled_ < std::chrono::seconds(1)) return;
     biomesPolled_ = now;
+    {
+        // The ground's texture laying (the ground panel's Textures section).
+        std::error_code ec;
+        const auto file = terrainLookFile();
+        const auto written = std::filesystem::last_write_time(file, ec);
+        if (ec || written != terrainLookWritten_) {
+            terrainLookWritten_ = ec ? std::filesystem::file_time_type{} : written;
+            terrainLook_.load(file);
+        }
+    }
     const auto dir = engine::biomes::defaultDirectory();
     const auto written = engine::biomes::registryWritten(dir);
     if (written == biomesWritten_) return;
@@ -335,6 +354,7 @@ bool WorldRenderer::draw(const client::Camera& camera, const WorldRenderSettings
         if (farTrees_) farTrees_->options(graphics.farTrees, graphics.farTreesStart);
     }
     foliage_->focus(cull.centreX, cull.centreY);
+    if (character_) character_->set(characterState_);
     foliage_->reach(settings.useGraphics ? graphics.foliageDistance : GraphicsSettings{}.foliageDistance);
     auto& terrain = collect_->gpuTerrain();
     terrain.stage(settings.stage);
@@ -371,9 +391,25 @@ bool WorldRenderer::draw(const client::Camera& camera, const WorldRenderSettings
     const float windLength = std::hypot(scalar(climate[3]), scalar(climate[4]));
     if (windLength > 0.001f) { scene.wind[0] = scalar(climate[3]) / windLength; scene.wind[1] = scalar(climate[4]) / windLength; }
     scene.wind[2] = local.air.wind;
+    // Long sea waves are forced at a fixed world reference, never at the
+    // camera. A tiny eye-dependent change in direction multiplied by world
+    // position (or strength multiplied by uptime) retimed every visible crest.
+    const auto swellClimate = field_->surfaceClimateAt(core::WorldPos{}).environment;
+    const float swellLength = std::hypot(scalar(swellClimate[3]), scalar(swellClimate[4]));
+    if (swellLength > 0.001f) {
+        scene.swellWind[0] = scalar(swellClimate[3]) / swellLength;
+        scene.swellWind[1] = scalar(swellClimate[4]) / swellLength;
+    }
+    const auto swellWeather = settings.weather.at(scalar(swellClimate[0]), scalar(swellClimate[2]),
+        0.0f, 0.0f, 0.0f, scalar(swellClimate[5]));
+    scene.swellWind[2] = swellWeather.air.wind;
     scene.table[6][0] = 0; scene.table[6][1] = 1; scene.table[6][2] = settings.potentialOnly ? 1 : 0;
     scene.table[6][3] = float(std::max(4.0, std::pow(2.0, std::round(std::log2(100.0 / std::max(0.001, camera.pixelsPerTile))))));
     std::copy(settings.floodBounds.begin(), settings.floodBounds.end(), scene.table[7]);
+    {
+        const auto look = terrainLook_.uniform();
+        std::copy(look.begin(), look.end(), scene.terrainLook);
+    }
     // Distance fog, from the draw distance: clear for the first third, then a
     // smooth rise to opaque at the draw distance itself. Inspection maps and
     // orthographic views measure no eye distance and are never fogged.
@@ -386,15 +422,21 @@ bool WorldRenderer::draw(const client::Camera& camera, const WorldRenderSettings
     const double altitude = camera.perspective() ? std::max(0.0, camera.eyePosition()[2] - camera.focusHeight) : 0.0;
     terrain.window(0.0);
     const double reach = std::max(detail, std::min(3000000.0, altitude * 4.0));
-    const bool fogged = settings.fog && camera.perspective() && settings.map == world::MapView::Natural;
-    scene.fog[0] = float(reach);
-    scene.fog[1] = float(reach * (settings.useGraphics ? graphics.fogStart : 0.3));
+    // Fog weather: the view closes in to a couple of kilometres, starting almost
+    // at the eye, whatever the draw distance. Only with the weather on.
+    const bool fogWeather = settings.weather.data[0][0] > 0.5f &&
+        int(settings.weather.data[0][3]) == world::weather::kFogPreset;
+    const bool fogged = (settings.fog || fogWeather) && camera.perspective() && settings.map == world::MapView::Natural;
+    scene.fog[0] = float(fogWeather ? std::min(reach, 2200.0) : reach);
+    scene.fog[1] = float(fogWeather ? 60.0 : reach * (settings.useGraphics ? graphics.fogStart : 0.3));
     scene.fog[2] = fogged ? 1.0f : 0.0f;
     // Where grass ends (FoliageVS fades over its last fifth).
     scene.fog[3] = float(settings.useGraphics ? graphics.foliageDistance : GraphicsSettings{}.foliageDistance);
     if (settings.useGraphics) {
         scene.look[0] = graphics.sunIntensity; scene.look[1] = graphics.ambient;
         scene.look[2] = graphics.exposure; scene.look[3] = 1.0f;
+        scene.grading[0] = graphics.brightness; scene.grading[1] = graphics.contrast;
+        scene.grading[2] = graphics.saturation; scene.grading[3] = 1.0f;
         scene.quality[0] = graphics.terrainBlend; scene.quality[1] = graphics.shadowSoftness;
         const bool sky = skyAvailable_ && graphics.skybox;
         for (int i = 0; i < 3; ++i) {

@@ -27,7 +27,9 @@ alpha 255.
     python3 tools/prepare_ue_foliage.py [--only lf_bush ms_wild_grass]
 """
 import argparse
+import hashlib
 import json
+import os
 import re
 import struct
 import sys
@@ -61,6 +63,18 @@ def accessor(doc, blob, index):
 
 
 def load_png(path):
+    if path.suffix.lower() == ".exr":
+        os.environ.setdefault("OPENCV_IO_ENABLE_OPENEXR", "1")
+        import cv2
+        pixels = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
+        if pixels is None:
+            raise ValueError("Cannot read HDR texture: " + str(path))
+        pixels = pixels[..., [2, 1, 0]]
+        image = Image.fromarray(np.rint(np.clip(pixels, 0, 1) * 255).astype(np.uint8))
+        if max(image.size) > MAX_EDGE:
+            ratio = MAX_EDGE / max(image.size)
+            image = image.resize((round(image.width * ratio), round(image.height * ratio)), Image.Resampling.LANCZOS)
+        return image
     with Image.open(path) as image:
         image.load()
         if max(image.size) > MAX_EDGE:
@@ -110,7 +124,7 @@ def colour_texture(material, raw):
             rgba.putalpha(255)
         return rgba
     opacity = [v for k, v in files.items() if OPACITY.search(k) or OPACITY.search(Path(v["file"]).stem)]
-    albedo = [v for k, v in files.items() if v not in opacity]
+    albedo = [v for k, v in files.items() if v not in opacity and not v.get("normal_map")]
     if not albedo:
         return None
     # Prefer the texture whose name says it is a base colour.
@@ -165,8 +179,10 @@ def prepare(entry):
         out = {"name": material["name"] if material else "none",
                "pbrMetallicRoughness": {"metallicFactor": 0.0, "roughnessFactor": 0.9}, "doubleSided": True}
         rgba = colour_texture(material, raw) if material else None
+        stem = (re.sub(r"[^A-Za-z0-9_]+", "_", material["name"]) + "_" +
+                hashlib.sha256(key.encode()).hexdigest()[:8]) if material else "none"
         if rgba is not None:
-            name = "textures/%s_rgba.png" % re.sub(r"[^A-Za-z0-9_]+", "_", material["name"])
+            name = "textures/%s_rgba.png" % stem
             rgba.save(into / name, compress_level=6)
             images.append({"uri": name, "mimeType": "image/png"})
             textures.append({"source": len(images) - 1})
@@ -174,6 +190,15 @@ def prepare(entry):
             if masked(material):
                 out["alphaMode"] = "MASK"
                 out["alphaCutoff"] = 0.5
+        normals = [v for v in material.get("files", {}).values() if v.get("normal_map")] if material else []
+        if normals:
+            pixels = np.array(load_png(raw / normals[0]["file"]).convert("RGB"))
+            pixels[..., 1] = 255 - pixels[..., 1]  # Unreal DirectX -> glTF OpenGL
+            name = "textures/%s_normal.png" % stem
+            Image.fromarray(pixels).save(into / name)
+            images.append({"uri": name, "mimeType": "image/png"})
+            textures.append({"source": len(images) - 1})
+            out["normalTexture"] = {"index": len(textures) - 1}
         materials.append(out)
         material_index[key] = len(materials) - 1
         return material_index[key]
@@ -213,7 +238,7 @@ def prepare(entry):
     (into / (asset + ".bin")).write_bytes(bytes(bin_data))
     (into / (asset + ".gltf")).write_text(json.dumps(gltf, indent=1))
     (into / "source.json").write_text(json.dumps({
-        "site": "unreal", "asset_id": asset, "asset_url": None, "name": asset,
+        "site": "unreal", "asset_id": asset, "asset_url": entry.get("source_url"), "name": asset,
         "license": LICENSE, "authors": None, "role": entry["role"], "biomes": entry.get("biomes"),
         "heavy": False, "gltf": asset + ".gltf", "variants": variants,
         "packages": [v["mesh"] for v in variants], "export_errors": export["errors"]}, indent=2) + "\n")
@@ -235,7 +260,7 @@ def main():
             continue
         try:
             n, tris, textures = prepare(entry)
-            print("  %-22s %-14s %2d variants  %8d tris  %d colour textures" % (
+            print("  %-22s %-14s %2d variants  %8d tris  %d textures" % (
                 entry["asset_id"], entry["role"], n, tris, textures))
         except Exception as error:
             print("  %-22s FAILED %s" % (entry["asset_id"], error))
@@ -245,4 +270,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-

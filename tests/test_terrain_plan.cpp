@@ -1840,6 +1840,7 @@ TEST(terrain_probe_walk_underfoot) {
     struct Copies {
         std::size_t blocks = 0, uploads = 0, newBase = 0, restitched = 0, interpolated = 0, noop = 0, bytes = 0;
     } copies;
+    TerrainPlan::CopyCounts why;
     const auto shown = [](const TerrainPlan::Block& b, const AdaptiveVertex& v) {
         const auto& m = *b.mesh;
         const auto i = std::size_t(v.y) * (m.cells + 1) + v.x;
@@ -1855,6 +1856,9 @@ TEST(terrain_probe_walk_underfoot) {
         step(cameraAt(px, py));
         if (!plan || plan == previous) continue;
         ++count.plans;
+        why.stitchCopies += plan->copies.stitchCopies; why.stitchReused += plan->copies.stitchReused;
+        why.displayMorphOnly += plan->copies.displayMorphOnly; why.displayRestitched += plan->copies.displayRestitched;
+        why.displayNewBase += plan->copies.displayNewBase; why.displayNoChange += plan->copies.displayNoChange;
         {
             std::unordered_map<std::int64_t, const TerrainPlan::Block*> before;
             for (const auto& b : previous->coverage) before.emplace(world::tileKeyOf(b.tile), &b);
@@ -1903,4 +1907,8 @@ TEST(terrain_probe_walk_underfoot) {
                 copies.blocks, count.plans, copies.uploads, double(copies.uploads) / std::max(1, count.plans),
                 double(copies.bytes) / 1024.0 / std::max(1, count.plans), copies.newBase, copies.restitched,
                 copies.interpolated, copies.noop, sizeof(AdaptiveVertex));
+    std::printf("planner side: seam copies %zu (identical seams reused %zu); display copies: morph only %zu, "
+                "re-seamed %zu, new base %zu; display copies with no visible change %zu\n",
+                why.stitchCopies, why.stitchReused, why.displayMorphOnly, why.displayRestitched, why.displayNewBase,
+                why.displayNoChange);
 }

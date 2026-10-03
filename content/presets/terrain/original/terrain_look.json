@@ -1,0 +1,8 @@
+{
+ "_comment": "How the ground's textures are laid, for every material (terrain_material.hlsli). tile_scale: times every material's own tile size. distance_octaves: how many times the scan may double its size as it shrinks on the screen (0: one size everywhere). octave_start_texels: texels a pixel at which the next octave starts. macro_variation: the broad light/dark variation over the scan.",
+ "tile_scale": 1.0,
+ "distance_octaves": 3.0,
+ "octave_start_texels": 8.0,
+ "macro_variation": 1.0
+}
+

@@ -42,7 +42,8 @@ const char* brushHint(BrushKind kind) {
 
 const char* modelName(std::uint32_t model) {
     static constexpr const char* names[] = {"Broadleaf tree", "Pine", "Bush", "Rock",
-                                            "Mushrooms", "Fallen log", "Stump", "Branch"};
+                                            "Mushrooms", "Fallen log", "Stump", "Branch", "Grey cliff", "Warm cliff",
+                                            "Moss cushion", "Fern", "Dense shrub", "Low shrub"};
     return model < std::size(names) ? names[model] : "Object";
 }
 
@@ -201,4 +202,3 @@ decor::ScatterBounds boundsAround(double x, double y, double radius) {
 }
 
 } // namespace world::tools
-

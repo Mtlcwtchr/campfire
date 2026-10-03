@@ -19,46 +19,110 @@ bool accepts(const camera::ViewState& v, const RepresentationCandidate& c,
     return m.errorPx <= error * factor && m.parallaxErrorPx <= v.quality.parallaxErrorPx * factor;
 }
 }
-RepresentationMetrics representationMetrics(const camera::ViewState& view,
-        const RepresentationBounds& bounds, const RepresentationCandidate& candidate) {
-    RepresentationMetrics m;
-    const double scale = view.pixelsPerMetre(bounds.centre, bounds.radius);
-    m.projectedRadiusPx = bounds.radius * scale;
-    m.viewAngle = std::acos(std::clamp(camera::dot(view.directionFrom(bounds.centre),
-                            camera::normalized(candidate.bakedDirection)), -1.0, 1.0));
-    m.errorPx = (candidate.errorMetres + candidate.angularErrorMetres *
-                2.0 * std::sin(m.viewAngle * 0.5)) * scale;
-    const auto direction = view.directionFrom(bounds.centre);
-    const double along = camera::dot(view.velocity, direction);
+namespace {
+// What one instance's metrics share whatever the candidate: the projection,
+// the direction to it and the parallax lever. Worked out once an instance,
+// not once a candidate - each was a tangent, a square root or a normalisation,
+// and the selector asks for several candidates of every visible instance.
+struct Shared {
+    double scale = 0, radius = 0, parallax = 0;
+    camera::Vec3 direction{};
+};
+// What a view makes of every instance it is asked about - whether it is
+// valid, its projection scale, its unit forward - worked out once a view, not
+// once an instance: the selector is called for every visible instance of the
+// frame with the same view, and pixelsPerMetre re-validated it, normalised
+// its forward and took a tangent each time. Keyed on the fields those depend
+// on, so a changed view is never answered from the old one.
+struct Prepared {
+    camera::Vec3 position{}, forward{}, unit{};
+    double fovY = 0, nearPlane = 0, orthographicScale = 0;
+    int viewportWidth = 0, viewportHeight = 0;
+    bool orthographic = false, ok = false;
+    double projection = 0;
+    bool same(const camera::ViewState& v) const {
+        return position == v.position && forward == v.forward && fovY == v.fovY && nearPlane == v.nearPlane &&
+               orthographicScale == v.orthographicScale && viewportWidth == v.viewportWidth &&
+               viewportHeight == v.viewportHeight && orthographic == v.orthographic;
+    }
+};
+const Prepared& prepared(const camera::ViewState& view) {
+    thread_local Prepared p;
+    thread_local bool filled = false;
+    if (filled && p.same(view)) return p;
+    p.position = view.position; p.forward = view.forward; p.fovY = view.fovY; p.nearPlane = view.nearPlane;
+    p.orthographicScale = view.orthographicScale; p.viewportWidth = view.viewportWidth;
+    p.viewportHeight = view.viewportHeight; p.orthographic = view.orthographic;
+    p.ok = view.valid();
+    p.projection = view.projectionScale();
+    p.unit = camera::normalized(view.forward);
+    filled = true;
+    return p;
+}
+// ViewState::pixelsPerMetre, from the prepared view (the same arithmetic).
+double pixelsPerMetre(const Prepared& p, camera::Vec3 centre, double radius) {
+    if (!p.ok) return 0;
+    if (p.orthographic) return p.orthographicScale;
+    const double depth = camera::dot(camera::subtract(centre, p.position), p.unit);
+    if (depth + radius <= 0) return 0;
+    return p.projection / std::max(p.nearPlane, depth - std::max(0.0, radius));
+}
+Shared shared(const camera::ViewState& view, const RepresentationBounds& bounds) {
+    Shared s;
+    const Prepared& p = prepared(view);
+    s.scale = pixelsPerMetre(p, bounds.centre, bounds.radius);
+    s.radius = bounds.radius;
+    s.direction = view.directionFrom(bounds.centre);
+    const double along = camera::dot(view.velocity, s.direction);
     const double lateral = std::sqrt(std::max(0.0, camera::dot(view.velocity, view.velocity) - along*along));
     if (!view.orthographic) {
         const double distance = std::max(view.nearPlane,
-            camera::dot(camera::subtract(bounds.centre, view.position), camera::normalized(view.forward)) - bounds.radius);
-        m.parallaxErrorPx = candidate.residualDepth * lateral *
-            std::clamp(view.quality.lookaheadSeconds, 0.0, 2.0) * view.projectionScale() / (distance * distance);
+            camera::dot(camera::subtract(bounds.centre, view.position), p.unit) - bounds.radius);
+        s.parallax = lateral * std::clamp(view.quality.lookaheadSeconds, 0.0, 2.0) * p.projection /
+                     (distance * distance);
     }
+    return s;
+}
+RepresentationMetrics metricsFrom(const Shared& s, const RepresentationCandidate& candidate) {
+    RepresentationMetrics m;
+    m.projectedRadiusPx = s.radius * s.scale;
+    // 2 sin(angle / 2) between two unit vectors is the chord between them.
+    const auto baked = camera::normalized(candidate.bakedDirection);
+    const auto apart = camera::subtract(s.direction, baked);
+    const double chord = std::min(2.0, std::sqrt(camera::dot(apart, apart)));
+    m.viewAngle = 2.0 * std::asin(chord * 0.5);
+    m.errorPx = (candidate.errorMetres + candidate.angularErrorMetres * chord) * s.scale;
+    m.parallaxErrorPx = candidate.residualDepth * s.parallax;
     return m;
+}
+} // namespace
+
+RepresentationMetrics representationMetrics(const camera::ViewState& view,
+        const RepresentationBounds& bounds, const RepresentationCandidate& candidate) {
+    return metricsFrom(shared(view, bounds), candidate);
 }
 RepresentationDecision selectRepresentation(const camera::ViewState& view,
         const RepresentationBounds& bounds, std::span<const RepresentationCandidate> candidates,
         std::size_t previous, bool hasChildren, bool allowCull) {
     RepresentationDecision result;
-    if (!view.valid() || !std::isfinite(bounds.radius) || bounds.radius < 0) {
+    const Prepared& ready = prepared(view);
+    if (!ready.ok || !std::isfinite(bounds.radius) || bounds.radius < 0) {
         result.qualityExceeded = true; return result;
     }
     for (double x : bounds.centre) if (!std::isfinite(x)) { result.qualityExceeded = true; return result; }
     result.residencySeconds = std::clamp(view.quality.residencySeconds, 0.0, 10.0);
-    const double scale = view.pixelsPerMetre(bounds.centre, bounds.radius);
+    const double scale = pixelsPerMetre(ready, bounds.centre, bounds.radius);
     if (scale == 0 || (allowCull && bounds.radius * 2.0 * scale < 0.5)) {
         result.kind = RepresentationKind::Cull; return result;
     }
     const double h = std::clamp(view.quality.hysteresis, 0.0, 0.45);
+    const Shared here = shared(view, bounds);
     double cost = std::numeric_limits<double>::infinity();
     std::size_t fallback = kNoRepresentation;
     for (std::size_t i = 0; i < candidates.size(); ++i) {
         const auto& candidate = candidates[i];
         if (!valid(candidate)) continue;
-        const auto metrics = representationMetrics(view, bounds, candidate);
+        const auto metrics = metricsFrom(here, candidate);
         if (!candidate.resident) {
             if (accepts(view, candidate, metrics, 1.0)) result.prefetchChildren = true;
             continue;
@@ -73,7 +137,7 @@ RepresentationDecision selectRepresentation(const camera::ViewState& view,
     if (result.candidate == kNoRepresentation) {
         if (!hasChildren && fallback != kNoRepresentation) {
             result.candidate = fallback; result.kind = RepresentationKind::Geometry;
-            result.metrics = representationMetrics(view, bounds, candidates[fallback]);
+            result.metrics = metricsFrom(here, candidates[fallback]);
             result.qualityExceeded = true;
         } else result.prefetchChildren = true;
     } else {

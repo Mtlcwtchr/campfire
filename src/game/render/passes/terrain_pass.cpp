@@ -225,7 +225,8 @@ void TerrainPass::collect(const engine::Frame& frame, engine::DrawQueue& queue) 
                             drawn.mesh->surfaceIndices / 3;
             }
             terrainRenderer_.submitSurface(queue,
-                {drawn.vertices, drawn.indices, SDL_GPU_INDEXELEMENTSIZE_32BIT, {}},
+                {drawn.vertices, drawn.indices, SDL_GPU_INDEXELEMENTSIZE_32BIT, {drawn.firstIndex, 0},
+                 drawn.vertexOffset},
                 *drawn.mesh, pages_->skirts(), {drawn.parameters, true, true});
         }
         return;

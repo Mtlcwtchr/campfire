@@ -76,6 +76,9 @@ struct Scene {
     // Lighting: sun intensity, sky/ambient intensity, exposure, provided (1).
     // Zero `w` means "not set" and shaders keep their built-in look.
     float look[4]{};
+    // The grade's own dials: brightness, contrast, saturation (1 = the built-in
+    // look), and w = 1 when they are set.
+    float grading[4]{};
     // Sky: horizon rgb + skybox enabled, zenith rgb + panorama rotation (rad).
     // Without a skybox the horizon/zenith colours are still the fog colour.
     float skyHorizon[4]{};
@@ -96,6 +99,13 @@ struct Scene {
     // (the game's world editor draws its region grid, selection and brush from
     // it). All zero when nothing is being edited.
     float editor[kSceneEditorVectors][4]{};
+    // How the ground's textures are laid, game-defined like `parameters`
+    // (content/config/terrain_look.json, terrain_material.hlsli): tile size
+    // multiplier, distance tiling octaves, the texels a pixel at which the
+    // next octave starts, macro variation. All zero: the shader's defaults.
+    float terrainLook[4]{};
+    // World-anchored forcing for long water waves, independent of eye position.
+    float swellWind[4]{};
 };
 
 // What CPU culling/LOD code must read instead of the drawing camera.

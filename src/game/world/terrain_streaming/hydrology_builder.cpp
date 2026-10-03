@@ -147,7 +147,7 @@ std::uint64_t fingerprintOf(const generation::WorldMapData& world) {
 // a fraction along it. Zero at both ends, so the network stays joined: a
 // course meanders between its junctions and arrives exactly where the next
 // one starts.
-Fixed meander(std::uint64_t seed, Fixed t) {
+[[maybe_unused]] Fixed meander(std::uint64_t seed, Fixed t) {
     // One arch, its height and sign from the reach's own seed. This is
     // 4t(1-t), which is the shape of a sine arch and is exact in fixed point.
     const Fixed arch = t * (core::kOne - t) * Fixed::fromInt(4);
@@ -164,7 +164,7 @@ Fixed meander(std::uint64_t seed, Fixed t) {
 // is quick, and a channel of one width for its whole length is a milled slot.
 // A different wavelength from the pools below, so the two do not line up into
 // a string of beads.
-Fixed breadth(std::uint64_t seed, Fixed along) {
+[[maybe_unused]] Fixed breadth(std::uint64_t seed, Fixed along) {
     const std::uint64_t h = core::splitmix64(seed ^ 0x51ed270bd7373bfdull);
     const Fixed phase = Fixed::ratio(static_cast<std::int64_t>(h % 1000), 1000);
     const Fixed u = along * Fixed::ratio(13, 10) + phase;
@@ -298,16 +298,12 @@ void absorbFootprintHoles(const generation::WorldMapData& world,
 // where they live and how often they run.
 // ---------------------------------------------------------------------------
 
-// The narrowest channel this world draws water in, in doublings of flow. Four
-// is five and a half metres across; three is past what a lattice sampled every
-// four metres can carry as water rather than as a dashed line.
+// Minimum natural headwater catchment, in doublings of flow. Smaller
+// catchments stay dry drainage. The drawn channels are at least eight metres
+// across so water remains continuous on the four-metre height lattice.
 constexpr std::uint8_t kNarrowestWetFlow = 4;
-// And what share of the carved network holds it: one valley in three. A share
-// rather than a number, because flow is the catchment above a cell and grows
-// with the whole map.
-constexpr std::int64_t kWetShareNumerator = 1, kWetShareDenominator = 3;
 // The narrowest and widest water this world draws, as half-widths in metres.
-constexpr std::int64_t kBrookHalfWidth = 4, kTrunkHalfWidth = 70;
+constexpr std::int64_t kBrookHalfWidth = 4, kTrunkHalfWidth = 90;
 // The widest a valley may be drawn. A valley wider than the drainage is
 // gathered around a point would be cut in some places and left uncut in
 // others, and that seam is worse than the steep bank it was widening away
@@ -336,37 +332,29 @@ Fixed depthFor(std::uint8_t flowLog) {
 // sized: what counts as a stream here, what the biggest river on the map is,
 // where the water stands, and which courses hold it.
 struct MacroHydrology {
-    const generation::WorldMapData* world = nullptr;
     std::uint8_t streamFlow = 255;
     std::uint8_t largestFlow = 0;
+    std::int64_t largestDischarge = 1;
     std::vector<Fixed> surface;
     std::vector<std::uint8_t> wet;
 
     // The same catchment is a stream in wet country and a dry wadi in a
-    // desert, and the map-wide share cannot see that.
-    [[nodiscard]] std::uint8_t streamFlowIn(const generation::WorldCell& cell) const {
+    // desert. The headwater threshold belongs to its basin.
+    [[nodiscard]] std::uint8_t streamFlowIn(const generation::WorldCell& cell,
+                                           std::uint8_t basinFlow) const {
         const std::int32_t shift = 2 - (static_cast<std::int32_t>(cell.moisture) * 4) / 255;
         return static_cast<std::uint8_t>(std::clamp<std::int32_t>(
-                static_cast<std::int32_t>(streamFlow) + shift,
-                std::max(kNarrowestWetFlow, world ? world->graphRiverFlow : std::uint8_t(0)), 15));
+                static_cast<std::int32_t>(basinFlow) + shift, kNarrowestWetFlow, 15));
     }
 
     // Width goes as the square root of the flow, which is what a real channel
     // does - but normalised against this map's own range rather than against a
     // table of absolute doublings. No world here has fifteen doublings in it,
     // and read absolutely every river on a small map came out the same width.
-    [[nodiscard]] Fixed halfWidthFor(std::uint8_t flowLog) const {
-        const std::int64_t bottom = kNarrowestWetFlow;
-        const std::int64_t top = std::max<std::int64_t>(largestFlow, bottom + 1);
-        const std::int64_t here = std::clamp<std::int64_t>(flowLog, bottom, top);
-        const std::int64_t steps = 8;
-        const std::int64_t up = ((here - bottom) * steps) / (top - bottom);
-        // kBrookHalfWidth * (kTrunkHalfWidth/kBrookHalfWidth)^(up/8), tabulated.
-        static const Fixed kStep[9] = {
-                Fixed::ratio(40, 10),  Fixed::ratio(59, 10),  Fixed::ratio(87, 10),
-                Fixed::ratio(128, 10), Fixed::ratio(187, 10), Fixed::ratio(275, 10),
-                Fixed::ratio(403, 10), Fixed::ratio(591, 10), Fixed::ratio(700, 10)};
-        return core::clamp(kStep[std::clamp<std::int64_t>(up, 0, steps)],
+    [[nodiscard]] Fixed halfWidthFor(std::int64_t discharge) const {
+        const Fixed share = Fixed::ratio(std::clamp<std::int64_t>(discharge, 0, largestDischarge),
+                                          largestDischarge);
+        return core::clamp(Fixed::fromInt(kTrunkHalfWidth) * core::sqrt(share),
                            Fixed::fromInt(kBrookHalfWidth), Fixed::fromInt(kTrunkHalfWidth));
     }
 
@@ -385,6 +373,105 @@ struct MacroHydrology {
     }
 };
 
+std::int64_t dischargeAt(const generation::WorldMapData& world, std::size_t cell) {
+    if (world.riverDischargeField.size() == world.cells.size())
+        return std::max(0, world.riverDischargeField[cell]);
+    return std::int64_t(1) << std::min<std::uint8_t>(world.cells[cell].drainSize, 15);
+}
+
+// Select complete drainage trees, starting with their main stems. A short
+// coastal gully never becomes a river merely because it crosses a percentile
+// threshold. Smaller branches belong to an accepted tree and must have enough
+// length and water to be a tributary of the stem they meet.
+void selectRiverTrees(MacroHydrology& hydro, const generation::WorldMapData& world,
+                      const std::vector<std::int32_t>& downstream,
+                      const std::vector<std::int32_t>& sinkFirst) {
+    const auto count = world.cells.size();
+    const auto dry = [&](std::size_t i) {
+        return i < world.waterPaintField.size() &&
+               world.waterPaintField[i] == std::uint8_t(generation::WaterPaint::Dry);
+    };
+    const double abundance = std::clamp(double(world.riverShare), 0.25, 3.0);
+    std::vector<std::int32_t> basin(count, -1), mainFeeder(count, -1);
+    std::vector<std::int32_t> length(count, 0);
+    const auto headFlow = [&](std::int64_t outletFlow) {
+        // Small streams may feed a large basin even on a continent whose
+        // independent rivers need much larger catchments (graphRiverFlow).
+        const auto minimum = std::int64_t(std::clamp(double(outletFlow) / (128.0 * abundance), 32.0, 512.0));
+        std::uint8_t log = kNarrowestWetFlow;
+        while ((std::int64_t(1) << log) < minimum) ++log;
+        return log;
+    };
+    for (const auto cell : sinkFirst) {
+        const auto i = std::size_t(cell);
+        if (world.cells[i].sea || dry(i)) continue;
+        const auto next = downstream[i];
+        basin[i] = next < 0 || world.cells[std::size_t(next)].sea || dry(std::size_t(next))
+                ? cell : basin[std::size_t(next)];
+    }
+    // Accumulate the length of the dominant eligible branch, upstream first.
+    // Once a stream starts, a drier cell downstream cannot interrupt it.
+    for (auto it = sinkFirst.rbegin(); it != sinkFirst.rend(); ++it) {
+        const auto i = std::size_t(*it);
+        if (basin[i] < 0) continue;
+        const auto log = hydro.streamFlowIn(world.cells[i], headFlow(dischargeAt(world, std::size_t(basin[i]))));
+        if (!length[i] && dischargeAt(world, i) < (std::int64_t(1) << log)) continue;
+        length[i] += generation::kMetresPerCell;
+        const auto next = downstream[i];
+        if (next < 0 || basin[std::size_t(next)] != basin[i]) continue;
+        const auto to = std::size_t(next);
+        const auto previous = mainFeeder[to];
+        if (previous < 0 || dischargeAt(world, i) > dischargeAt(world, std::size_t(previous)) ||
+            (dischargeAt(world, i) == dischargeAt(world, std::size_t(previous)) && length[i] > length[std::size_t(previous)])) {
+            mainFeeder[to] = *it;
+            length[to] = length[i];
+        }
+    }
+
+    const auto basinMinimum = std::max<std::int64_t>(
+            std::int64_t(1) << std::min<std::uint8_t>(world.graphRiverFlow, 15),
+            std::int64_t(std::max(256.0, double(hydro.largestDischarge) / 8.0) / abundance));
+    const auto mainLength = 10 * generation::kMetresPerCell;
+    const auto tributaryLength = std::max(4, int(std::lround(6.0 / abundance))) * generation::kMetresPerCell;
+    std::vector<std::int32_t> pending;
+    std::vector<std::uint8_t> selected(count, 0);
+    std::int32_t bestRoot = -1;
+    for (std::size_t i = 0; i < count; ++i) {
+        if (basin[i] != std::int32_t(i) || !length[i]) continue;
+        const auto next = downstream[i];
+        if (next >= 0 && dry(std::size_t(next))) continue;
+        if (length[i] >= 3 * generation::kMetresPerCell &&
+            (bestRoot < 0 || dischargeAt(world, i) > dischargeAt(world, std::size_t(bestRoot))))
+            bestRoot = std::int32_t(i);
+        if (dischargeAt(world, i) >= basinMinimum && length[i] >= mainLength)
+            pending.push_back(std::int32_t(i));
+    }
+    // A small island can still have its own river, even if no catchment meets
+    // the continental minimum. Do not rescue lone cells or one-cell gullies.
+    if (pending.empty() && bestRoot >= 0)
+        pending.push_back(bestRoot);
+    while (!pending.empty()) {
+        const auto cell = pending.back();
+        pending.pop_back();
+        const auto i = std::size_t(cell);
+        if (selected[i]) continue;
+        selected[i] = 1;
+        hydro.wet[i] = 1;
+        const auto main = mainFeeder[i];
+        if (main >= 0) pending.push_back(main);
+        const core::TilePos at{cell % world.width, cell / world.width};
+        for (int dir = 0; dir < core::kNeighbourCount; ++dir) {
+            const auto p = core::neighbour(at, dir);
+            if (!world.inBounds(p)) continue;
+            const auto j = std::size_t(p.y) * world.width + p.x;
+            if (downstream[j] != cell || std::int32_t(j) == main || basin[j] != basin[i]) continue;
+            if (length[j] < tributaryLength) continue;
+            if (double(dischargeAt(world, j)) * (3.0 * abundance) < double(dischargeAt(world, i))) continue;
+            pending.push_back(std::int32_t(j));
+        }
+    }
+}
+
 // Resolved once, in drainage order, over the whole map. A node has one head
 // shared by every tributary and by the reach leaving it, and wet runoff is
 // inherited downstream even where the local climate is dry: a rainfall
@@ -392,36 +479,19 @@ struct MacroHydrology {
 MacroHydrology resolveHydrology(const generation::WorldMapData& world,
                                 const std::vector<std::int32_t>& downstream) {
     MacroHydrology out;
-    out.world = &world;
     const auto count = world.cells.size();
     const std::int32_t width = world.width;
 
-    std::int64_t carved = 0;
-    std::int64_t above[16] = {};
-    for (const generation::WorldCell& cell : world.cells) {
+    for (std::size_t i = 0; i < count; ++i) {
+        const auto& cell = world.cells[i];
         if (cell.sea) continue;
         const std::uint8_t size = std::min<std::uint8_t>(cell.drainSize, 15);
-        if (carveStrength(size).raw <= 0) continue;   // a trickle carves nothing
-        ++carved;
-        ++above[size];
         if (size > out.largestFlow) out.largestFlow = size;
+        out.largestDischarge = std::max(out.largestDischarge, dischargeAt(world, i));
     }
-    std::int64_t running = 0;
-    std::uint8_t chosen = 15;
-    // The share is the world's own dial (WorldMapData::riverShare: more or
-    // fewer rivers on land made by hand), one in three when nobody set it.
-    const double share = std::clamp(double(kWetShareNumerator) / double(kWetShareDenominator) *
-                                            double(world.riverShare), 0.05, 0.9);
-    for (int size = 15; size >= 0; --size) {
-        running += above[size];
-        chosen = static_cast<std::uint8_t>(size);
-        // Exactly the integer rule when the dial is untouched: a world nobody
-        // set it on gets the streams it always had, to the cell.
-        if (world.riverShare == 1.0f ? running * kWetShareDenominator >= carved * kWetShareNumerator
-                                     : double(running) >= double(carved) * share)
-            break;
-    }
-    out.streamFlow = std::max({chosen, kNarrowestWetFlow, world.graphRiverFlow});
+    out.streamFlow = kNarrowestWetFlow;
+    while ((std::int64_t(1) << out.streamFlow) < std::clamp<std::int64_t>(out.largestDischarge / 512, 16, 256))
+        ++out.streamFlow;
 
     out.surface.assign(count, core::kZero);
     out.wet.assign(count, 0);
@@ -524,7 +594,7 @@ MacroHydrology resolveHydrology(const generation::WorldMapData& world,
                 const auto paint = i < world.waterPaintField.size()
                         ? static_cast<generation::WaterPaint>(world.waterPaintField[i]) : generation::WaterPaint::None;
                 out.wet[i] = !cell.sea && paint != generation::WaterPaint::Dry &&
-                             (cell.river || cell.drainSize >= out.streamFlowIn(cell) ||
+                             ((world.riverDischargeField.size() != count && cell.river) ||
                               paint == generation::WaterPaint::Course);
             }
     };
@@ -562,6 +632,8 @@ MacroHydrology resolveHydrology(const generation::WorldMapData& world,
             order.push_back(n);
         }
     }
+    if (world.riverDischargeField.size() == count)
+        selectRiverTrees(out, world, downstream, order);
     // Water inherited downstream - except into ground painted dry, where it
     // sinks (the water layer, WaterPaint::Dry): nothing painted dry is wet.
     const auto paintedDry = [&](std::size_t i) {
@@ -572,6 +644,15 @@ MacroHydrology resolveHydrology(const generation::WorldMapData& world,
         const auto next = downstream[static_cast<std::size_t>(*it)];
         if (next >= 0 && out.wet[static_cast<std::size_t>(*it)] && !paintedDry(static_cast<std::size_t>(next)))
             out.wet[static_cast<std::size_t>(next)] = 1;
+    }
+    // Size channels against the rivers actually kept. A rejected catchment
+    // must not make all remaining rivers narrower.
+    out.largestDischarge = 1;
+    out.largestFlow = 0;
+    for (std::size_t i = 0; i < count; ++i) {
+        if (!out.wet[i] || world.cells[i].sea) continue;
+        out.largestDischarge = std::max(out.largestDischarge, dischargeAt(world, i));
+        out.largestFlow = std::max(out.largestFlow, std::min<std::uint8_t>(world.cells[i].drainSize, 15));
     }
     return out;
 }
@@ -1634,17 +1715,11 @@ HydrologyGraph buildHydrologyGraph(const generation::WorldMapData& world) {
 
     // --- what carries water --------------------------------------------------
     //
-    // Not `WorldCell::river`. That flag is drawn above a threshold that scales
-    // with the size of the map, so on a continent it marks the trunks and
-    // nothing else: on seed 11 at 64 cells it is twelve cells of the whole
-    // world, against the eight hundred-odd courses the linter measures water
-    // in. A graph built from it would leave every stream on the map to be
-    // rediscovered per query, which is the thing this replaces.
-    //
-    // resolveHydrology answers it over the whole map - the blue lines, plus
-    // every catchment that clears its own cell's threshold, plus everything
-    // downstream of those - with no camera and no LOD in it. Dry drainage
-    // stays out: a gully is a valley, not a body.
+    // resolveHydrology selects whole drainage trees: main rivers with smaller
+    // branches feeding them. The map's percentile flags alone would keep
+    // disconnected coastal fragments, and accepting a share of every drainage
+    // gully would cover the land with short channels. Painted courses remain
+    // explicit inputs. Selection has no camera or LOD in it.
     MacroHydrology hydro = resolveHydrology(world, downstream);
     {
         const std::lock_guard<std::mutex> lock(lastFitsGuard);
@@ -1810,13 +1885,7 @@ HydrologyGraph buildHydrologyGraph(const generation::WorldMapData& world) {
 
         Fixed halfWidth = core::kZero;
         if (holdsWater) {
-            halfWidth = hydro.halfWidthFor(here.drainSize);
-            // Recover sub-octave discharge instead of quantising every river
-            // width to the integer drainSize.
-            if (world.riverDischargeField.size() == count && here.drainSize < 30) {
-                const auto flow = std::max(1, world.riverDischargeField[cell]);
-                halfWidth *= core::sqrt(Fixed::ratio(flow, std::int64_t(1) << here.drainSize));
-            }
+            halfWidth = hydro.halfWidthFor(dischargeAt(world, cell));
             const std::int32_t next = downstream[cell];
             if (next >= 0) {
                 const Fixed fall = core::max(core::kZero,
@@ -1898,6 +1967,21 @@ HydrologyGraph buildHydrologyGraph(const generation::WorldMapData& world) {
             mouth.valleyReach = core::max(mouth.valleyReach, last.valleyReach);
         }
 
+        // The cell centres of a D8 network sit on a lattice, so the polyline
+        // through them runs at nought, forty-five and ninety degrees and turns
+        // corners at every cell: the circuit-board look. Low-passed along the
+        // chain, with both ends (the junctions) pinned so the network stays
+        // joined, it becomes a line a spline can follow gracefully.
+        for (int pass = 0; pass < 3 && knots.size() > 2; ++pass) {
+            std::vector<WorldPos> relaxed(knots.size());
+            for (std::size_t i = 0; i < knots.size(); ++i) relaxed[i] = knots[i].position;
+            for (std::size_t i = 1; i + 1 < knots.size(); ++i) {
+                relaxed[i] = {(knots[i - 1].position.x + knots[i].position.x * Fixed::fromInt(2) + knots[i + 1].position.x) / Fixed::fromInt(4),
+                              (knots[i - 1].position.y + knots[i].position.y * Fixed::fromInt(2) + knots[i + 1].position.y) / Fixed::fromInt(4)};
+            }
+            for (std::size_t i = 0; i < knots.size(); ++i) knots[i].position = relaxed[i];
+        }
+
         // The segment's own summary is taken where it is largest, which is the
         // last of its cells that is still land.
         for (std::size_t n = chain.size(); n-- > 0;) {
@@ -1920,15 +2004,15 @@ HydrologyGraph buildHydrologyGraph(const generation::WorldMapData& world) {
         const auto upstreamOf = [&](std::size_t member) {
             const TilePos here = positionOf(member);
             std::size_t best = member;
-            std::uint8_t most = 0;
+            std::int64_t most = -1;
             for (int dir = 0; dir < core::kNeighbourCount; ++dir) {
                 const TilePos n = core::neighbour(here, dir);
                 if (!world.inBounds(n)) continue;
                 const auto index = static_cast<std::size_t>(n.y) * width + n.x;
-                if (world.cells[index].sea) continue;
+                if (!flows(index)) continue;
                 if (downstream[index] != static_cast<std::int32_t>(member)) continue;
-                if (world.cells[index].drainSize >= most) {
-                    most = world.cells[index].drainSize;
+                if (dischargeAt(world, index) > most) {
+                    most = dischargeAt(world, index);
                     best = index;
                 }
             }
@@ -1956,6 +2040,9 @@ HydrologyGraph buildHydrologyGraph(const generation::WorldMapData& world) {
 
         const bool headwater = from.kind == RiverNodeKind::Source;
         segment.course.clear();
+        // The meander is laid on afterwards, along the whole run, so it is
+        // continuous across cell boundaries instead of kicking at each one.
+        std::vector<Fixed> wanders;
         for (std::size_t leg = 0; leg + 1 < knots.size(); ++leg) {
             const ReachPoint& a = knots[leg];
             const ReachPoint& b = knots[leg + 1];
@@ -2014,15 +2101,14 @@ HydrologyGraph buildHydrologyGraph(const generation::WorldMapData& world) {
             for (std::int64_t n = 0; n < steps; ++n) {
                 const Fixed t = Fixed::ratio(n, steps);
                 ReachPoint point;
-                point.position = {spline(p0.x, a.position.x, b.position.x, p3.x, t) +
-                                          (-dy / span) * meander(seed, t) * wander,
-                                  spline(p0.y, a.position.y, b.position.y, p3.y, t) +
-                                          (dx / span) * meander(seed, t) * wander};
+                point.position = {spline(p0.x, a.position.x, b.position.x, p3.x, t),
+                                  spline(p0.y, a.position.y, b.position.y, p3.y, t)};
+                wanders.push_back(wander);
                 point.surface = core::lerp(a.surface, b.surface, t);
                 // Width varies along the reach as well as depth. A channel of
                 // one width for its whole length is a milled slot, and that
                 // reads as machined however well the line itself wanders.
-                point.halfWidth = core::lerp(a.halfWidth, b.halfWidth, t) * breadth(seed, t);
+                point.halfWidth = core::lerp(a.halfWidth, b.halfWidth, t);
                 point.depth = core::lerp(a.depth, b.depth, t) * bedform(seed, t);
                 point.valleyReach = core::lerp(a.valleyReach, b.valleyReach, t);
                 // A spring grows out of its hillside over its first cell.
@@ -2036,6 +2122,55 @@ HydrologyGraph buildHydrologyGraph(const generation::WorldMapData& world) {
             }
         }
         segment.course.push_back(knots.back());
+        wanders.push_back(core::kZero);
+        {
+            // Arc length along the base line, and the meander as smooth value
+            // noise of it: one random lateral offset per wavelength, eased
+            // between, under an envelope that is zero with zero slope at both
+            // junctions. The wavelength grows with the river (a belt of a few
+            // cells for a trunk), so a brook does not chatter.
+            auto& course = segment.course;
+            const std::size_t n = course.size();
+            std::vector<Fixed> along(n, core::kZero);
+            for (std::size_t i = 1; i < n; ++i)
+                along[i] = along[i - 1] + core::max(core::hypot(course[i].position.x - course[i - 1].position.x,
+                                                               course[i].position.y - course[i - 1].position.y),
+                                                    core::kZero);
+            const Fixed total = core::max(along.back(), core::kOne);
+            for (int pass = 0; pass < 4; ++pass) {
+                std::vector<Fixed> soft = wanders;
+                for (std::size_t i = 1; i + 1 < n; ++i) soft[i] = (wanders[i - 1] + wanders[i] * Fixed::fromInt(2) + wanders[i + 1]) / Fixed::fromInt(4);
+                wanders = soft;
+            }
+            Fixed widest = core::kZero;
+            for (const ReachPoint& point : course) widest = core::max(widest, point.halfWidth);
+            const Fixed wavelength = perCell * (Fixed::fromInt(2) + widest / Fixed::fromInt(40));
+            const std::uint64_t runSeed = core::splitmix64(0x51ed270bd7373bfdULL ^ std::uint64_t(chain.front()) * 0x9e3779b97f4a7c15ULL);
+            const auto lattice = [&](std::int64_t k) {
+                const std::uint64_t h = core::splitmix64(runSeed ^ std::uint64_t(k) * 0xbf58476d1ce4e5b9ULL);
+                return Fixed::ratio(std::int64_t(h % 2001) - 1000, 1000);
+            };
+            std::vector<WorldPos> base(n);
+            for (std::size_t i = 0; i < n; ++i) base[i] = course[i].position;
+            for (std::size_t i = 1; i + 1 < n; ++i) {
+                const Fixed x = along[i] / wavelength;
+                const std::int64_t k = x.toInt();
+                const Fixed f = x - Fixed::fromInt(k);
+                const Fixed ease = f * f * (Fixed::fromInt(3) - f * Fixed::fromInt(2));
+                const Fixed noise = core::lerp(lattice(k), lattice(k + 1), ease);
+                const Fixed u = along[i] / total;
+                const Fixed arch = u * (core::kOne - u) * Fixed::fromInt(4);
+                const Fixed offset = noise * arch * arch * wanders[i];
+                const Fixed tx = base[i + 1].x - base[i - 1].x, ty = base[i + 1].y - base[i - 1].y;
+                const Fixed length = core::max(core::hypot(tx, ty), core::kOne);
+                course[i].position = {base[i].x + (-ty / length) * offset, base[i].y + (tx / length) * offset};
+                // Width wanders too, slowly and continuously along the run.
+                const Fixed w = along[i] / (perCell * 3) + Fixed::ratio(std::int64_t(runSeed % 1000), 1000);
+                const Fixed part = w - Fixed::fromInt(w.toInt());
+                const Fixed hump = part * (core::kOne - part) * Fixed::fromInt(4);
+                course[i].halfWidth = course[i].halfWidth * (Fixed::ratio(88, 100) + hump * Fixed::ratio(24, 100));
+            }
+        }
 
         // The envelope covers the water, and the water may stand as far out
         // as the valley: a page index built on the channel alone would not

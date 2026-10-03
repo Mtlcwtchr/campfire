@@ -18,6 +18,7 @@
 #define TERRAIN_BIOMES_HLSLI
 
 #include "noise.hlsli"
+#include "world_frame.hlsli"
 
 // A vertex stage defines BIOME_SPACE space0 and BIOME_TRANSFORM parameters[20]
 // as well (its own textures and constants); a fragment stage takes these.
@@ -129,9 +130,11 @@ BiomeHere biomeHereAt(float2 worldXY, float pixel)
     const float raw = next >= 0 ? sum[next] / max(sum[best] + sum[next], 1e-5) : 0.0;
     // Torn: broad and fine noise move the tie line about by up to a third of
     // a sample either way, then a band a few tens of metres wide.
-    const float tear = (noiseAt(worldXY / 140.0 + 17.3) * 0.65 +
-                        filteredNoiseAt(worldXY / 37.0 + 3.1, pixel / 37.0) * 0.35 - 0.5) * 0.7;
-    h.groundShare = next >= 0 ? smoothstep(0.42, 0.58, raw + tear) : 0.0;
+    // A wide soft border: the category field is one sample in 256 m, so a
+    // band of 0.5 of it is ~130 m, torn about by broad and fine noise.
+    const float tear = (noiseAt(worldXY / 260.0 + 11.7) * 0.45 + noiseAt(worldXY / 140.0 + 17.3) * 0.35 +
+                        filteredNoiseAt(worldXY / 37.0 + 3.1, pixel / 37.0) * 0.20 - 0.5) * 1.0;
+    h.groundShare = next >= 0 ? smoothstep(0.20, 0.80, raw + tear) : 0.0;
     // The other layers: the sample nearest the point, its own id or its
     // category's default.
     const int4 near = f.x < 0.5 ? (f.y < 0.5 ? c00 : c01) : (f.y < 0.5 ? c10 : c11);
@@ -193,14 +196,14 @@ float biomeNoiseFbm(float2 xy, float4 n, float footprint)
     float fp = footprint / max(n.x, 0.01);
     at += domainWarp(at * 0.5) * n.z;
     float value = 0.0, amplitude = 0.5, total = 0.0;
-    [unroll] for (int i = 0; i < 3; ++i) {
+    [unroll] for (int i = 0; i < 2; ++i) {
         value += filteredNoiseAt(at, fp) * amplitude;
         total += amplitude;
         at = at * 2.03 + float2(3.7, 8.1);
         fp *= 2.03;
         amplitude *= 0.5;
     }
-    // Stretched back towards 0..1: three octaves gather about the middle.
+    // Two broad octaves: detail belongs to transition edges, not every soil pixel.
     return saturate((value / total - 0.5) * 1.9 + 0.5);
 }
 
@@ -243,7 +246,7 @@ float biomeNoiseRidged(float2 xy, float4 n, float footprint)
     float fp = footprint / max(n.x, 0.01);
     at += domainWarp(at * 0.5) * n.z;
     float value = 0.0, amplitude = 0.55, total = 0.0;
-    [unroll] for (int i = 0; i < 3; ++i) {
+    [unroll] for (int i = 0; i < 2; ++i) {
         value += (1.0 - abs(filteredNoiseAt(at, fp) * 2.0 - 1.0)) * amplitude;
         total += amplitude;
         at = at * 2.11 + float2(9.2, 1.7);
@@ -251,6 +254,14 @@ float biomeNoiseRidged(float2 xy, float4 n, float footprint)
         amplitude *= 0.5;
     }
     return saturate(value / total);
+}
+
+// The one field of islands every soil, flower field, shrub island and bog pool
+// shares (noise.hlsli patchFieldAt): unresolved past a few metres a pixel it
+// tends to its mean, so a far hillside is not a grain.
+float biomeNoisePatch(float2 xy, float footprint)
+{
+    return lerp(patchFieldAt(xy), 0.5, smoothstep(5.0, 22.0, footprint));
 }
 
 // A noise of a kind by number. Only the kinds the config uses are compiled
@@ -269,6 +280,9 @@ float biomeNoise(int kind, float2 xy, float4 n, float footprint)
 #endif
 #ifdef BIOME_NOISE_RIDGED
     case 3: return biomeNoiseRidged(xy, n, footprint);
+#endif
+#ifdef BIOME_NOISE_PATCH
+    case 4: return biomeNoisePatch(xy, footprint);
 #endif
     default: return 0.5;
     }
@@ -305,7 +319,12 @@ float biomeScree(float steepness, float steepFrom, float2 xy)
 // --- decals ---------------------------------------------------------------
 
 struct BiomeDecalIn {
-    float2 xy;          // world metres
+    float2 xy;          // world metres: smooth fields and metre-scale noise
+    // The same point as a frame origin and the metres from it
+    // (world_frame.hlsli): cells, marks and texture coordinates finer than a
+    // centimetre are read from these, never from `xy`.
+    float2 anchor;
+    float2 local;
     float pixel;        // metres one pixel covers
     float steepness;
     float aboveWater;   // metres
@@ -319,11 +338,14 @@ struct BiomeDecalOut {
     float emissive;
     float metal;
     float rough;        // its own, where it covers
+    float3 normalDelta;
+    float ao;
 };
 BiomeDecalOut noBiomeDecal()
 {
     BiomeDecalOut o;
     o.colour = 0.0; o.cover = 0.0; o.emissive = 0.0; o.metal = 0.0; o.rough = 0.8;
+    o.normalDelta = 0.0; o.ao = 1.0;
     return o;
 }
 
@@ -369,15 +391,16 @@ void biomeSpeckle(int row, float weight, BiomeDecalIn d, inout BiomeDecalOut o)
     const float gate = biomeDecalGate(row, weight, d, look, size);
     if (gate <= 0.001) return;
     const float cellMetres = max(size.x, 0.05);
-    const float2 cell = d.xy / cellMetres;
-    const float2 whole = fmod(floor(cell) + 4096.0, 4096.0);
+    float2 cellWhole, cellWithin;
+    frameCells(d.anchor, d.local, cellMetres, cellWhole, cellWithin);
+    const float2 whole = fmod(cellWhole + 4096.0, 4096.0);
     const float salt = float(row) * 1.618;
     const float pick = hashAt(whole + salt);
     if (pick > size.y) return;
     const float shape = hashAt(whole + salt + 7.3);
     const float2 centre = float2(0.2 + shape * 0.6, 0.2 + frac(pick * 9.7) * 0.6);
     const float radius = lerp(size.z, size.w, frac(shape * 3.1)) / cellMetres * 0.5;
-    const float2 off = frac(cell) - centre;
+    const float2 off = cellWithin - centre;
     const float turn = frac(pick * 5.3) * 6.2832;
     const float2 axis = float2(cos(turn), sin(turn));
     const float2 local = float2(dot(off, axis), dot(off, float2(-axis.y, axis.x))) / float2(1.0, 0.6 + shape * 0.5);
@@ -400,8 +423,8 @@ void biomeStain(int row, float weight, BiomeDecalIn d, inout BiomeDecalOut o)
     const float gate = biomeDecalGate(row, weight, d, look, size);
     if (gate <= 0.001) return;
     const float cellMetres = max(size.x, 0.5);
-    const float2 cell = d.xy / cellMetres;
-    const float2 base = floor(cell);
+    float2 base, inCell;
+    frameCells(d.anchor, d.local, cellMetres, base, inCell);
     const float salt = float(row) * 2.414;
     const float4 lie = biomeRow(row, 3);
     float cover = 0.0;
@@ -414,8 +437,10 @@ void biomeStain(int row, float weight, BiomeDecalIn d, inout BiomeDecalOut o)
             const float shape = hashAt(c + salt + 3.3);
             const float2 centre = float2(i, j) + float2(0.25 + shape * 0.5, 0.25 + frac(pick * 7.7) * 0.5);
             const float radius = lerp(size.z, size.w, frac(shape * 4.7)) / cellMetres * 0.5;
-            const float2 off = (cell - base) - centre;
-            const float torn = (filteredNoiseAt(d.xy / max(radius * cellMetres * 0.35, 0.2) + c, d.pixel / max(radius * cellMetres * 0.35, 0.2)) - 0.5) * lie.w;
+            const float2 off = inCell - centre;
+            const float tear = max(radius * cellMetres * 0.35, 0.2);
+            const float resolvedTear = 1.0 - smoothstep(0.25, 0.9, d.pixel / tear);
+            const float torn = (lerp(0.5, frameNoiseAt(d.anchor, d.local, tear, c), resolvedTear) - 0.5) * lie.w;
             const float away = length(off) / max(radius, 1e-4) + torn;
             cover = max(cover, 1.0 - smoothstep(0.55, 1.0, away));
         }
@@ -458,6 +483,63 @@ void biomeStreak(int row, float weight, BiomeDecalIn d, inout BiomeDecalOut o)
     biomeLayDecal(o, look.rgb, saturate(cover * look.a * gate), fade.z, cluster.z, cluster.w);
 }
 
+// Trail: sparse winding corridors, with broken margins and alternating hoof
+// prints. Coordinates belong to the world; camera motion only filters marks
+// too small to resolve. These are environmental trails, not simulation tracks.
+void biomeTrail(int row,float weight,BiomeDecalIn d,inout BiomeDecalOut o)
+{
+    float4 look,size;
+    const float gate=biomeDecalGate(row,weight,d,look,size);
+    if (gate<=0.001 || d.aboveWater<0.05) return;
+    const float angle=biomeRow(row,5).x;
+    const float2 along=float2(cos(angle),sin(angle)),across=float2(-along.y,along.x);
+    // `u` only feeds metre-scale noise. Lanes and prints are read from the
+    // frame (world_frame.hlsli): from the world coordinate they stepped in
+    // 1.6 cm, and a hoof print is four.
+    const float u=dot(d.xy,along);
+    const float spacing=max(size.x,12.0);
+    float base,lanePart;
+    frameCellsAlong(d.anchor,d.local,across,spacing,base,lanePart);
+    const float4 properties=biomeRow(row,2),fade=biomeRow(row,4),lie=biomeRow(row,3);
+    // Hoof prints repeat every two strides.
+    const float stride=0.62;
+    float gaitWhole,gaitPart;
+    frameCellsAlong(d.anchor,d.local,along,2.0*stride,gaitWhole,gaitPart);
+    const float gait=gaitPart*2.0*stride;
+    const float tear=0.27;
+    const float resolvedTear=1.0-smoothstep(0.25,0.9,d.pixel/tear);
+    const float fray=(lerp(0.5,frameNoiseAt(d.anchor,d.local,tear),resolvedTear)-0.5);
+    float cover=0.0;
+    [unroll] for (int lane=-1;lane<=1;++lane) {
+        const float id=fmod(base+lane+4096.0,4096.0);
+        const float pick=hashAt(float2(id,row*1.731));
+        if (pick>size.y) continue;
+        const float2 route=float2(u/58.0,id*0.319+row);
+        const float bend=(noiseAt(route)-0.5)*spacing*0.19+
+                         (noiseAt(route*float2(2.7,1.0)+19.0)-0.5)*spacing*0.045;
+        // Across the lane from its centre: the position in the base lane minus
+        // the centre's, both in lanes, so nothing large is ever subtracted.
+        const float offset=(lanePart-(float(lane)+0.2+pick*0.6))*spacing-bend;
+        const float halfWidth=lerp(size.z,size.w,frac(pick*13.7))*0.5;
+        const float aa=max(0.015,d.pixel);
+        const float path=1.0-smoothstep(halfWidth*0.35-aa,halfWidth+aa,abs(offset)+fray*halfWidth*lie.w);
+        const float broken=smoothstep(0.24,0.62,noiseAt(float2(u/31.0,id+17.3)));
+        // Two halves of a cloven hoof, alternating on either side of the gait.
+        const float step=floor(gait/stride),phase=frac(gait/stride);
+        const float side=frac(step*0.5)<0.25?-1.0:1.0;
+        const float acrossHoof=offset-side*0.12;
+        const float hoof=length(float2((abs(acrossHoof)-0.018)/0.020,(phase-0.46)*0.62/0.065));
+        const float print=1.0-smoothstep(0.70,1.0+aa/0.04,hoof);
+        const float resolved=1.0-smoothstep(0.025,0.10,d.pixel);
+        cover=max(cover,(path*0.38+print*resolved*0.48)*broken);
+    }
+    biomeLayDecal(o,look.rgb,saturate(cover*look.a*gate),fade.z,properties.z,properties.w);
+}
+
+// The terrain supplies the texture implementation after declaring its arrays.
+#ifdef BIOME_DECAL_TEXTURE
+void biomeTexture(int row,float weight,BiomeDecalIn d,inout BiomeDecalOut o);
+#endif
 // One decal by family. Only the families the config uses are compiled in.
 void biomeDecal(int kind, int row, float weight, BiomeDecalIn d, inout BiomeDecalOut o)
 {
@@ -471,6 +553,12 @@ void biomeDecal(int kind, int row, float weight, BiomeDecalIn d, inout BiomeDeca
 #endif
 #ifdef BIOME_DECAL_STREAK
     case 2: biomeStreak(row, weight, d, o); break;
+#endif
+#ifdef BIOME_DECAL_TRAIL
+    case 4: biomeTrail(row, weight, d, o); break;
+#endif
+#ifdef BIOME_DECAL_TEXTURE
+    case 5: biomeTexture(row, weight, d, o); break;
 #endif
     default: break;
     }

@@ -1,0 +1,20 @@
+{
+ "_comment": "A ground preset: every file the ground panel edits (TerrainPanel). Loaded by copying them back over content/config.",
+ "saved": "2026-10-02 19:52:25",
+ "files": [
+  "terrain/categories.json",
+  "terrain/decals.json",
+  "terrain/decor_biomes.json",
+  "terrain/foliage.json",
+  "terrain/forest_biomes.json",
+  "terrain/layers.json",
+  "terrain/noises.json",
+  "terrain/plants.json",
+  "terrain/props.json",
+  "terrain/rocks.json",
+  "terrain/soils.json",
+  "terrain/water_biomes.json",
+  "ground.json",
+  "terrain_look.json"
+ ]
+}

@@ -62,8 +62,11 @@ float4 TerrainPagePS(TerrainOut input) : SV_Target0
     const PageDetail detail = pageDetail(input.worldXY);
     const float3 shape = pageShape(input.worldXY);
     const bool staged = ringState.y >= 3.0;
-    const float3 geometric = normalize(cross(ddx(float3(input.worldXY,input.worldHeight)),
-        ddy(float3(input.worldXY,input.worldHeight))));
+    // The drawn surface's slope from the frame's offset (world_frame.hlsli):
+    // the world coordinate holds 1.6 cm steps far from the origin, and its
+    // derivatives tilted the normal differently in every pixel quad.
+    const float3 geometric = normalize(cross(ddx(float3(input.frameXY,input.worldHeight)),
+        ddy(float3(input.frameXY,input.worldHeight))));
     const float3 normal = geometric.z < 0.0 ? -geometric : geometric;
     input.normal = staged ? normal : normalize(float3(-shape.xy, 1.0));
     input.geography.z = shape.z;
@@ -128,7 +131,7 @@ float4 TerrainPagePS(TerrainOut input) : SV_Target0
         colour.rgb = lerp(colour.rgb, tint, ink * 0.9);
     }
     // The world editor's region grid, selection and brush (editor_overlay.hlsli).
-    const float4 marks = editorMarks(input.worldXY, max(length(ddx(input.worldXY)), length(ddy(input.worldXY))));
+    const float4 marks = editorMarks(input.worldXY, max(length(ddx(input.frameXY)), length(ddy(input.frameXY))));
     colour.rgb = lerp(colour.rgb, marks.rgb, marks.a);
     return colour;
 }

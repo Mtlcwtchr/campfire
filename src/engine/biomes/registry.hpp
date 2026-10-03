@@ -68,11 +68,12 @@ struct TextureLayer {
     std::string name;      // "moon_dusted_04": assets/terrain/ph/<name>/ph_<name>
     double metres = 2.0;   // ground one turn of the texture covers
     std::string role;
+    std::string path;      // optional packed stem relative to assets; empty: legacy ph/<name>
 };
 
-enum class NoiseKind : std::uint8_t { Fbm, Cellular, Streaks, Ridged };
-inline constexpr std::size_t kNoiseKinds = 4;
-inline constexpr const char* kNoiseKindNames[kNoiseKinds] = {"fbm", "cellular", "streaks", "ridged"};
+enum class NoiseKind : std::uint8_t { Fbm, Cellular, Streaks, Ridged, Patch };
+inline constexpr std::size_t kNoiseKinds = 5;
+inline constexpr const char* kNoiseKindNames[kNoiseKinds] = {"fbm", "cellular", "streaks", "ridged", "patch"};
 
 struct Noise {
     std::string name;                // empty when written inline
@@ -121,9 +122,9 @@ struct Prop {
     double scaleMin = 1.0, scaleMax = 1.0;
 };
 
-enum class DecalKind : std::uint8_t { Speckle, Stain, Streak, Instance };
-inline constexpr std::size_t kDecalKinds = 4;
-inline constexpr const char* kDecalKindNames[kDecalKinds] = {"speckle", "stain", "streak", "instance"};
+enum class DecalKind : std::uint8_t { Speckle, Stain, Streak, Instance, Trail, Texture };
+inline constexpr std::size_t kDecalKinds = 6;
+inline constexpr const char* kDecalKindNames[kDecalKinds] = {"speckle", "stain", "streak", "instance", "trail", "texture"};
 
 struct Decal {
     std::string name;
@@ -144,6 +145,7 @@ struct Decal {
     bool alongWind = false;          // streaks: along the wind, else along `angle`
     double angle = 0.0;
     std::string model;               // instances only
+    std::string texture;             // texture decals: named terrain layer, opacity in properties.a
 };
 
 struct WaterBiome {

@@ -201,6 +201,18 @@ struct TerrainPlan {
     // Squares drawn with a mesh of ground that has since been dug (a stale
     // mesh is drawn until its replacement is built, never a hole instead).
     std::size_t staleMeshes = 0;
+    // Why blocks of this plan carry a mesh object the last plan did not
+    // (each such object is a new vertex + index buffer on the card):
+    //   stitchCopies       - stitchEdges wrote a new seam copy
+    //   stitchReused       - the seam came out identical, the last copy kept
+    //   displayMorphOnly   - same mesh object as before, only parentMorph moved
+    //   displayRestitched  - same base mesh, different seam copy
+    //   displayNewBase     - a mesh not drawn on this tile in the last plan
+    //   displayNoChange    - a display copy whose old and new surface agree
+    struct CopyCounts {
+        std::size_t stitchCopies = 0, stitchReused = 0;
+        std::size_t displayMorphOnly = 0, displayRestitched = 0, displayNewBase = 0, displayNoChange = 0;
+    } copies;
     bool needsUpdate = false, capacityLimited = false;
     TerrainDetail::Stats detail;
 

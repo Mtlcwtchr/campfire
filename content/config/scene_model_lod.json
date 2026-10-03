@@ -1,0 +1,17 @@
+{
+ "_comment": "How scene models are reduced for distance (tools/rebuild_prop_lods.py, tools/scene_model_clusters). `chain_only` models draw from a discrete LOD chain, not the cluster DAG: solid props whose texture runs across many UV islands. The DAG welds vertices by position and simplifies across UV seams, which smeared their textures into noise and folded them down to four-triangle shapes; the chain keeps every seam (meshoptimizer's attribute-aware simplifier) and hands over to the baked impostors at distance. `ratios` are the triangle shares of the chain levels after level zero; `normal_weight` and `uv_weight` are how much the simplifier protects shading and texture placement against moving the surface. `winding` is the front face as the renderer sees it in world space: the pipeline's SDL front face is clockwise in window coordinates and the projection flips y, so a triangle wound counter-clockwise about the way it faces is a front face (measured with SV_IsFrontFace). Each texture layer of a model is turned to that when its verdict is clear.",
+ "chain_only": [
+  "Rock_Medium_1",
+  "Mushroom_Common",
+  "Deadwood_Log",
+  "Deadwood_Stump",
+  "Deadwood_Branch",
+  "Cliff_Face_Grey",
+  "Cliff_Face_Warm"
+ ],
+ "ratios": [0.4, 0.16, 0.06],
+ "normal_weight": 0.5,
+ "uv_weight": 0.5,
+ "winding": "counter_clockwise"
+}
+

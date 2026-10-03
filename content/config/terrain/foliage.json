@@ -59,6 +59,62 @@
    "name": "thin_litter",
    "density": 0.25,
    "flowers": 0.0
+  },
+  {
+   "name": "flower_meadow",
+   "density": 1.0,
+   "height": 0.95,
+   "flowers": 2.4,
+   "tint": [
+    1.02,
+    1.06,
+    0.92
+   ]
+  },
+  {
+   "name": "amber_fern",
+   "density": 0.9,
+   "dryness": 0.45,
+   "flowers": 0.1,
+   "tint": [
+    1.3,
+    0.95,
+    0.55
+   ]
+  },
+  {
+   "name": "moor_sedge",
+   "density": 1.15,
+   "height": 1.1,
+   "dryness": 0.15,
+   "flowers": 0.25,
+   "tint": [
+    0.78,
+    0.95,
+    0.7
+   ]
+  },
+  {
+   "name": "wild_meadow",
+   "density": 1.1,
+   "height": 1.1,
+   "dryness": 0.2,
+   "flowers": 1.9,
+   "tint": [
+    0.95,
+    1.05,
+    1.0
+   ]
+  },
+  {
+   "name": "moss_fern",
+   "density": 1.1,
+   "flowers": 0.05,
+   "tint": [
+    0.7,
+    0.95,
+    0.75
+   ]
   }
  ]
 }

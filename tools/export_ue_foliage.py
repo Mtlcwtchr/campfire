@@ -38,6 +38,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 CONFIG = ROOT / "content/config/ue_foliage_sources.json"
 OUT = Path(os.environ.get("AS_UE_FOLIAGE_OUT", str(ROOT / "assets/models/ue_foliage")))
 ONLY = {a for a in os.environ.get("AS_UE_FOLIAGE_ONLY", "").split(",") if a}
+NORMAL = re.compile(r"(normal|_n$|_nt$)", re.IGNORECASE)
 
 COLOUR = re.compile(r"(albedo|basecolou?r|base_colou?r|diffuse|colou?r|opacity|alpha|_b-o$|_b$|_bc$|_d$|_mask(_\d+)?$|^mask$)",
                     re.IGNORECASE)
@@ -110,17 +111,22 @@ def export_texture(path, into, done):
     if not isinstance(texture, unreal.Texture2D):
         done[path] = None
         return None
-    name = "textures/" + path.split("/")[-1].split(".")[0] + ".png"
-    dest = into / name
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    task = unreal.AssetExportTask()
-    task.set_editor_property("object", texture)
-    task.set_editor_property("filename", str(dest))
-    task.set_editor_property("automated", True)
-    task.set_editor_property("prompt", False)
-    task.set_editor_property("replace_identical", True)
-    task.set_editor_property("exporter", unreal.TextureExporterPNG())
-    if not unreal.Exporter.run_asset_export_task(task) or not dest.is_file():
+    stem = "textures/" + path.split("/")[-1].split(".")[0]
+    # Let UE select a supported exporter. Explicit PNG asserts for HDR source
+    # normals; an automatic task declines PNG and accepts EXR instead.
+    for extension in (".png", ".exr"):
+        name = stem + extension
+        dest = into / name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        task = unreal.AssetExportTask()
+        task.set_editor_property("object", texture)
+        task.set_editor_property("filename", str(dest))
+        task.set_editor_property("automated", True)
+        task.set_editor_property("prompt", False)
+        task.set_editor_property("replace_identical", True)
+        if unreal.Exporter.run_asset_export_task(task) and dest.is_file():
+            break
+    else:
         raise RuntimeError("texture export failed: " + path)
     done[path] = {"file": name, "width": texture.blueprint_get_size_x(), "height": texture.blueprint_get_size_y(),
                   "srgb": bool(texture.get_editor_property("srgb"))}
@@ -205,8 +211,32 @@ def export_mesh(path, into, options, textures):
     return row
 
 
+def export_normals(entry):
+    """Augment cached geometry with normals without re-exporting large meshes."""
+    into = OUT / entry["asset_id"] / "raw"
+    file = into / "export.json"
+    cached = json.loads(file.read_text())
+    done = {}
+    for row in cached["meshes"]:
+        for material in row["materials"]:
+            if not material:
+                continue
+            for param, path in material.get("textures", {}).items():
+                if path and (NORMAL.search(param) or NORMAL.search(path.split(".")[-1])):
+                    info = export_texture(path, into, done)
+                    if info:
+                        material.setdefault("files", {})[param] = dict(info, normal_map=True)
+    file.write_text(json.dumps(cached, indent=1) + "\n")
+    log("%s: exported %d normal textures" % (entry["asset_id"], len(done)))
+
+
 def main():
     config = json.loads(CONFIG.read_text())
+    if os.environ.get("AS_UE_FOLIAGE_TEXTURES_ONLY") == "1":
+        for entry in config["assets"]:
+            if not ONLY or entry["asset_id"] in ONLY:
+                export_normals(entry)
+        return
     options = gltf_options()
     summary = {}
     for entry in config["assets"]:
@@ -237,4 +267,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

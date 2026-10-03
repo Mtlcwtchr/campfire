@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <limits>
+#include <optional>
 #include "game/client/camera.hpp"
 #include "game/world/terrain_grid.hpp"
 #include "game/world/ring_mesh.hpp"
@@ -42,6 +43,9 @@ void GpuTerrain::reset() {
     gathered_ = {};
     resolved_.clear();
     meshes_.clear();
+    indexRanges_.clear();
+    vertexPool_.clear(); indexPool_.clear();
+    vertexPages_.clear(); indexPages_.clear();
     leases_.clear(); persistent_.clear(); known_.clear();
     inflight_.clear(); // the atlases go below, with every pin they had
     stale_.clear(); groundSeen_ = 0; restream_ = false;
@@ -178,6 +182,19 @@ void GpuTerrain::retire(std::uint64_t completed) {
     }
     std::unordered_set<const world::terrain::AdaptiveMesh*> held;
     if (plan_) for (const auto& block : plan_->coverage) held.insert(block.mesh.get());
+    // Plans the card may still be reading (their leases are not retired yet).
+    for (const auto& lease : leases_)
+        if (lease.plan) for (const auto& block : lease.plan->coverage) held.insert(block.mesh.get());
+    // A per-plan copy (a seam, a display transition) that no such plan draws
+    // will not be drawn again: its plan is gone, and the next one makes its
+    // own. Given back now rather than kept as cache - a cache full of them
+    // pushed out the meshes that do come back.
+    std::vector<const world::terrain::AdaptiveMesh*> spent;
+    for (const auto& [key, buffers] : meshes_)
+        if (!keepCopies_ && buffers.source->unstitched && !held.contains(key) && buffers.lastSerial <= completed)
+            spent.push_back(key);
+    for (const auto* key : spent) forget(key);
+    spentCopies_ += spent.size();
     // Buffers no cut draws stay on the card, oldest out first, within the
     // config's budget: a mesh the CPU kept in its cache comes back drawn at
     // once instead of uploaded again. They used to go at the first frame the
@@ -196,10 +213,78 @@ void GpuTerrain::retire(std::uint64_t completed) {
         std::sort(idle.begin(), idle.end(), [](const Idle& a, const Idle& b) { return a.serial < b.serial; });
         for (const auto& i : idle) {
             if (idleBytes <= config_.gpuMeshCacheBytes) break;
-            meshes_.erase(i.key);
+            forget(i.key);
             idleBytes -= i.bytes;
         }
+        // Pages nothing lives in any more: one of each kind is kept for the
+        // next arrivals, the rest are released (the driver frees them once
+        // the frames that might still read them are done).
+        for (const auto page : vertexPool_.trim(1)) vertexPages_[page] = {};
+        for (const auto page : indexPool_.trim(1)) indexPages_[page] = {};
     }
+}
+
+void GpuTerrain::forget(const world::terrain::AdaptiveMesh* key) {
+    const auto it = meshes_.find(key);
+    if (it == meshes_.end()) return;
+    vertexPool_.release(it->second.vertices);
+    if (const auto owner = indexRanges_.find(it->second.indexOwner);
+        owner != indexRanges_.end() && --owner->second.users == 0) {
+        indexPool_.release(owner->second.range);
+        indexRanges_.erase(owner);
+    }
+    meshes_.erase(it);
+}
+
+bool GpuTerrain::place(engine::Device& device, engine::Device::Uploader& upload,
+                       const std::shared_ptr<const world::terrain::AdaptiveMesh>& mesh, MeshBuffers& into) {
+    using Vertex = world::terrain::AdaptiveVertex;
+    const std::size_t vertexBytes = mesh->vertices.size() * sizeof(Vertex);
+    const std::size_t indexBytes = mesh->indices.size() * sizeof(std::uint32_t);
+    if (!vertexBytes || !indexBytes) return false;
+    const auto pageFor = [&](engine::RangePool& pool, std::vector<engine::Buffer>& pages,
+                             SDL_GPUBufferUsageFlags usage, std::size_t bytes) -> engine::RangePool::Range {
+        std::optional<std::uint32_t> added;
+        const auto range = pool.allocate(bytes, added);
+        if (added) {
+            if (pages.size() <= *added) pages.resize(*added + 1);
+            pages[*added] = device.makeBuffer(usage, pool.pageSize(*added));
+            if (!pages[*added]) {
+                pool.release(range);
+                for (const auto page : pool.trim(0)) pages[page] = {};
+                return {};
+            }
+        }
+        return range;
+    };
+    const auto vertices = pageFor(vertexPool_, vertexPages_, SDL_GPU_BUFFERUSAGE_VERTEX, vertexBytes);
+    if (!vertices) return false;
+    upload.rewriteAt(vertexPages_[vertices.page].get(), vertices.offset, mesh->vertices.data(), vertexBytes);
+    // A copy (a seam or a display transition, terrain_seams.cpp) draws with
+    // the index list of the mesh it was copied from - checked, not assumed.
+    const world::terrain::AdaptiveMesh* owner = mesh.get();
+    std::shared_ptr<const world::terrain::AdaptiveMesh> ownerMesh = mesh;
+    if (const auto& base = mesh->unstitched; base && base->indices == mesh->indices) {
+        owner = base.get();
+        ownerMesh = base;
+    }
+    auto it = indexRanges_.find(owner);
+    if (it == indexRanges_.end()) {
+        const auto indices = pageFor(indexPool_, indexPages_, SDL_GPU_BUFFERUSAGE_INDEX, indexBytes);
+        if (!indices) {
+            vertexPool_.release(vertices);
+            return false;
+        }
+        upload.rewriteAt(indexPages_[indices.page].get(), indices.offset, mesh->indices.data(), indexBytes);
+        it = indexRanges_.emplace(owner, IndexBuffers{ownerMesh, indices, 0}).first;
+    } else {
+        ++sharedIndexLists_;
+    }
+    ++it->second.users;
+    into.vertices = vertices;
+    into.indexOwner = owner;
+    ++pooledUploads_;
+    return true;
 }
 
 bool GpuTerrain::requestPlan(const world::terrain::TerrainView& view) {
@@ -241,10 +326,16 @@ bool GpuTerrain::accept(engine::Device& device, std::shared_ptr<const Plan> plan
     }
     // One copy submission for all new immutable topology buffers. Never replace
     // a cut with partially uploaded geometry; the old cut and its fences survive.
-    std::vector<MeshBuffers> uploaded;
+    // Placed in the pools as they go; on any failure every one placed here is
+    // given back, so the old cut and its ranges are exactly as they were.
+    std::vector<const world::terrain::AdaptiveMesh*> placed;
+    const auto rollback = [&] {
+        for (const auto* key : placed) forget(key);
+        return false;
+    };
     engine::Device::Uploader upload(device);
     for (const auto& block : plan->coverage) {
-        if (!block.mesh) return false;
+        if (!block.mesh) return rollback();
         if (meshes_.contains(block.mesh.get())) continue;
         MeshBuffers buffers;
         buffers.source = block.mesh;
@@ -256,18 +347,12 @@ bool GpuTerrain::accept(engine::Device& device, std::shared_ptr<const Plan> plan
             if (v < head.size() && head[v] > bed[v] + 0.05f && head[v] > 0.25f) buffers.inland = true;
         }
         if (bed.empty()) { buffers.highBed = 1e9f; buffers.inland = true; }
-        buffers.vertices = upload.add(SDL_GPU_BUFFERUSAGE_VERTEX,block.mesh->vertices.data(),
-            block.mesh->vertices.size()*sizeof(world::terrain::AdaptiveVertex));
-        buffers.indices = upload.add(SDL_GPU_BUFFERUSAGE_INDEX,block.mesh->indices.data(),
-            block.mesh->indices.size()*sizeof(std::uint32_t));
-        if (!buffers.vertices || !buffers.indices) return false;
-        uploaded.push_back(std::move(buffers));
+        if (!place(device, upload, block.mesh, buffers)) return rollback();
+        const auto* key = block.mesh.get();
+        meshes_.emplace(key, std::move(buffers));
+        placed.push_back(key);
     }
-    if (!upload.finish()) return false;
-    for (auto& buffers : uploaded) {
-        const auto* key = buffers.source.get();
-        meshes_.emplace(key,std::move(buffers));
-    }
+    if (!upload.finish()) return rollback();
     std::size_t pinned = 0;
     for (auto key : plan->pins) {
         auto& atlas = *atlases_[atlasOf(key.level)];
@@ -339,6 +424,13 @@ bool GpuTerrain::accept(engine::Device& device, std::shared_ptr<const Plan> plan
                          int(plan->interpolated), plan->coverage.size(), plan->missing.size(), plan->meshesBuilt,
                          int(restartPlan_), jump30, jump128, uploads, nearUploads);
     }
+    if (underfoot)
+        std::fprintf(stderr, "underfoot pool vertices %.1f/%.1f MB in %zu pages (%zu holes), indices %.1f/%.1f MB "
+                     "in %zu pages, meshes %zu, index lists %zu, placed %zu, index lists shared %zu, spent copies %zu\n",
+                     vertexPool_.used() / 1048576.0, vertexPool_.capacity() / 1048576.0, vertexPool_.livePages(),
+                     vertexPool_.freeRanges(), indexPool_.used() / 1048576.0, indexPool_.capacity() / 1048576.0,
+                     indexPool_.livePages(), meshes_.size(), indexRanges_.size(), pooledUploads_, sharedIndexLists_,
+                     spentCopies_);
     // Keep the old snapshot AND its pins alive through its last GPU reader.
     if (plan_) leases_.push_back({lastDrawSerial_, {}, std::move(plan_)});
     plan_ = std::move(plan);
@@ -862,9 +954,13 @@ void GpuTerrain::gather(const engine::Frame& frame) {
         if (!block.mesh) continue;
         const auto it = meshes_.find(block.mesh.get());
         if (it == meshes_.end() || !it->second.vertices) continue;
+        const auto owner = indexRanges_.find(it->second.indexOwner);
+        if (owner == indexRanges_.end()) continue;
         auto& into = resolved_[i];
-        into.vertices = it->second.vertices.get();
-        into.indices = it->second.indices.get();
+        into.vertices = vertexPages_[it->second.vertices.page].get();
+        into.vertexOffset = std::uint32_t(it->second.vertices.offset);
+        into.indices = indexPages_[owner->second.range.page].get();
+        into.firstIndex = std::uint32_t(owner->second.range.offset / sizeof(std::uint32_t));
         into.waterIndices = block.mesh->wetIndices;
         into.highBed = it->second.highBed;
         into.inland = it->second.inland;
@@ -905,8 +1001,12 @@ std::array<float, 16> GpuTerrain::parameters(const Block& block) const {
             float(tableWidth_), float(tableHeight_), block.skirtLow, float(1 + 2 * grid_)};
 }
 
-SDL_GPUBuffer* GpuTerrain::vertices(const Block& block) const { return meshes_.at(block.mesh.get()).vertices.get(); }
-SDL_GPUBuffer* GpuTerrain::indices(const Block& block) const { return meshes_.at(block.mesh.get()).indices.get(); }
+SDL_GPUBuffer* GpuTerrain::vertices(const Block& block) const {
+    return vertexPages_.at(meshes_.at(block.mesh.get()).vertices.page).get();
+}
+SDL_GPUBuffer* GpuTerrain::indices(const Block& block) const {
+    return indexPages_.at(indexRanges_.at(meshes_.at(block.mesh.get()).indexOwner).range.page).get();
+}
 std::uint32_t GpuTerrain::indexCount(const Block& block, bool water) const {
     return !block.mesh ? 0 : water || !skirts_ ? block.mesh->surfaceIndices : std::uint32_t(block.mesh->indices.size());
 }

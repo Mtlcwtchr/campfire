@@ -6,6 +6,7 @@
 #include "game/generation/world_map_gen.hpp"
 #include "../assets/shaders/foliage_field.hlsli"
 #include "../assets/shaders/scene_model_motion.hlsli"
+#include "../assets/shaders/environment_detail.hlsli"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -94,7 +95,7 @@ TEST(scene_scatter_is_repeatable_and_models_have_stable_positions) {
         CHECK(o.scale>=0.75 && o.scale<=1.4);CHECK(o.model<kModels.size());
         ++counts[o.model];
     }
-    for (const auto count:counts) CHECK(count>0);
+    for (std::size_t model=0;model<kBaseModelCount;++model) CHECK(counts[model]>0);
     CHECK_EQ(counts,a.populations);
     const auto changed=scatter(43,4,4,5000,5000,land,forest);
     CHECK(a.objects!=changed.objects);
@@ -112,7 +113,7 @@ TEST(scene_scatter_neighbouring_windows_do_not_shuffle_instances) {
 TEST(scene_deadwood_is_present_on_flat_forest_ground_but_not_open_or_steep_land) {
     const auto wooded=scatter(42,8,8,5000,5000,land,
         [](double,double){return Site{100,0,0,1,0.4};});
-    for (std::size_t model=5;model<kModels.size();++model) CHECK(wooded.populations[model]>10);
+    for (std::size_t model=5;model<kBaseModelCount;++model) CHECK(wooded.populations[model]>10);
     for (const Site site:std::array<Site,3>{{{100,0,0,0,0},{100,0,0.6,1,0},{0,1,0,1,0}}}) {
         const auto result=scatter(42,8,8,5000,5000,land,[&](double,double){return site;});
         for (std::size_t model=5;model<kModels.size();++model) CHECK_EQ(result.populations[model],0u);
@@ -124,6 +125,64 @@ TEST(scene_scatter_open_water_skips_all_expensive_queries) {
         [&](double,double){++samples;return Site{};});
     CHECK(result.objects.empty());CHECK_EQ(samples,0u);CHECK_EQ(result.sampled,0u);
     CHECK_EQ(result.waterTilesSkipped,maskCalls);CHECK(maskCalls>0 && maskCalls<=16);
+}
+TEST(environment_clumps_keep_ids_and_positions_across_partial_page_requests) {
+    const SiteSample damp=[](double x,double y) {
+        Site s{100+0.01*x+0.01*y,0,0.08,1,0.3};
+        s.hasEcology=s.hasMaterials=true;
+        s.ecology.moisture=0.82f; s.ecology.canopy=0.55f;
+        s.ecology.fertility=0.65f; s.ecology.shrubs=0.5f;
+        return s;
+    };
+    const auto full=scatter(77,{0,0,384,384},512,512,land,damp,{},true);
+    for (const auto model:{kMoss,kFern,kDenseShrub,kLowShrub}) CHECK(full.populations[model]>0);
+    std::map<std::uint64_t,Object> ids;
+    for (const auto& object:full.objects) CHECK(ids.emplace(object.id,object).second);
+    for (const auto bounds:std::array<ScatterBounds,3>{{{3,5,379,375},{121,127,257,260},{128,128,256,256}}}) {
+        const auto part=scatter(77,bounds,512,512,land,damp,{},true);
+        std::vector<Object> expected;
+        for (const auto& object:full.objects)
+            if (object.x>=bounds.minX && object.x<bounds.maxX && object.y>=bounds.minY && object.y<bounds.maxY)
+                expected.push_back(object);
+        CHECK_EQ(part.objects,expected);
+    }
+    const auto legacy=scatter(77,{0,0,384,384},512,512,land,damp);
+    for (const auto& object:legacy.objects) CHECK_EQ(ids.at(object.id),object);
+    const SiteSample cleared=[&](double x,double y) { auto s=damp(x,y); s.detailDensity=0; return s; };
+    CHECK(scatter(77,{0,0,384,384},512,512,land,cleared,{},true).objects.empty());
+}
+TEST(environment_cliffs_face_downhill_fit_relief_and_stay_on_their_support) {
+    const SiteSample plane=[](double x,double) {
+        Site s{100+2*x,0,2.0,0,0.1};
+        s.hasEcology=s.hasMaterials=true; s.rock=1;
+        s.ecology.moisture=0.75f;
+        return s;
+    };
+    const auto cliffs=scatter(17,{32,32,512,512},1024,1024,land,plane,{},true);
+    CHECK(cliffs.populations[kCliffGrey]>20);
+    CHECK_EQ(cliffs.populations[kCliffWarm],0u);
+    for (const auto& object:cliffs.objects) {
+        CHECK_EQ(object.model,kCliffGrey);
+        const auto shape=kEnvironmentBounds[object.model-kCliffGrey];
+        CHECK(shape.width*object.scale<=11.001);
+        CHECK(object.scale>=0.49f && object.scale<=1.65f);
+        CHECK(std::abs(std::sin(object.yaw)+1)<0.01); // local -Y faces world -X
+        const double radius=shape.front*object.scale;
+        const double landing=plane(object.x-radius,object.y).height;
+        CHECK(object.z<=landing);
+        CHECK(object.z+shape.height*object.scale>landing);
+    }
+    const auto water=scatter(17,{32,32,512,512},1024,1024,land,plane,[](double,double){return true;},true);
+    CHECK(water.objects.empty());
+}
+TEST(environment_moss_needs_moisture_shelter_and_an_upward_surface) {
+    CHECK_EQ(environmentMossHabitat(0.1f,1,0,0),0.0f);
+    CHECK_EQ(environmentMossHabitat(1,1,1,0),0.0f);
+    CHECK_EQ(environmentMossHabitat(1,1,0,1),0.0f);
+    const float habitat=environmentMossHabitat(0.8f,0.7f,0,0);
+    CHECK(habitat>0.6f);
+    CHECK_EQ(environmentMossSurface(habitat,-1,1,1),0.0f);
+    CHECK(environmentMossSurface(habitat,1,1,1)>environmentMossSurface(habitat,0,0,1));
 }
 TEST(scene_scatter_wet_steep_and_nonfinite_sites_never_receive_objects) {
     for (const auto bad:std::array<Site,3>{{{0,2,0,1,1},{100,0,2,1,1},

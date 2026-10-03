@@ -1,0 +1,78 @@
+{
+  "id": "ms_moss_patch",
+  "runtime_size": 2048,
+  "runtime_files": {
+    "albedo": "ms_moss_patch_albedo.png",
+    "normal": "ms_moss_patch_normal.png",
+    "properties": "ms_moss_patch_properties.png"
+  },
+  "properties_channels": {
+    "r": "ao",
+    "g": "roughness",
+    "b": "height",
+    "a": "mask"
+  },
+  "mip_steps": [
+    2,
+    4,
+    8,
+    16
+  ],
+  "height_range_before_stretch": [
+    -0.3921,
+    254.3512
+  ],
+  "had": {
+    "ao": true,
+    "rough": true,
+    "displacement": true,
+    "mask": true
+  },
+  "source": {
+    "site": "fab",
+    "asset_id": "tjxpndh",
+    "asset_url": "https://www.fab.com/listings/b5fad446-5ca0-44b1-96cf-74051936b0e6",
+    "license": "Fab / original Quixel asset licence (not CC0)",
+    "archive": "assets/downloaded/moss_patch_tjxpndh_1k.zip",
+    "archive_sha256": "0197666999038350b976bd638a85331855c5d5f35234a3cf65bd7c0224a1ce57",
+    "original_physical_metres": [
+      0.5,
+      0.5
+    ],
+    "source_normal_convention": "dx",
+    "normal_convention": "gl",
+    "files": {
+      "diffuse": {
+        "file": "ms_moss_patch_diffuse.png",
+        "original": "Moss_Patch_tjxpndh_1K_BaseColor.jpg",
+        "sha256": "19ed6ae965e6d08320e0a6a73b0ea0ba0619054912e344ccf7c9ea4fdf2f2e69"
+      },
+      "normal": {
+        "file": "ms_moss_patch_normal.png",
+        "original": "Moss_Patch_tjxpndh_1K_Normal.jpg",
+        "sha256": "184f5e2322d3774c624c23d18bdb3fa6d25940f3d3884e5cd884157b2c0ca8bf"
+      },
+      "mask": {
+        "file": "ms_moss_patch_mask.png",
+        "original": "Moss_Patch_tjxpndh_1K_Opacity.jpg",
+        "sha256": "d7dae3b3374879872a59ff1165626cad84bffcd160fc634dfc883f0402614f84"
+      },
+      "ao": {
+        "file": "ms_moss_patch_ao.png",
+        "original": "Moss_Patch_tjxpndh_1K_AO.jpg",
+        "sha256": "a2e07bc7c81ee4659e1bd4b3d78ddd574c0360fe611cbf1206cd4db6c6c5af04"
+      },
+      "rough": {
+        "file": "ms_moss_patch_rough.png",
+        "original": "Moss_Patch_tjxpndh_1K_Roughness.jpg",
+        "sha256": "9905abef0eb8b620a97105373289012958f5ead4aa33be0bda90f04f106fe37d"
+      },
+      "displacement": {
+        "file": "ms_moss_patch_displacement.png",
+        "original": "Moss_Patch_tjxpndh_1K_Displacement.jpg",
+        "sha256": "f630514c73496972cf3b1f6d2003669b13567e777a071889d1299da070870cff"
+      }
+    }
+  },
+  "world_scale": 0.5
+}

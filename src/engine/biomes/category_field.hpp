@@ -23,6 +23,7 @@ public:
     static constexpr std::int64_t kChunk = 128;
     // ground, forest, water, decor, and forest_bias as 1 + 254 * bias (0: not said)
     using Ids = std::array<std::uint8_t, 5>;
+    void setSampleMetres(std::int64_t value) { sampleMetres_ = value; }
     [[nodiscard]] static double forestBias(const Ids& ids) { return ids[4] ? double(ids[4] - 1) / 254.0 : 0.5; }
     [[nodiscard]] static std::uint8_t forestBiasByte(double bias) {
         return std::uint8_t(1 + std::lround(std::clamp(bias, 0.0, 1.0) * 254.0));
@@ -54,6 +55,7 @@ private:
         return (std::uint64_t(std::uint32_t(cx)) << 32) | std::uint32_t(cy);
     }
     std::unordered_map<std::uint64_t, std::vector<Ids>> chunks_;
+    std::int64_t sampleMetres_ = kSampleMetres;
 };
 
 } // namespace engine::biomes

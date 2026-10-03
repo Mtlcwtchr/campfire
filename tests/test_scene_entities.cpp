@@ -85,8 +85,10 @@ TEST(scene_entities_replaces_the_previous_region_and_leaves_everything_else) {
     publishScatter(registry, made(300), 5);
     const auto again = publishScatter(registry, made(120), 5);
 
-    CHECK_EQ(again.destroyed, std::size_t(300));
-    CHECK_EQ(again.created, std::size_t(120));
+    // The first 120 ids are the same objects: kept and updated, the rest gone.
+    CHECK_EQ(again.destroyed, std::size_t(180));
+    CHECK_EQ(again.kept, std::size_t(120));
+    CHECK_EQ(again.created, std::size_t(0));
     CHECK_EQ(registry.view<ScatterRef>().size(), std::size_t(120));
     CHECK_EQ(registry.view<Actor>().size(), std::size_t(7));
     for (const auto entity : actors) CHECK(registry.valid(entity));

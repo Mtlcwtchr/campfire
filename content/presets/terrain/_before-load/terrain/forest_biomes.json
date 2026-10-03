@@ -1,0 +1,710 @@
+{
+ "_comment": "The forest layer's ids (0: as the ground category says). trees and shrubs: plants and their shares; shrub_density against the trees; undergrowth: ground cover under the canopy (foliage.json, or none); floor: the forest floor's soil; props: a hectare; fertility: how much forest the ground gives at forest_bias 0.5; density: forest against a control channel; clearings: a noise and the share it opens; edge: shrubs times this within metres of the edge.",
+ "forest_biomes": [
+  {
+   "name": "old_mixed",
+   "id": 1,
+   "trees": [
+    [
+     "beech",
+     0.4
+    ],
+    [
+     "oak",
+     0.25
+    ],
+    [
+     "hornbeam",
+     0.2
+    ],
+    [
+     "spruce",
+     0.15
+    ]
+   ],
+   "shrubs": [
+    [
+     "hazel",
+     0.6
+    ],
+    [
+     "elder",
+     0.4
+    ]
+   ],
+   "shrub_density": 0.3,
+   "undergrowth": "fern_and_grass",
+   "floor": {
+    "soil": "leaf_litter",
+    "noise": "fbm_8m"
+   },
+   "props": [
+    [
+     "fallen_log",
+     8
+    ],
+    [
+     "stump",
+     10
+    ],
+    [
+     "branches",
+     90
+    ],
+    [
+     "mushrooms",
+     30
+    ]
+   ],
+   "fertility": 0.95,
+   "density": {
+    "by": "forest_bias",
+    "curve": [
+     [
+      0,
+      0
+     ],
+     [
+      0.5,
+      0.7
+     ],
+     [
+      1,
+      1.0
+     ]
+    ]
+   },
+   "clearings": {
+    "noise": "cellular_120m",
+    "share": 0.08
+   },
+   "edge": {
+    "shrubs": 1.8,
+    "metres": 25
+   }
+  },
+  {
+   "name": "sparse_wood",
+   "id": 2,
+   "trees": [
+    [
+     "birch",
+     0.4
+    ],
+    [
+     "beech",
+     0.3
+    ],
+    [
+     "spruce",
+     0.3
+    ]
+   ],
+   "shrubs": [
+    [
+     "hazel",
+     0.5
+    ],
+    [
+     "scrub",
+     0.5
+    ]
+   ],
+   "shrub_density": 0.45,
+   "undergrowth": "meadow",
+   "props": [
+    [
+     "stump",
+     6
+    ],
+    [
+     "branches",
+     40
+    ]
+   ],
+   "fertility": 0.45,
+   "density": {
+    "by": "forest_bias",
+    "curve": [
+     [
+      0,
+      0
+     ],
+     [
+      0.5,
+      0.35
+     ],
+     [
+      1,
+      0.7
+     ]
+    ]
+   },
+   "clearings": {
+    "noise": "cellular_120m",
+    "share": 0.3
+   }
+  },
+  {
+   "name": "swamp_thin",
+   "id": 3,
+   "trees": [
+    [
+     "swamp_pine_thin",
+     0.6
+    ],
+    [
+     "dead_birch",
+     0.4
+    ]
+   ],
+   "shrubs": [
+    [
+     "swamp_willow",
+     1.0
+    ]
+   ],
+   "shrub_density": 0.35,
+   "undergrowth": "sedge",
+   "floor": {
+    "soil": "peat"
+   },
+   "props": [
+    [
+     "snag",
+     30
+    ],
+    [
+     "half_sunk_log",
+     12
+    ]
+   ],
+   "fertility": 0.7,
+   "density": {
+    "by": "forest_bias",
+    "curve": [
+     [
+      0,
+      0
+     ],
+     [
+      0.5,
+      0.75
+     ],
+     [
+      1,
+      0.95
+     ]
+    ]
+   }
+  },
+  {
+   "name": "shrubland",
+   "id": 4,
+   "trees": [
+    [
+     "oak",
+     0.5
+    ],
+    [
+     "hornbeam",
+     0.5
+    ]
+   ],
+   "shrubs": [
+    [
+     "scrub",
+     0.6
+    ],
+    [
+     "hazel",
+     0.4
+    ]
+   ],
+   "shrub_density": 1.4,
+   "undergrowth": "shrubby_grass",
+   "props": [
+    [
+     "stones",
+     12
+    ],
+    [
+     "stump",
+     3
+    ]
+   ],
+   "fertility": 0.3,
+   "density": {
+    "by": "forest_bias",
+    "curve": [
+     [
+      0,
+      0
+     ],
+     [
+      0.5,
+      0.25
+     ],
+     [
+      1,
+      0.5
+     ]
+    ]
+   },
+   "clearings": {
+    "noise": "cellular_120m",
+    "share": 0.35
+   }
+  },
+  {
+   "name": "charred_dead",
+   "id": 5,
+   "trees": [
+    [
+     "charred_trunk",
+     1.0
+    ]
+   ],
+   "undergrowth": "none",
+   "floor": {
+    "soil": "grey_dust"
+   },
+   "props": [
+    [
+     "charred_stump",
+     8
+    ]
+   ],
+   "fertility": 0.05
+  },
+  {
+   "name": "beech_mixed",
+   "id": 6,
+   "trees": [
+    [
+     "beech",
+     0.55
+    ],
+    [
+     "hornbeam",
+     0.2
+    ],
+    [
+     "oak",
+     0.15
+    ],
+    [
+     "birch",
+     0.1
+    ]
+   ],
+   "shrubs": [
+    [
+     "hazel",
+     0.6
+    ],
+    [
+     "elder",
+     0.4
+    ]
+   ],
+   "shrub_density": 0.35,
+   "undergrowth": "fern_and_grass",
+   "floor": {
+    "soil": "leaf_litter",
+    "noise": "fbm_8m"
+   },
+   "props": [
+    [
+     "fallen_log",
+     6
+    ],
+    [
+     "stump",
+     10
+    ],
+    [
+     "branches",
+     80
+    ],
+    [
+     "mushrooms",
+     25
+    ]
+   ],
+   "fertility": 0.8,
+   "density": {
+    "by": "forest_bias",
+    "curve": [
+     [
+      0,
+      0
+     ],
+     [
+      0.5,
+      0.6
+     ],
+     [
+      1,
+      0.95
+     ]
+    ]
+   },
+   "clearings": {
+    "noise": "cellular_120m",
+    "share": 0.15
+   },
+   "edge": {
+    "shrubs": 1.8,
+    "metres": 25
+   }
+  },
+  {
+   "name": "conifer",
+   "id": 7,
+   "trees": [
+    [
+     "spruce",
+     0.65
+    ],
+    [
+     "fir",
+     0.35
+    ]
+   ],
+   "shrubs": [
+    [
+     "elder",
+     1.0
+    ]
+   ],
+   "shrub_density": 0.15,
+   "undergrowth": "thin_litter",
+   "floor": {
+    "soil": "leaf_litter"
+   },
+   "props": [
+    [
+     "fallen_log",
+     10
+    ],
+    [
+     "stump",
+     8
+    ],
+    [
+     "branches",
+     60
+    ],
+    [
+     "mushrooms",
+     40
+    ]
+   ],
+   "fertility": 0.9,
+   "density": {
+    "by": "forest_bias",
+    "curve": [
+     [
+      0,
+      0
+     ],
+     [
+      0.5,
+      0.75
+     ],
+     [
+      1,
+      1.0
+     ]
+    ]
+   }
+  },
+  {
+   "name": "old_oak",
+   "id": 8,
+   "trees": [
+    [
+     "old_dark_oak",
+     0.85
+    ],
+    [
+     "oak",
+     0.15
+    ]
+   ],
+   "shrubs": [
+    [
+     "hazel",
+     1.0
+    ]
+   ],
+   "shrub_density": 0.1,
+   "undergrowth": "thin_litter",
+   "floor": {
+    "soil": "dark_oak_floor",
+    "noise": "cellular_18m"
+   },
+   "props": [
+    [
+     "fallen_log",
+     12
+    ],
+    [
+     "stump",
+     6
+    ],
+    [
+     "branches",
+     120
+    ],
+    [
+     "mushrooms",
+     20
+    ]
+   ],
+   "fertility": 0.6,
+   "density": {
+    "by": "forest_bias",
+    "curve": [
+     [
+      0,
+      0
+     ],
+     [
+      0.5,
+      0.45
+     ],
+     [
+      1,
+      0.7
+     ]
+    ]
+   },
+   "clearings": {
+    "noise": "cellular_120m",
+    "share": 0.2
+   }
+  },
+  {
+   "name": "eerie",
+   "id": 9,
+   "trees": [
+    [
+     "eerie_bare",
+     0.7
+    ],
+    [
+     "beech",
+     0.3
+    ]
+   ],
+   "shrubs": [
+    [
+     "elder",
+     1.0
+    ]
+   ],
+   "shrub_density": 0.1,
+   "undergrowth": "thin_litter",
+   "floor": {
+    "soil": "dark_oak_floor"
+   },
+   "props": [
+    [
+     "snag",
+     15
+    ],
+    [
+     "branches",
+     60
+    ]
+   ],
+   "fertility": 0.55
+  },
+  {
+   "name": "withered",
+   "id": 10,
+   "trees": [
+    [
+     "dead_birch",
+     0.6
+    ],
+    [
+     "eerie_bare",
+     0.4
+    ]
+   ],
+   "undergrowth": "sedge",
+   "floor": {
+    "soil": "peat"
+   },
+   "props": [
+    [
+     "snag",
+     20
+    ],
+    [
+     "half_sunk_log",
+     8
+    ]
+   ],
+   "fertility": 0.35
+  },
+  {
+   "name": "tropical",
+   "id": 11,
+   "trees": [
+    [
+     "tropical_broadleaf",
+     1.0
+    ]
+   ],
+   "shrubs": [
+    [
+     "tropical_shrub",
+     1.0
+    ]
+   ],
+   "shrub_density": 0.8,
+   "undergrowth": "tropical_ferns",
+   "floor": {
+    "soil": "leaf_litter"
+   },
+   "props": [
+    [
+     "branches",
+     120
+    ],
+    [
+     "fallen_log",
+     6
+    ]
+   ],
+   "fertility": 1.0,
+   "density": {
+    "by": "forest_bias",
+    "curve": [
+     [
+      0,
+      0
+     ],
+     [
+      0.5,
+      0.8
+     ],
+     [
+      1,
+      1.0
+     ]
+    ]
+   }
+  },
+  {
+   "name": "savanna_dry",
+   "id": 12,
+   "trees": [
+    [
+     "savanna_acacia",
+     1.0
+    ]
+   ],
+   "shrubs": [
+    [
+     "dry_bush",
+     1.0
+    ]
+   ],
+   "shrub_density": 0.6,
+   "undergrowth": "dry_tussocks",
+   "props": [
+    [
+     "dry_branches",
+     20
+    ],
+    [
+     "stones",
+     8
+    ]
+   ],
+   "fertility": 0.2,
+   "density": {
+    "by": "forest_bias",
+    "curve": [
+     [
+      0,
+      0
+     ],
+     [
+      0.5,
+      0.15
+     ],
+     [
+      1,
+      0.35
+     ]
+    ]
+   },
+   "clearings": {
+    "noise": "cellular_120m",
+    "share": 0.45
+   }
+  },
+  {
+   "name": "savanna_coast",
+   "id": 13,
+   "trees": [
+    [
+     "savanna_acacia",
+     0.7
+    ],
+    [
+     "tropical_broadleaf",
+     0.3
+    ]
+   ],
+   "shrubs": [
+    [
+     "dry_bush",
+     0.6
+    ],
+    [
+     "tropical_shrub",
+     0.4
+    ]
+   ],
+   "shrub_density": 0.7,
+   "undergrowth": "dry_tussocks",
+   "props": [
+    [
+     "dry_branches",
+     25
+    ]
+   ],
+   "fertility": 0.5,
+   "density": {
+    "by": "forest_bias",
+    "curve": [
+     [
+      0,
+      0
+     ],
+     [
+      0.5,
+      0.4
+     ],
+     [
+      1,
+      0.7
+     ]
+    ]
+   }
+  },
+  {
+   "name": "barren",
+   "id": 14,
+   "undergrowth": "none",
+   "fertility": 0.0
+  }
+ ]
+}

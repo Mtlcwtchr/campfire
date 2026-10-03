@@ -110,8 +110,9 @@ std::optional<Schema> parseSchema(const nlohmann::json& j, std::string* why) {
         fail(why, "world extents must be positive");
         return std::nullopt;
     }
-    if (s.world.chunkMetres != 32768 || s.world.sampleMetres != 256) {
-        fail(why, "only sample_m 256 and chunk_m 32768 (128 x 128 samples a chunk) are supported");
+    if (s.world.chunkMetres != 32768 ||
+        (s.world.sampleMetres != 64 && s.world.sampleMetres != 128 && s.world.sampleMetres != 256)) {
+        fail(why, "sample_m must be 64, 128 or 256 and chunk_m must be 32768");
         return std::nullopt;
     }
     if (std::fmod(double(s.world.chunkMetres), s.world.sampleMetres) != 0) {

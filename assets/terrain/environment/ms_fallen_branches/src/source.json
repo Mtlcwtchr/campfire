@@ -1,0 +1,41 @@
+{
+  "site": "fab",
+  "asset_id": "se1kxrh",
+  "asset_url": "https://www.fab.com/listings/874d948f-b6a2-4846-bdeb-49840d70658b",
+  "license": "Fab / original Quixel asset licence (not CC0)",
+  "archive": "assets/downloaded/fallen_branches_se1kxrh_1k.zip",
+  "archive_sha256": "fafa32c14e4758eabdb61825c374b2ab69ed9535aeba74f8abdb3de2114c9fa8",
+  "original_physical_metres": [
+    2.0,
+    2.0
+  ],
+  "source_normal_convention": "dx",
+  "normal_convention": "gl",
+  "files": {
+    "diffuse": {
+      "file": "ms_fallen_branches_diffuse.png",
+      "original": "Fallen_Branches_se1kxrh_1K_BaseColor.jpg",
+      "sha256": "fe1d90dfc8f8f9d08ff120c953529c4c055cd6962a6c28e3395f712e03fef264"
+    },
+    "normal": {
+      "file": "ms_fallen_branches_normal.png",
+      "original": "Fallen_Branches_se1kxrh_1K_Normal.jpg",
+      "sha256": "adf916c7949790593f6bb4a5ee7a02cf5d46da71546798302e1c5a6b6d1a0ba8"
+    },
+    "mask": {
+      "file": "ms_fallen_branches_mask.png",
+      "original": "Fallen_Branches_se1kxrh_1K_Opacity.jpg",
+      "sha256": "d06c01ffe23822dee928751310a1153935d27585f805ff414a483459c6b954e0"
+    },
+    "ao": {
+      "file": "ms_fallen_branches_ao.png",
+      "original": "Fallen_Branches_se1kxrh_1K_AO.jpg",
+      "sha256": "7647c14df0b8a97fb06b9e29c1bb0ba944ba534e677a4d878971c64fd6f603b1"
+    },
+    "rough": {
+      "file": "ms_fallen_branches_rough.png",
+      "original": "Fallen_Branches_se1kxrh_1K_Roughness.jpg",
+      "sha256": "2603e8086ecef9e6845d6cd3ac63d7a2f96192e506ff264d7c13b5fc6e0ed542"
+    }
+  }
+}

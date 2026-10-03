@@ -24,24 +24,34 @@ bool ForestProxyCache::setup(engine::Device& device,engine::RenderPipeline& pipe
     if (!gpu_.setup(device) || !material_.setup(device,pipeline,materials::sceneModels(true),layout)) return false;
     material_.textures(gpu_.bindings(shadow));ready_=true;return true;
 }
-void ForestProxyCache::clear() {gpu_.cache.clear();groups_.clear();drawn_.clear();fade_.clear();objectsVersion_=~std::uint64_t(0);}
+void ForestProxyCache::clear() {gpu_.cache.clear();groups_.clear();regionRevisions_.clear();drawn_.clear();fade_.clear();objectsVersion_=~std::uint64_t(0);}
 void ForestProxyCache::rebuild(const world::ScenePlacementSnapshot* placement) {
     if (!placement) {clear();return;}
     if (objectsVersion_==placement->objectsVersion) return;
     objectsVersion_=placement->objectsVersion;
-    std::set<engine::render::ImpostorKey> unchanged;
+    std::unordered_set<engine::render::ImpostorKey,engine::render::ImpostorKeyHash> unchanged;
+    unchanged.reserve(groups_.size());
     for (auto it=groups_.begin();it!=groups_.end();) {
         const auto revision=placement->regionRevisions.find(parent(it->first));
         if (revision!=placement->regionRevisions.end() && revision->second==it->second.revision) {unchanged.insert(it->first);++it;}
         else {gpu_.cache.invalidate(it->first);it=groups_.erase(it);}
     }
-    for (const auto& object:placement->scatter.objects) {
-        if (object.model>=sources_.size() || !sources_[object.model]) continue;
-        const auto cell=key(object.x,object.y);if (unchanged.contains(cell)) continue;
-        const auto revision=placement->regionRevisions.find(parent(cell));if (revision==placement->regionRevisions.end()) continue;
-        auto& group=groups_[cell];group.revision=revision->second;
-        const auto& source=sources_[object.model];
-        group.members.push_back({source,{object.x-cell.x,object.y-cell.y,object.z+source->centre[2]*object.scale},object.scale,object.yaw,object.tint});
+    // Region by region: a part at the revision last grouped adds nothing new
+    // (its cells are all in `unchanged`), so it is not even walked.
+    auto previous=std::move(regionRevisions_);
+    regionRevisions_.clear();
+    for (std::size_t i=0;i<placement->regions.size() && i<placement->parts.size();++i) {
+        const auto& part=*placement->parts[i];
+        regionRevisions_[placement->regions[i]]=part.revision;
+        if (const auto was=previous.find(placement->regions[i]); was!=previous.end() && was->second==part.revision) continue;
+        for (const auto& object:part.objects) {
+            if (object.model>=sources_.size() || !sources_[object.model]) continue;
+            const auto cell=key(object.x,object.y);if (unchanged.contains(cell)) continue;
+            const auto revision=placement->regionRevisions.find(parent(cell));if (revision==placement->regionRevisions.end()) continue;
+            auto& group=groups_[cell];group.revision=revision->second;
+            const auto& source=sources_[object.model];
+            group.members.push_back({source,{object.x-cell.x,object.y-cell.y,object.z+source->centre[2]*object.scale},object.scale,object.yaw,object.tint});
+        }
     }
     for (auto& [cell,group]:groups_) if (!unchanged.contains(cell)) {
         engine::camera::Vec3 low{1e30,1e30,1e30},high{-1e30,-1e30,-1e30};

@@ -192,6 +192,7 @@ WsCoastIn wsCoastInput(float2 p, WsPlace here, float level, float2 rise, float s
     i.bed = here.bed;
     i.level = level;
     i.slope = length(rise);
+    i.bedRise = rise;
     const float windLength = length(windNow.xy);
     i.windDir = windLength > 1e-4 ? windNow.xy / windLength : float2(1.0, 0.0);
     i.sea = sea;
@@ -205,14 +206,15 @@ WsCoastIn wsCoastInput(float2 p, WsPlace here, float level, float2 rise, float s
 // --- the sheet ----------------------------------------------------------------
 
 // Its vertices: a grid centred where the camera looks (morphWindow.xy, see
-// WaterPass), about half a metre between vertices there and exponentially
-// coarser outwards; morphUv.x carries each vertex's own spacing, which decides
+// WaterPass), one metre between vertices throughout its central 192 m and
+// exponentially coarser beyond; morphUv.x carries the local spacing, deciding
 // the shortest wave it may carry. Each vertex is lifted by the open sea's swell
 // and, near a coast, by the wave rolling in and the swash running up the sand.
 WaterOut WaterSheetVS(WaterIn input)
 {
     WaterOut o = (WaterOut)0;
     const float2 xy = morphWindow.xy + input.position.xy;
+    o.frameXY = xy - frameAnchorOf(camera.xy);
     const float spacing = max(input.morphUv.x, 0.25);
     const WsPlace here = wsPlaceVS(xy);
     const float owned = wsSheetOwns(here);
@@ -225,21 +227,21 @@ WaterOut WaterSheetVS(WaterIn input)
     [branch] if (e > 0.0 && e < kWsMaxRunup && sea > 0.0 && slope > 0.004)
         reach = wsBeachReachVS(xy, e, -rise / slope, slope);
     const WsCoast coast = wsCoastAt(wsCoastInput(xy, here, level, rise, sea, reach,
-                                                 wind, viewport.z, spacing));
+                                                 swellWind, viewport.z, spacing));
     // The open sea's own swell, handed over to the coast's waves as they shoal.
     float2 swellSlope;
-    const float swell = waveField(xy, wind.xy, viewport.z, spacing, swellSlope) *
-                        waterWaveRoom(max(level - here.bed, 0.0), 1.0) * waterWaveAmplitude(wind.z) *
+    const float swell = waveField(xy, swellWind.xy, viewport.z, spacing, swellSlope) *
+                        waterWaveRoom(max(level - here.bed, 0.0), 1.0) * waterWaveAmplitude(swellWind.z) *
                         1.6 * coast.calm * sea;
     float height = level + coast.wave + swell;
-    // The swash: the sheet over the sand as far as it has climbed, and just
-    // clear of the ground over the strip the sea has lately been over, where
-    // the foam it left and the wet sand are drawn. A little above both, as the
-    // ground between two vertices is not the straight line between them; the
-    // pixel stage decides exactly where the water ends.
-    const float margin = 0.02 + spacing * min(slope, 0.5) * 0.3;
-    if (coast.swashTop > kWsNone * 0.5) height = max(height, level + coast.swashTop + margin);
-    if (e > 0.0 && e < coast.swept * 1.08 + 0.03) height = max(height, here.bed + 0.03 + margin);
+    // A stable carrier for the swash and stranded foam. Its extent must not
+    // jump between vertices or follow a wave ID: that made entire triangles
+    // pop through the beach. Visibility is resolved continuously per pixel.
+    const float margin = 0.03 + min(spacing * min(slope, 0.5) * 0.3, 0.15);
+    const float apron = smoothstep(-0.15, 0.0, e) *
+                        (1.0 - smoothstep(kWsMaxRunup + 0.1, kWsMaxRunup + 0.6, e)) * sea;
+    height = max(height, lerp(height, here.bed + margin, apron));
+    height = max(height, level + coast.swashTop);
     // Every vertex resource stays referenced (the climate field included):
     // slots are handed out to what a shader reads, and one gone unused would
     // move the page textures onto the wrong slots.
@@ -259,7 +261,7 @@ WaterOut WaterSheetVS(WaterIn input)
 float4 WaterSheetPS(WaterOut input) : SV_Target0
 {
     const float2 p = input.worldXY;
-    const float2 dx = ddx(p), dy = ddy(p);
+    const float2 dx = ddx(input.frameXY), dy = ddy(input.frameXY);
     const float footprint = max(length(dx), length(dy));
     WsPlace here = wsPlacePS(p);
     here.bed = lerp(here.bed, min(here.bed, -60.0), wsOpenSea(p));
@@ -274,14 +276,20 @@ float4 WaterSheetPS(WaterOut input) : SV_Target0
     [branch] if (e > 0.0 && e < kWsMaxRunup && sea > 0.0 && slope > 0.004)
         reach = wsBeachReachPS(p, e, -rise / slope, slope);
     const WsCoastIn coastIn = wsCoastInput(p, here, level, rise, sea, reach,
-                                           windPS, viewportPS.z, footprint);
+                                           swellWindPS, viewportPS.z, 1.0);
     const WsCoast coast = wsCoastAt(coastIn);
-    // The incoming wave's own slope, in world metres, from screen derivatives
-    // (taken before anything can discard), for the light to see its face.
-    const float det = dx.x * dy.y - dx.y * dy.x;
-    const float inv = abs(det) > 1e-7 ? 1.0 / det : 0.0;
-    const float hx = ddx(coast.wave), hy = ddy(coast.wave);
-    float2 face = float2(hx * dy.y - hy * dx.y, dx.x * hy - dy.x * hx) * inv;
+    // Evaluate the visual surface in world coordinates, not by interpolating
+    // samples on the camera-centred mesh. Moving that mesh must not advect
+    // waves, change their amplitude, or change the waterline.
+    float2 swellSlope;
+    const float swellScale = waterWaveRoom(max(level - here.bed, 0.0), 1.0) *
+                             waterWaveAmplitude(swellWindPS.z) * 1.6 * coast.calm * sea;
+    const float swell = waveField(p, swellWindPS.xy, viewportPS.z, 1.0, swellSlope) * swellScale;
+    gSheetSwellSlope = swellSlope * swellScale;
+    // Differentiate the wave profile, not neighbouring pixels of sampled
+    // terrain. Sampler sub-texel rounding made those derivatives zero then
+    // spike on every tiny terrace: bright horizontal dashes in the recording.
+    float2 face = coast.waveSlope;
     const float faceLength = length(face);
     face *= faceLength > 0.8 ? 0.8 / faceLength : 1.0;
 
@@ -292,8 +300,20 @@ float4 WaterSheetPS(WaterOut input) : SV_Target0
     if (here.bed < level && here.cover < 0.02) discard;
     // The water stands wherever its rolling surface - the wave, or the swash
     // over the sand - is above the ground, and nowhere else.
-    const float surfaceHeight = level + wsCoastSurface(coast);
+    // Pixel footprint filters textures, never the physical height of water.
+    const float waveHeight = coast.wave + swell;
+    const float surfaceHeight = level + max(waveHeight, coast.swashTop);
     const float depth = surfaceHeight - here.bed;
+    const float shorelineSoftness = max(0.025, slope * max(0.8, footprint * 1.5));
+    const float waterJoin = smoothstep(0.0, shorelineSoftness, depth);
+    gCoastShoreward = slope > 1e-4 ? rise / slope : coastIn.windDir;
+    const float foamPresence = max(max(coast.roller, coast.trail),
+                                  max(max(coast.lip, coast.sheetFoam), coast.residue));
+    [branch] if (foamPresence > 0.0001 && footprint < 4.0) {
+        const float floating = 1.0 - smoothstep(-0.6, -0.02, e);
+        gCoastFoamPattern = wsFoamPattern(frameAnchorFrom(p, input.frameXY),
+            input.frameXY - gCoastShoreward * coast.carried * floating, footprint);
+    }
     [branch] if (depth <= 0.0) {
         // Sand the sea has just left: what it stranded there, and the wet.
         if (coast.residue < 0.004 && coast.wetSand < 0.004) discard;
@@ -302,21 +322,27 @@ float4 WaterSheetPS(WaterOut input) : SV_Target0
         return decal;
     }
     gCoast = coast;
-    gCoastShoreward = slope > 1e-4 ? rise / slope : coastIn.windDir;
     gCoastFace = face;
     gSheetHasCoast = true;
     input.depth = depth;
     input.worldHeight = surfaceHeight;
     input.baseLevel = level;
-    input.lift = coast.wave;
+    input.lift = waveHeight;
     // The sea needs no coverage; up a river mouth the page's does the same
     // work it does for page water.
     input.cover = lerp(1.0, here.cover, 1.0 - seaShare);
     input.motion = float4(here.flow, here.river, here.lake);
     input.ice = 0.0;
     float4 result = WaterScenePS(input);
+    // Blend premultiplied coverage across the thin edge. Both sides read the
+    // same foam pattern; switching shading at depth==0 cannot cut a stripe.
+    [branch] if (waterJoin < 1.0) {
+        const float4 sand = wsSandDecal(float3(p, here.bed), coast, footprint);
+        const float alpha = lerp(sand.a, result.a, waterJoin);
+        const float3 colour = lerp(sand.rgb * sand.a, result.rgb * result.a, waterJoin);
+        result = float4(colour / max(alpha, 0.00001), alpha);
+    }
     result.a *= owned;
     return withEditorMarks(result, p, footprint);
 }
 #endif
-

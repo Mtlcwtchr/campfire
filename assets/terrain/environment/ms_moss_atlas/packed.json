@@ -1,0 +1,78 @@
+{
+  "id": "ms_moss_atlas",
+  "runtime_size": 2048,
+  "runtime_files": {
+    "albedo": "ms_moss_atlas_albedo.png",
+    "normal": "ms_moss_atlas_normal.png",
+    "properties": "ms_moss_atlas_properties.png"
+  },
+  "properties_channels": {
+    "r": "ao",
+    "g": "roughness",
+    "b": "height",
+    "a": "mask"
+  },
+  "mip_steps": [
+    2,
+    4,
+    8,
+    16
+  ],
+  "height_range_before_stretch": [
+    0.7933,
+    254.4504
+  ],
+  "had": {
+    "ao": true,
+    "rough": true,
+    "displacement": true,
+    "mask": true
+  },
+  "source": {
+    "site": "fab",
+    "asset_id": "reAdL2",
+    "asset_url": "https://www.fab.com/listings/29307c07-c07f-4b0d-8d91-6581481a7431",
+    "license": "Fab / original Quixel asset licence (not CC0)",
+    "archive": "assets/downloaded/moss_readl2_1k.zip",
+    "archive_sha256": "9a109c3b4a90a698d90baa11568dcef3459b28f2f248e01a7ee394598f4d812d",
+    "original_physical_metres": [
+      0.25,
+      0.25
+    ],
+    "source_normal_convention": "dx",
+    "normal_convention": "gl",
+    "files": {
+      "diffuse": {
+        "file": "ms_moss_atlas_diffuse.png",
+        "original": "Moss_reAdL2_1K_BaseColor.jpg",
+        "sha256": "19480aa50cf8d55454450964fd57ab1247cd6c983569df497ecb5bb909afecb5"
+      },
+      "normal": {
+        "file": "ms_moss_atlas_normal.png",
+        "original": "Moss_reAdL2_1K_Normal.jpg",
+        "sha256": "97c4baf8c4cc7ac03078db899a2afe696e51d2df9543b6db601c55a6d7a3898d"
+      },
+      "mask": {
+        "file": "ms_moss_atlas_mask.png",
+        "original": "Moss_reAdL2_1K_Opacity.jpg",
+        "sha256": "8910fe500b9767f6ebd3d9f5e17e055e02719db37138e115468c61f0e2d34de5"
+      },
+      "ao": {
+        "file": "ms_moss_atlas_ao.png",
+        "original": "Moss_reAdL2_1K_AO.jpg",
+        "sha256": "b57753d380cb3c8ae52f2f2aa4064adc65c3053f05b1d4339a55083977369fb3"
+      },
+      "rough": {
+        "file": "ms_moss_atlas_rough.png",
+        "original": "Moss_reAdL2_1K_Roughness.jpg",
+        "sha256": "b8b1393d06d10ca7a5f177eaa362aaf89e239ee94d2824ab41605123fe0b3655"
+      },
+      "displacement": {
+        "file": "ms_moss_atlas_displacement.png",
+        "original": "Moss_reAdL2_1K_Displacement.jpg",
+        "sha256": "9f54ec8c37eb9c6ecb7dea70d0f8e7dcafd7f8612afa3d89c8972202c34710fe"
+      }
+    }
+  },
+  "world_scale": 0.25
+}

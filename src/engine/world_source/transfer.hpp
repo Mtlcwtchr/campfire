@@ -23,6 +23,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "engine/world_source/png_io.hpp"
 #include "engine/world_source/world_source.hpp"
 
 namespace engine::world_source {
@@ -37,6 +38,10 @@ struct ImportReport {
     std::map<ChunkKey, std::set<std::string>> dirty;
     // Loose pictures: the grey taken as the coast (LooseImages::seaGrey).
     int seaGrey = -1;
+    // The stage a package asks its regions be taken to (world.json "stage":
+    // "relief" or "water"): drainage and climate, and rivers and lakes, without
+    // pressing their buttons. Empty: the heights alone.
+    std::string stage;
     // Categorical layers whose ids the import renumbered by name: layer ->
     // the package's id -> the source's.
     std::map<std::string, std::map<std::uint32_t, std::uint32_t>> renumbered;
@@ -104,6 +109,19 @@ struct LooseImages {
 std::optional<ImportReport> importImages(const LooseImages& images, const std::filesystem::path& source,
                                          const ImportTarget& target, std::string* why = nullptr);
 
+// Rasters worked out in memory rather than read from pictures: what the
+// editor's procedural phases write (game/generation/world_procedural.hpp)
+// in place of an import. Each is already in the canonical schema's numbers
+// (canonicalSchema: `height` one 16-bit channel, `control` four 8-bit ones)
+// and holds exactly one pixel per source sample of `target.rect` - nothing
+// is resampled. Either may be absent, not both. Laid in like an import: the
+// mask and its feathered edge, only the chunks whose hash changed written.
+struct GridRasters {
+    std::optional<Image> height, control;
+};
+std::optional<ImportReport> importGrids(GridRasters rasters, const std::filesystem::path& source,
+                                        const ImportTarget& target, std::string* why = nullptr);
+
 // The rasters a source is made with when nothing else says: height over
 // -2000..8000 m in sixteen bits (a sixth of a metre), and control_0 with the
 // four channels above.
@@ -136,6 +154,10 @@ std::optional<ImportReport> clearRasters(const std::filesystem::path& source,
 // outside the new extent is dropped. Rewrites the source.
 bool reshapeSource(const std::filesystem::path& source, std::int64_t westChunks, std::int64_t northChunks,
                    const WorldExtent& world, std::string* why = nullptr);
+
+// Rebuilds raster storage on a different supported sample grid without
+// changing world-space coverage or vector features.
+bool resampleSource(const std::filesystem::path& source, const WorldExtent& world, std::string* why = nullptr);
 
 struct ExportOptions {
     enum class Mode { Source, Preview } mode = Mode::Source;

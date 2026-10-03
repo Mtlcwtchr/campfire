@@ -1,6 +1,40 @@
 #ifndef TERRAIN_MATERIAL_HLSLI
 #define TERRAIN_MATERIAL_HLSLI
 
+#include "world_frame.hlsli"
+
+// A point of the ground as the material reads it (world_frame.hlsli): an exact
+// frame origin and the metres from it. `local.z` is the height itself - heights
+// are small enough for a float to hold to a fraction of a millimetre.
+struct GroundFrame {
+    float2 anchor;
+    float3 local;
+};
+
+GroundFrame groundFrame(float2 worldXY, float2 frameXY, float height)
+{
+    GroundFrame f;
+    f.anchor = frameAnchorFrom(worldXY, frameXY);
+    f.local = float3(frameXY, height);
+    return f;
+}
+
+// A world position taken as it is (frame origin nought): what callers without
+// an interpolated offset - probes, tests - always had.
+GroundFrame groundFrameOfWorld(float3 world)
+{
+    GroundFrame f;
+    f.anchor = float2(0.0, 0.0);
+    f.local = world;
+    return f;
+}
+
+// The world position again, for smooth fields and metre-scale noise only.
+float3 groundFrameWorld(GroundFrame f)
+{
+    return float3(f.anchor + f.local.xy, f.local.z);
+}
+
 // All maps describe the same surface. Never jitter colour, properties and
 // normals differently, or let camera distance change their mixture.
 float3 rnmBlend(float3 baseTS, float3 detailTS)
@@ -57,21 +91,9 @@ MaterialBand sampleMaterialBand(int layer, float2 uv, float2 dx, float2 dy, floa
     // and no derivative of a random offset polluting mip selection.
     const float2 a = uv + float2(0.17, 0.63);
     const float2 b = uv + float2(0.71, 0.29);
-    // Variance-preserving mix of the two copies. A plain lerp at 50/50 is a
-    // double exposure of one scan over a shifted copy of itself: half the
-    // contrast, which is most of what read as a soapy, blurred ground close
-    // up. Rescaling the deviation from the mean by 1/sqrt(w^2+(1-w)^2)
-    // keeps the grain at full strength through the whole blend - where the
-    // grain is resolved. Minified, the samples are already averages and
-    // rescaling them would bring unresolved grain back, so it fades out.
-    uint bandWidth, bandHeight, bandLayers, bandLevels;
-    groundTex.GetDimensions(0, bandWidth, bandHeight, bandLayers, bandLevels);
-    const float resolved = 1.0 - smoothstep(0.75, 2.0, max(length(dx), length(dy)) * float(bandWidth));
-    const float k = lerp(1.0, rsqrt(blend * blend + (1.0 - blend) * (1.0 - blend)), resolved);
-    const float3 mean = groundTex.SampleLevel(groundSampler, float3(0.5, 0.5, layer), 16).rgb;
-    const float3 colour = lerp(groundTex.SampleGrad(groundSampler, float3(a, layer), dx, dy).rgb,
-                               groundTex.SampleGrad(groundSampler, float3(b, layer), dx, dy).rgb, blend);
-    s.colour = max(mean + (colour - mean) * k, 0.0);
+    // Keep scan contrast quiet through the copy hand-over: no grain boost.
+    s.colour = lerp(groundTex.SampleGrad(groundSampler, float3(a, layer), dx, dy).rgb,
+                    groundTex.SampleGrad(groundSampler, float3(b, layer), dx, dy).rgb, blend);
     s.properties = lerp(groundPropertiesTex.SampleGrad(groundPropertiesSampler, float3(a, layer), dx, dy),
                         groundPropertiesTex.SampleGrad(groundPropertiesSampler, float3(b, layer), dx, dy), blend);
     s.normal = lerp(groundNormalTex.SampleGrad(groundNormalSampler, float3(a, layer), dx, dy).xyz,
@@ -105,32 +127,65 @@ MaterialMacro sampleMaterialMacro(int layer, float2 uv, float2 dx, float2 dy, fl
     return s;
 }
 
+// Turns of a layer after which every band of materialProjection repeats at
+// once: the distance octaves 2, 4, 8, 16, 32, middle 16, broad 96. Shifting a
+// texture coordinate by a multiple of it changes nothing that is drawn.
+static const float kMaterialRepeat = 96.0;
+// The coarsest distance octave: the scan at sixteen times its size.
+static const int kMaxTilingOctaves = 4;
+
+// The look's knobs (Scene::terrainLook, content/config/terrain_look.json):
+// tile size multiplier, distance octaves, the texels a pixel at which the
+// next octave starts, macro variation. Unset (x <= 0): the defaults.
+struct TerrainLookKnobs { float tile; float octaves; float start; float macro; };
+TerrainLookKnobs terrainLookKnobs()
+{
+    TerrainLookKnobs k;
+    const bool given = terrainLookPS.x > 0.0;
+    k.tile = given ? terrainLookPS.x : 1.0;
+    k.octaves = given ? clamp(terrainLookPS.y, 0.0, float(kMaxTilingOctaves)) : 0.0;
+    k.start = given ? max(terrainLookPS.z, 1.0) : 8.0;
+    k.macro = given ? max(terrainLookPS.w, 0.0) : 0.55;
+    return k;
+}
+
 MaterialSample materialProjection(int layer, float2 uv, float2 dx, float2 dy,
                                   float blend, float normalStrength)
 {
     // Fixed physical detail plus LOW-frequency macro colour, not three copies
-    // of the same microstructure. Camera zoom never changes texture scale.
+    // of the same microstructure.
     const float fineScale = 2.0, middleScale = 16.0, broadScale = 96.0;
-    MaterialBand fine = sampleMaterialBand(layer,
-        uv / fineScale, dx / fineScale, dy / fineScale, blend);
-    // Texture scale follows distance, growing with it: close up the scan at
-    // its photographed size (every texel real detail); once the fine band is
-    // well minified (past ~10 texels a pixel, where its own grain is already
-    // averaged away) a copy at four times the size takes over, so a hillside
-    // is not the same two-metre photograph printed ten thousand times. The
-    // hand-over starts where both are unresolved grain, so neither brings
-    // grain back or swims with zoom.
+    const TerrainLookKnobs knobs = terrainLookKnobs();
+    // Texture scale follows the size a texel takes on the screen. Close up the
+    // scan lies at its photographed size, every texel real detail. Once a
+    // pixel covers `start` of its texels - its own grain already averaged
+    // away - the next octave (the same scan at twice the size) takes over
+    // smoothly, and the one after at four times, so the repeat stays a few
+    // hundred pixels across at any zoom instead of the same two-metre
+    // photograph printed ten thousand times over a hillside. Two octaves at
+    // most are read at any pixel, the same as the old fixed far band; the
+    // hand-over is where both are unresolved grain, so neither brings grain
+    // back.
     uint texWidth, texHeight, texLayers, texLevels;
     groundTex.GetDimensions(0, texWidth, texHeight, texLayers, texLevels);
     const float texelsPerPixel = max(length(dx), length(dy)) / fineScale * float(texWidth);
-    const float far = smoothstep(10.0, 40.0, texelsPerPixel);
-    [branch] if (far > 0.01) {
-        const float wide = fineScale * 4.0;
-        const MaterialBand w = sampleMaterialBand(layer, uv / wide + float2(0.29, 0.83),
-            dx / wide, dy / wide, blend);
-        fine.colour = lerp(fine.colour, w.colour, far * 0.7);
-        fine.properties = lerp(fine.properties, w.properties, far * 0.7);
-        fine.normal = lerp(fine.normal, w.normal, far * 0.7);
+    const float level = clamp(log2(max(texelsPerPixel, 1e-4) / knobs.start), 0.0, knobs.octaves);
+    const float octave = min(floor(level), max(knobs.octaves - 1.0, 0.0));
+    const float toNext = knobs.octaves > 0.0 ? smoothstep(0.0, 1.0, level - octave) : 0.0;
+    MaterialBand fine = (MaterialBand)0;
+    [branch] if (toNext < 0.999) {
+        const float scale = fineScale * exp2(octave);
+        const float2 shift = frac(octave * float2(0.29, 0.83));
+        fine = sampleMaterialBand(layer, uv / scale + shift, dx / scale, dy / scale, blend);
+    }
+    [branch] if (toNext > 0.001) {
+        const float next = octave + 1.0;
+        const float scale = fineScale * exp2(next);
+        const float2 shift = frac(next * float2(0.29, 0.83));
+        const MaterialBand wide = sampleMaterialBand(layer, uv / scale + shift, dx / scale, dy / scale, blend);
+        fine.colour = lerp(fine.colour, wide.colour, toNext);
+        fine.properties = lerp(fine.properties, wide.properties, toNext);
+        fine.normal = lerp(fine.normal, wide.normal, toNext);
     }
     const MaterialMacro middle = sampleMaterialMacro(layer,
         uv / middleScale + float2(0.31, 0.57), dx / middleScale, dy / middleScale, blend);
@@ -150,21 +205,30 @@ MaterialSample materialProjection(int layer, float2 uv, float2 dx, float2 dy,
     const float contrastStrength = layer == 5 ? 0.30 : layer == 4 ? 0.70 : layer == 2 ? 0.75 : 1.0;
     const float broadContrast = layer == 0 ? 0.35 : 0.50;
     MaterialSample s;
-    s.colour = fine.colour * (1.0 + contrastStrength *
-        clamp(middleLight * 0.35 + broadLight * broadContrast, -0.12, 0.12));
+    const float variation = knobs.macro;
+    // Broad light/dark AND a little of the scan's own hue drift, so a far
+    // hillside is not one tile's colours repeated: the bands carry what the
+    // fine copies cannot. Chroma is bounded and mean-preserving.
+    const float3 drift = (middle.colour - meanColour) * 0.20 + (broad.colour - meanColour) * 0.25;
+    s.colour = fine.colour * (1.0 + contrastStrength * variation *
+        clamp(middleLight * 0.35 + broadLight * broadContrast, -0.20, 0.20));
+    s.colour = max(s.colour + drift * contrastStrength * variation * 0.5, 0.0);
     s.properties = fine.properties;
-    s.properties.rg = saturate(fine.properties.rg + (middle.properties - meanProperties) * 0.20 +
-                              (broad.properties - meanProperties) * 0.10);
+    s.properties.rg = saturate(fine.properties.rg + ((middle.properties - meanProperties) * 0.20 +
+                              (broad.properties - meanProperties) * 0.10) * variation);
     // Fixed world-space height for material identity. A mip chosen by the
     // camera or a coarse shading band must NEVER decide grass versus rock.
     const float2 a = uv + float2(0.17, 0.63), b = uv + float2(0.71, 0.29);
     s.borderHeight = lerp(groundPropertiesTex.SampleLevel(groundPropertiesSampler, float3(a, layer), 6).b,
                           groundPropertiesTex.SampleLevel(groundPropertiesSampler, float3(b, layer), 6).b, blend);
     const float footprint = max(length(dx), length(dy));
-    const float fineDetail = 1.0 - smoothstep(0.06, 0.24, footprint / fineScale);
+    // The scan's normals only where their bumps are a few pixels across: a
+    // leaf-litter normal map minified to a pixel sparkles in the sun (every
+    // texel a different facet) - the dotted ripple on a meadow at mid range.
+    const float fineDetail = 1.0 - smoothstep(0.03, 0.14, footprint / fineScale);
     // Enlarging a normal map while keeping its slopes invents giant bumps.
     // Terrain geometry owns large-scale relief; the scan owns close-up detail.
-    s.normal = quietNormal(fine.normal, normalStrength * 0.65 * fineDetail);
+    s.normal = quietNormal(fine.normal, normalStrength * 0.40 * fineDetail);
     return s;
 }
 
@@ -194,33 +258,53 @@ MaterialSample materialProjection(int layer, float2 uv, float2 dx, float2 dy,
 
 // One layer of the array, laid at its class's (editable) scale adjusted by
 // the layer's own physical size, with the class's normal strength.
-MaterialSample sampleGroundLayer(int layer, int cls, float3 p, float3 normal,
+//
+// The texture coordinate is the frame's exact start (world_frame.hlsli) plus
+// the exact offset from it, never the world coordinate times the scale: far
+// from the origin that product holds the ground in 1.6 cm steps and the scan
+// came out as stripes of one colour. dx/dy are derivatives of `at.local`.
+MaterialSample sampleGroundLayer(int layer, int cls, GroundFrame at, float3 normal,
                                  float3 dx, float3 dy)
 {
-    const float frequency = tablePS[cls].x / 14.0 * kLayerMetres[cls] / kLayerMetres[layer];
+    const float frequency = tablePS[cls].x / 14.0 * kLayerMetres[cls] / kLayerMetres[layer] /
+                            terrainLookKnobs().tile;
+    const float3 p = groundFrameWorld(at);
     float3 weights = pow(abs(normal), 4.0);
     // Cull negligible projections smoothly, then renormalize; flat land costs
     // one projection, not three. Gradients are computed before this branch.
     weights = max(weights - 0.01, 0.0);
     weights /= max(dot(weights, float3(1, 1, 1)), 1e-5);
-    const float blend = smoothstep(0.15, 0.85, noiseAt(p.xy / 9.0 + float(layer) * 17.0));
+    // Which of the two offset copies, as soft organic patches. Value noise on
+    // a 9 m lattice, contrast-stretched, put the hand-over on its axes: square
+    // patches of one copy against the other all over the ground. Gradient
+    // noise turned off the world axes has no lattice to show.
+    const float2 turned = float2(dot(p.xy, float2(0.799, 0.602)), dot(p.xy, float2(-0.602, 0.799))) / 64.0 +
+                          float(layer) * 17.0;
+    const float blend = smoothstep(0.2, 0.8, perlinAt(turned));
     const float strengths[6] = {0.30, 0.34, 0.24, 0.46, 0.28, 0.20};
     const float strength = layer >= LAYER_CLIFF_DOLOMITE && layer <= LAYER_CLIFF_DESERT ? 0.55 : strengths[cls];
     MaterialSample result = (MaterialSample)0;
+    const float3 l = at.local;
     [unroll] for (int axis = 0; axis < 3; ++axis) {
-        float2 uv, gx, gy;
+        // The projection's coordinate in two parts: the frame origin's share
+        // (heights have none) and the offset's.
+        float2 uv, origin, gx, gy;
         if (axis == 0) {
             const float s = normal.x < 0.0 ? -1.0 : 1.0;
-            uv = float2(p.y, p.z * s); gx = float2(dx.y, dx.z * s); gy = float2(dy.y, dy.z * s);
+            uv = float2(l.y, l.z * s); origin = float2(at.anchor.y, 0.0);
+            gx = float2(dx.y, dx.z * s); gy = float2(dy.y, dy.z * s);
         } else if (axis == 1) {
             const float s = normal.y < 0.0 ? -1.0 : 1.0;
-            uv = float2(p.x, -p.z * s); gx = float2(dx.x, -dx.z * s); gy = float2(dy.x, -dy.z * s);
+            uv = float2(l.x, -l.z * s); origin = float2(at.anchor.x, 0.0);
+            gx = float2(dx.x, -dx.z * s); gy = float2(dy.x, -dy.z * s);
         } else {
             const float s = normal.z < 0.0 ? -1.0 : 1.0;
-            uv = float2(p.x, p.y * s); gx = float2(dx.x, dx.y * s); gy = float2(dy.x, dy.y * s);
+            uv = float2(l.x, l.y * s); origin = float2(at.anchor.x, at.anchor.y * s);
+            gx = float2(dx.x, dx.y * s); gy = float2(dy.x, dy.y * s);
         }
         [branch] if (weights[axis] > 0.0) {
-            const MaterialSample s = materialProjection(layer, uv * frequency,
+            const float2 start = frameTurns(origin, frequency, kMaterialRepeat);
+            const MaterialSample s = materialProjection(layer, start + uv * frequency,
                 gx * frequency, gy * frequency, blend, strength);
             result.colour += s.colour * weights[axis];
             result.properties += s.properties * weights[axis];
@@ -232,10 +316,10 @@ MaterialSample sampleGroundLayer(int layer, int cls, float3 p, float3 normal,
     return result;
 }
 
-MaterialSample sampleGroundMaterial(int layer, float3 p, float3 normal,
+MaterialSample sampleGroundMaterial(int layer, GroundFrame at, float3 normal,
                                      float3 dx, float3 dy)
 {
-    return sampleGroundLayer(layer, layer, p, normal, dx, dy);
+    return sampleGroundLayer(layer, layer, at, normal, dx, dy);
 }
 
 // Height only breaks a shared border. It cannot expose the runner-up material
@@ -273,4 +357,3 @@ float filteredMaterialNoise(float2 p, float footprint)
     return value / total;
 }
 #endif
-

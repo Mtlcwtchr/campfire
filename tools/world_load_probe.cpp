@@ -11,6 +11,9 @@
 //   world_load_probe --import <height.png | package dir> WxH [--drain | --water] [--rivers]
 //       an empty world of W x H regions, the picture (black -100 m, white
 //       3000 m) or package imported over all of it, and the world built on it
+//   world_load_probe --generate WxH [--drain | --water] [--rivers] [--seed S]
+//       the same with the maps generated instead (world_procedural.hpp):
+//       heights over the whole world, then control maps over them
 //
 // The disk cache of pages is off unless --disk: a cold open is what is being
 // measured, and a warm one only measures the disk.
@@ -30,6 +33,7 @@
 #include "game/generation/world_brush.hpp"
 #include "game/generation/world_compose.hpp"
 #include "game/generation/world_import.hpp"
+#include "game/generation/world_procedural.hpp"
 #include "engine/world_source/transfer.hpp"
 #include "game/generation/world_map_gen.hpp"
 #include "game/generation/world_sketch.hpp"
@@ -65,7 +69,7 @@ int main(int argc, char** argv) {
     bool prebake = true, disk = false, grow = false, reference = false, stages = false;
     int empty = 0, emptyHigh = 0;
     std::string importFrom;
-    bool water = false, rivers = false, drain = false;
+    bool water = false, rivers = false, drain = false, generate = false;
     std::string saveTo;
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
@@ -85,8 +89,12 @@ int main(int argc, char** argv) {
             const auto cross = size.find('x');
             emptyHigh = cross == std::string::npos ? empty : std::max(1, std::atoi(size.c_str() + cross + 1));
         }
-        else if (a == "--import") {
-            importFrom = next();
+        else if (a == "--import" || a == "--generate") {
+            // --generate WxH: the same, the maps made by the generator
+            // (world_procedural.hpp) instead of read: heights, then controls.
+            generate = a == "--generate";
+            if (!generate) importFrom = next();
+            else importFrom = "(generated)";
             const std::string size = next();
             empty = std::max(1, std::atoi(size.c_str()));
             const auto cross = size.find('x');
@@ -123,7 +131,40 @@ int main(int argc, char** argv) {
         std::string why;
         auto t = Clock::now();
         std::optional<ws::ImportReport> report;
-        if (std::filesystem::is_directory(importFrom)) {
+        if (generate) {
+            // Phase 1, the heights; phase 2, the control maps over them.
+            generation::ProceduralHeights dials;
+            dials.seed = seed;
+            const auto presets = generation::loadWorldPresets(contentDirectory() / "config" / "world_presets.json");
+            if (!presets.empty()) dials.settings = generation::regionSettingsFrom(presets.front(), seed);
+            auto heights = generation::generateSourceHeights(layout, {}, dials, 256, &why);
+            if (!heights) { std::cerr << "generate: " << why << "\n"; return 1; }
+            std::cout << "heights generated " << ms(t, Clock::now()) << " ms: " << heights->samplesX << " x "
+                      << heights->samplesY << " samples, land " << heights->landSamples << ", highest "
+                      << heights->highestMetres << " m, " << residentMb() << " MB\n";
+            ws::GridRasters grids;
+            grids.height = ws::Image{std::uint32_t(heights->samplesX), std::uint32_t(heights->samplesY), 1, 16, {},
+                                     std::move(heights->height)};
+            report = ws::importGrids(std::move(grids), root, target, &why);
+            if (report) {
+                const auto c = Clock::now();
+                generation::ProceduralControls controls;
+                controls.seed = seed;
+                auto maps = generation::generateSourceControls(root, layout, {}, controls, &why);
+                if (!maps) { std::cerr << "controls: " << why << "\n"; return 1; }
+                ws::ImportTarget mask = target;
+                const double r = double(generation::kRegionMetres);
+                for (const auto& [rx, ry] : maps->regions) mask.mask.push_back({rx * r, ry * r, (rx + 1) * r, (ry + 1) * r});
+                mask.rect = maps->rect();
+                ws::GridRasters cgrids;
+                cgrids.control = ws::Image{std::uint32_t(maps->samplesX), std::uint32_t(maps->samplesY), 4, 8,
+                                           std::move(maps->control), {}};
+                const auto written = ws::importGrids(std::move(cgrids), root, mask, &why);
+                if (!written) { std::cerr << "controls: " << why << "\n"; return 1; }
+                std::cout << "control maps " << ms(c, Clock::now()) << " ms: " << written->chunksWritten << " chunks, "
+                          << residentMb() << " MB\n";
+            }
+        } else if (std::filesystem::is_directory(importFrom)) {
             report = ws::importPackage(importFrom, root, target, &why);
         } else {
             ws::LooseImages images;

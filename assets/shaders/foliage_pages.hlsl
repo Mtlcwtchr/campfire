@@ -69,10 +69,11 @@ float pageFloraCard(float2 p, float4 foliage, float canopy, float moisture, floa
     const float shore = 1.0 - smoothstep(0.15, 0.9, aboveWater);
     const float reeds = saturate(shore * (0.35 + 0.65 * saturate(moisture * 1.4)) + marsh * 0.8) * 0.75;
     // Drifts of flowers: a coarse field says where, a finer one breaks the edge.
-    const float drift = smoothstep(0.50, 0.70, foliageNoise(p.x / 37.0 + 13.1, p.y / 37.0 - 5.7)) *
-                        smoothstep(0.30, 0.55, foliageNoise(p.x / 9.0 - 2.3, p.y / 9.0 + 8.9));
-    const float flowers = drift * open * (temperate * 0.55 + steppe * 0.40 + tropical * 0.30) *
-                          (1.0 - reeds) * (0.55 + 0.45 * smoothstep(0.2, 0.6, moisture)) * flowerScale;
+    // Flower fields are the islands of the shared field (patchFieldAt), thick on
+    // their best ground, and the flowers stand in them by the hundred.
+    const float drift = smoothstep(0.50, 0.64, patchFieldAt(p));
+    const float flowers = min(0.85, drift * open * (temperate * 0.7 + steppe * 0.5 + tropical * 0.4) *
+                          (1.0 - reeds) * (0.60 + 0.40 * smoothstep(0.2, 0.6, moisture)) * flowerScale * 0.45);
     // A scatter of single flowers anywhere open, so a meadow is never only grass.
     const float stray = open * (temperate + steppe * 0.6) * 0.035 * flowerScale;
     // The floor of a wood.
@@ -85,11 +86,16 @@ float pageFloraCard(float2 p, float4 foliage, float canopy, float moisture, floa
     float t = pick;
     if ((t -= reeds) < 0.0) return float(kCardReeds);
     if ((t -= flowers + stray) < 0.0) {
-        const float hue = foliageNoise(p.x / 23.0 + 41.0, p.y / 23.0 - 17.0);
-        if (hue < 0.36) return float(kCardFlowersWhite);
-        if (hue < 0.58) return float(kCardFlowersYellow);
-        if (hue < 0.80 || tropical > 0.5) return float(kCardFlowersPurple);
-        return float(kCardFlowersRed);
+        // A drift is one species (its colour from a field ~90 m across), with
+        // a quarter of strays, so a meadow of flowers is fields of colour and
+        // not confetti.
+        const float field = foliageNoise(p.x / 90.0 + 41.0, p.y / 90.0 - 17.0);
+        const float stray = frac(pick * 91.7);
+        const float hue = stray < 0.25 ? frac(field + stray * 3.1) : field;
+        const int kinds[10] = {kCardFlowersWhite, kCardFlowersYellow, kCardFlowersPurple, kCardFlowersPink,
+                               kCardFlowersLilac, kCardFlowersGazania, kCardFlowersCelandine,
+                               kCardFlowersUrsinia, kCardFlowersRed, kCardFlowersDandelion};
+        return float(kinds[min(int(hue * 10.0), 9)]);
     }
     if ((t -= ferns) < 0.0) return float(kCardFern);
     if ((t -= under) < 0.0) return float(kCardUndergrowth);
@@ -153,6 +159,16 @@ FoliageOut PageGrassVS(FoliageVertexIn vertex, PageGrassIn root)
     // The terrain category's ground cover (engine/biomes): bare, or its own
     // density, height, dryness, flowers and colour; a forest biome's floor.
     const BiomeCover biome = biomeCoverAt(p, cellMetres, foliageHash(cell.x ^ 0x6d2bu, cell.y ^ 0x1f3fu));
+    // Islands: the one field the ground, the shrubs and the bog pools share
+    // (noise.hlsli patchFieldAt). Grass stands thick on its high ground and
+    // thins to a worn path between; where it is broad country the islands are
+    // fields, and the flowers gather on their best ground.
+    const float patch = patchFieldAt(p);
+    const float broad = patchRegionAt(p);
+    // No background sprinkling, including the coarse representation. The
+    // same island mask survives LOD changes and leaves real open ground.
+    const float island = smoothstep(0.50, 0.62, patch);
+    const float flowerFields = 1.0 + 2.4 * broad * smoothstep(0.50, 0.66, patch);
     instance.position = float3(p,z-0.025);
     instance.scale = (0.45+0.40*shape)*community.height*biome.height;
     if (coarse) instance.scale *= min(cellMetres,64.0)*0.32; // wider groups, height remains capped
@@ -165,7 +181,7 @@ FoliageOut PageGrassVS(FoliageVertexIn vertex, PageGrassIn root)
         const float aboveWater = head > morphWindow.z + 0.5 ? z - head : 1000.0;
         instance.variant = pageFloraCard(p, climate.foliage, cover.canopy, climate.environment.z, w1.x,
             aboveWater, instance.variant, foliageHash(cell.x ^ 0x2c1bu, cell.y ^ 0x77a3u),
-            biome.flowers, biome.dryness * 0.8);
+            biome.flowers * flowerFields, biome.dryness * 0.8);
     }
     // More occupied sites, not more candidates or larger overlapping cards.
     // Under a canopy the floor carries ferns and low leaves where grass would
@@ -173,7 +189,9 @@ FoliageOut PageGrassVS(FoliageVertexIn vertex, PageGrassIn root)
     const float wood = coarse ? 0.0 : smoothstep(0.10, 0.60, cover.canopy);
     const float understory = wood * 0.45 * saturate((w0.x + w0.y) * 1.5) * (1.0 - saturate(w0.w * 1.5)) *
                              (1.0 - saturate(w1.y * 2.0)) * (1.0 - saturate(w0.z * 2.0));
-    const float occupied = biome.none ? 0.0 : max(saturate(cover.grass * 1.5 * biome.density), understory * biome.under);
+    const float turfSlope = 1.0 - smoothstep(0.14, 0.36, 1.0 - root.heights.w);
+    const float occupied = biome.none ? 0.0 : island * turfSlope *
+        saturate(max(cover.grass * 2.8 * biome.density, understory * biome.under * 1.4));
     // Parched ground takes the straw out of the green.
     const float3 grassTint = lerp(float3(cover.red, cover.green, cover.blue),
                                   float3(cover.red, cover.green, cover.blue) * float3(1.12, 0.96, 0.62), saturate(biome.dryness)) * biome.tint;
@@ -191,7 +209,7 @@ FoliageOut PageGrassVS(FoliageVertexIn vertex, PageGrassIn root)
         const float own = foliageHash(cell.x ^ (k * 0x2f1du), cell.y ^ (k * 0x61c9u));
         instance.scale *= 0.70 + 0.30 * own;
         instance.phase = frac(shape + own * 0.73) * 6.2831853;
-        const float near = coarse ? 0.0 : 1.0 - smoothstep(36.0, 64.0, length(p - camera.xy));
+        const float near = coarse ? 0.0 : 1.0 - smoothstep(112.0, 160.0, length(p - camera.xy));
         present = own < occupied * near ? 1.0 : 0.0;
     }
     instance.tint = float4(grassTint,

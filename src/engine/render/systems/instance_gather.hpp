@@ -35,6 +35,7 @@ struct GatheredInstance {
     float tint = 1;
     float phase = 0;
     std::uint32_t variant = 0;
+    float surface = 0;
 };
 
 // A run of instances that share an asset and a material, which is exactly what

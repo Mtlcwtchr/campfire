@@ -36,6 +36,7 @@ namespace {
 // colour, texture layer.
 constexpr std::size_t kVertexFloats = 12;
 
+
 struct Mesh {
     std::vector<float> positions;          // three per vertex
     std::vector<float> layers;             // the texture layer of each vertex
@@ -397,9 +398,32 @@ int main(int argc, char** argv) {
     }
 
     int failures = 0;
+    // Models that draw from their discrete chain only (content/config/
+    // scene_model_lod.json, tools/rebuild_prop_lods.py). A DAG welds them by
+    // position and simplifies across their UV seams, which smeared a scanned
+    // rock's texture into noise; their sidecars are removed, not rebuilt.
+    std::vector<std::string> chainOnly;
+    for (const auto& config : {std::filesystem::path("content/config/scene_model_lod.json"),
+                               root / "../../../content/config/scene_model_lod.json"}) {
+        std::ifstream in(config);
+        if (!in) continue;
+        const auto json = nlohmann::json::parse(in, nullptr, false);
+        if (json.is_object() && json.contains("chain_only"))
+            for (const auto& name : json["chain_only"])
+                if (name.is_string()) chainOnly.push_back(name.get<std::string>());
+        break;
+    }
     if (sourceMode) std::cout << "Full source geometry: no card thinning, impostors or shells\n";
     else std::cout << "model                  model  solid  cards  clusters  levels  in all  dominated\n";
     for (const auto& file : meshes) {
+        if (std::find(chainOnly.begin(), chainOnly.end(), file.stem().string()) != chainOnly.end()) {
+            std::error_code ignored;
+            auto sidecar = file;
+            std::filesystem::remove(sidecar.replace_extension(".clusters"), ignored);
+            std::filesystem::remove(root / (file.stem().string() + ".source.clusters"), ignored);
+            std::cout << file.stem().string() << ": chain only (content/config/scene_model_lod.json)\n";
+            continue;
+        }
         Mesh mesh;
         std::string why;
         std::size_t shellCoarsest = 0, shellFinest = 0, chainCoarsest = 0;

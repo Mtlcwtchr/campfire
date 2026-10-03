@@ -31,4 +31,29 @@ float3 weatherVegetation(float3 pigment, float seasonal, float wet, float temper
     float luminance=dot(pigment,float3(0.30,0.59,0.11));
     return lerp(pigment,luminance*float3(1.35,0.94,0.48),amount)*(1.0-wet*0.10);
 }
+
+// Small rain rings decorate the existing water normal, only close enough to
+// resolve them. One bounded cell candidate, no geometry or texture fetches.
+float2 rainSurfaceSlope(float2 xy,float clock,float rain,float pixel) {
+    if (rain<=0.01 || pixel>=0.045) return 0.0;
+    const float cellMetres=1.2;
+    const int2 cell=int2(floor(xy/cellMetres));
+    const float seed=wxHash(cell.x,cell.y,9371u);
+    if (seed>rain*0.72) return 0.0;
+    const float cycle=clock*1.4+seed*17.3;
+    const uint episode=uint(floor(cycle));
+    const float shape=wxHash(cell.x,cell.y,7237u+episode*53u);
+    const float2 centre=(0.30+frac(shape*float2(17.73,71.91))*0.40)*cellMetres;
+    const float2 delta=xy-float2(cell)*cellMetres-centre;
+    const float distance=length(delta);
+    if (distance>0.32 || distance<0.002) return 0.0;
+    const float age=frac(cycle);
+    const float radius=0.02+age*0.25;
+    const float width=max(0.014,pixel*1.2);
+    const float ring=1.0-smoothstep(width,width*2.8,abs(distance-radius));
+    const float slope=sin((distance-radius)/width*2.5)*ring*
+                      (1.0-age)*(1.0-age)*smoothstep(0.0,0.10,age)*
+                      (1.0-smoothstep(0.018,0.045,pixel))*0.045*rain;
+    return delta/distance*slope;
+}
 #endif

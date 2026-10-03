@@ -336,7 +336,18 @@ std::optional<ImportReport> importManifest(const PackageManifest& manifestIn, co
     if (WorldSource::exists(sourceRoot)) {
         source = WorldSource::open(sourceRoot, why);
         if (!source) return std::nullopt;
-        if (!(source->schema().world == world)) { fail(why, "the package's world is not the source's: extents differ"); return std::nullopt; }
+        const auto& have = source->schema().world;
+        if (have.widthMetres != world.widthMetres || have.heightMetres != world.heightMetres ||
+            have.chunkMetres != world.chunkMetres) {
+            fail(why, "the package's world is not the source's: world extents differ");
+            return std::nullopt;
+        }
+        if (have.sampleMetres != world.sampleMetres) {
+            source.reset();
+            if (!resampleSource(sourceRoot, world, why)) return std::nullopt;
+            source = WorldSource::open(sourceRoot, why);
+            if (!source) return std::nullopt;
+        }
     } else {
         Schema fresh = ps;
         fresh.world = world;
@@ -378,6 +389,7 @@ std::optional<ImportReport> importManifest(const PackageManifest& manifestIn, co
 
     // --- the rectangle, in samples ---
     const double sm = ss.world.sampleMetres;
+    const std::int64_t chunkSamples = source->chunkSamples();
     std::int64_t sx0 = std::llround(manifest->originX / sm), sy0 = std::llround(manifest->originY / sm);
     std::int64_t sw = std::llround(manifest->sizeX / sm), sh = std::llround(manifest->sizeY / sm);
     if (target.rect) {
@@ -490,11 +502,11 @@ std::optional<ImportReport> importManifest(const PackageManifest& manifestIn, co
     // --- every chunk anything reaches ---
     std::set<ChunkKey> affected;
     if (!rasters.empty())
-        for (auto cy = world_store::floorDiv(sy0, kChunkSamples); cy <= world_store::floorDiv(sy0 + sh - 1, kChunkSamples); ++cy)
-            for (auto cx = world_store::floorDiv(sx0, kChunkSamples); cx <= world_store::floorDiv(sx0 + sw - 1, kChunkSamples); ++cx)
+        for (auto cy = world_store::floorDiv(sy0, chunkSamples); cy <= world_store::floorDiv(sy0 + sh - 1, chunkSamples); ++cy)
+            for (auto cx = world_store::floorDiv(sx0, chunkSamples); cx <= world_store::floorDiv(sx0 + sw - 1, chunkSamples); ++cx)
                 if (target.mask.empty() ||
                     std::any_of(target.mask.begin(), target.mask.end(), [&](const std::array<double, 4>& m) {
-                        const double cm = double(kChunkSamples) * sm;
+                        const double cm = double(chunkSamples) * sm;
                         return m[0] < double(cx + 1) * cm && m[2] > double(cx) * cm &&
                                m[1] < double(cy + 1) * cm && m[3] > double(cy) * cm;
                     }))
@@ -528,22 +540,22 @@ std::optional<ImportReport> importManifest(const PackageManifest& manifestIn, co
             chunk = std::move(*read);
         }
         const auto before = source->chunks().count(key) ? source->chunks().at(key) : ChunkRecord{};
-        const std::int64_t ox = key.x * kChunkSamples, oy = key.y * kChunkSamples;
-        const bool inside = ox < sx0 + sw && ox + kChunkSamples > sx0 && oy < sy0 + sh && oy + kChunkSamples > sy0;
+        const std::int64_t ox = key.x * chunkSamples, oy = key.y * chunkSamples;
+        const bool inside = ox < sx0 + sw && ox + chunkSamples > sx0 && oy < sy0 + sh && oy + chunkSamples > sy0;
         if (inside)
             for (const auto& r : rasters) {
                 Tile tile = source->tile(chunk, r.to->name);
                 tile.expand();
                 const std::uint8_t channels = tile.channels;
-                const std::int64_t x0 = std::max(ox, sx0), x1 = std::min(ox + kChunkSamples, sx0 + sw);
-                const std::int64_t y0 = std::max(oy, sy0), y1 = std::min(oy + kChunkSamples, sy0 + sh);
+                const std::int64_t x0 = std::max(ox, sx0), x1 = std::min(ox + chunkSamples, sx0 + sw);
+                const std::int64_t y0 = std::max(oy, sy0), y1 = std::min(oy + chunkSamples, sy0 + sh);
                 const bool blends = r.to->kind == RasterKind::Height || r.to->kind == RasterKind::Control;
                 for (auto y = y0; y < y1; ++y)
                     for (auto x = x0; x < x1; ++x) {
                         const int w = weight.empty() ? 255 : weight[std::size_t((y - sy0) * sw + (x - sx0))];
                         if (w == 0) continue;
                         for (std::uint8_t c = 0; c < channels; ++c) {
-                            auto& value = tile.values[std::size_t(((y - oy) * kChunkSamples + (x - ox)) * channels + c)];
+                            auto& value = tile.values[std::size_t(((y - oy) * chunkSamples + (x - ox)) * channels + c)];
                             const std::uint16_t incoming = r.at(x - sx0, y - sy0, c);
                             // Ids and flags are taken or not; amounts blend.
                             if (w == 255 || (!blends && w >= 128)) value = incoming;
@@ -614,7 +626,9 @@ std::optional<ImportReport> importPackage(const std::filesystem::path& package, 
         fail(why, "the package is cut for another world: import it into a selection instead");
         return std::nullopt;
     }
-    return importManifest(*manifest, package, sourceRoot, target, why);
+    auto report = importManifest(*manifest, package, sourceRoot, target, why);
+    if (report && manifestJson.is_object()) report->stage = manifestJson.value("stage", std::string());
+    return report;
 }
 
 Schema canonicalSchema(const WorldExtent& world) {
@@ -723,12 +737,63 @@ std::optional<ImportReport> importImages(const LooseImages& images, const std::f
     return report;
 }
 
+std::optional<ImportReport> importGrids(GridRasters rasters, const std::filesystem::path& sourceRoot,
+                                        const ImportTarget& target, std::string* why) {
+    if (!rasters.height && !rasters.control) { fail(why, "no raster to write"); return std::nullopt; }
+    if (!target.world || !target.rect) { fail(why, "worked-out rasters need a world and a rectangle to go into"); return std::nullopt; }
+    const Schema canonical = canonicalSchema(*target.world);
+    // One pixel a sample of the rectangle, as the importer counts them, or
+    // they would be stretched - and a stretched grid is not the one worked out.
+    const double sm = target.world->sampleMetres;
+    const auto& r = *target.rect;
+    const auto wantX = std::uint32_t(std::clamp<std::int64_t>(std::llround(std::ceil(r[2] / sm)), 0, target.world->samplesX()) -
+                                     std::clamp<std::int64_t>(std::llround(std::floor(r[0] / sm)), 0, target.world->samplesX()));
+    const auto wantY = std::uint32_t(std::clamp<std::int64_t>(std::llround(std::ceil(r[3] / sm)), 0, target.world->samplesY()) -
+                                     std::clamp<std::int64_t>(std::llround(std::floor(r[1] / sm)), 0, target.world->samplesY()));
+    const auto check = [&](const std::optional<Image>& image, const char* name, std::uint8_t channels, std::uint8_t bits) {
+        if (!image) return true;
+        if (image->width != wantX || image->height != wantY)
+            return fail(why, std::string(name) + ": " + std::to_string(image->width) + " x " + std::to_string(image->height) +
+                                 " samples for a rectangle of " + std::to_string(wantX) + " x " + std::to_string(wantY));
+        if (image->channels != channels || image->bits != bits)
+            return fail(why, std::string(name) + " is not in the canonical numbers");
+        const std::size_t n = std::size_t(image->width) * image->height * channels;
+        if ((bits == 16 ? image->words.size() : image->bytes.size()) != n) return fail(why, std::string(name) + " is short");
+        return true;
+    };
+    if (!check(rasters.height, "height", 1, 16) || !check(rasters.control, "control", 4, 8)) return std::nullopt;
+    bool created = false;
+    if (!WorldSource::exists(sourceRoot)) {
+        if (!WorldSource::create(sourceRoot, canonical, why)) return std::nullopt;
+        created = true;
+    }
+    PackageManifest m;
+    m.schema.world = *target.world;
+    m.sizeX = target.world->widthMetres;
+    m.sizeY = target.world->heightMetres;
+    std::map<std::string, Image> preloaded;
+    if (rasters.height) {
+        m.schema.rasters.push_back(canonical.rasters[0]);
+        preloaded.emplace(canonical.rasters[0].name, std::move(*rasters.height));
+    }
+    if (rasters.control) {
+        m.schema.rasters.push_back(canonical.rasters[1]);
+        preloaded.emplace(canonical.rasters[1].name, std::move(*rasters.control));
+    }
+    ImportTarget t = target;
+    t.rastersOnly = true;
+    auto report = importManifest(m, std::filesystem::path(), sourceRoot, t, why, &preloaded);
+    if (report) report->created = created;
+    return report;
+}
+
 std::optional<ImportReport> clearRasters(const std::filesystem::path& sourceRoot,
                                          const std::vector<std::array<double, 4>>& rects, std::string* why) {
     auto source = WorldSource::open(sourceRoot, why);
     if (!source) return std::nullopt;
     const Schema& ss = source->schema();
-    const double sm = ss.world.sampleMetres, cm = double(kChunkSamples) * sm;
+    const std::int64_t chunkSamples = source->chunkSamples();
+    const double sm = ss.world.sampleMetres, cm = double(chunkSamples) * sm;
     ImportReport report;
     std::set<ChunkKey> keys;
     for (const auto& [key, record] : source->chunks())
@@ -744,16 +809,16 @@ std::optional<ImportReport> clearRasters(const std::filesystem::path& sourceRoot
             const auto* desc = ss.raster(name);
             if (!desc) continue;
             tile.expand();
-            for (std::int64_t y = 0; y < kChunkSamples; ++y)
-                for (std::int64_t x = 0; x < kChunkSamples; ++x) {
-                    const double cx = (double(key.x * kChunkSamples + x) + 0.5) * sm;
-                    const double cy = (double(key.y * kChunkSamples + y) + 0.5) * sm;
+            for (std::int64_t y = 0; y < chunkSamples; ++y)
+                for (std::int64_t x = 0; x < chunkSamples; ++x) {
+                    const double cx = (double(key.x * chunkSamples + x) + 0.5) * sm;
+                    const double cy = (double(key.y * chunkSamples + y) + 0.5) * sm;
                     const bool hit = std::any_of(rects.begin(), rects.end(), [&](const std::array<double, 4>& r) {
                         return cx >= r[0] && cx < r[2] && cy >= r[1] && cy < r[3];
                     });
                     if (!hit) continue;
                     for (std::uint8_t c = 0; c < tile.channels; ++c)
-                        tile.values[std::size_t((y * kChunkSamples + x) * tile.channels + c)] = desc->defaultStored(c);
+                        tile.values[std::size_t((y * chunkSamples + x) * tile.channels + c)] = desc->defaultStored(c);
                 }
             tile.settle();
         }
@@ -778,7 +843,12 @@ bool reshapeSource(const std::filesystem::path& sourceRoot, std::int64_t westChu
     auto source = WorldSource::open(sourceRoot, why);
     if (!source) return false;
     const Schema& ss = source->schema();
-    const double cm = double(kChunkSamples) * ss.world.sampleMetres;
+    if (world.sampleMetres != ss.world.sampleMetres) {
+        fail(why, "changing the imported sample spacing while reshaping needs a source resample");
+        return false;
+    }
+    const std::int64_t chunkSamples = source->chunkSamples();
+    const double cm = double(chunkSamples) * ss.world.sampleMetres;
     const double dx = double(westChunks) * cm, dy = double(northChunks) * cm;
     const std::int64_t chunksX = std::int64_t(std::ceil(world.widthMetres / cm));
     const std::int64_t chunksY = std::int64_t(std::ceil(world.heightMetres / cm));
@@ -883,6 +953,7 @@ std::optional<ImportReport> paintCategorical(const std::filesystem::path& source
     const RasterDesc* height = nullptr;
     for (const auto& r : ss.rasters) if (r.kind == RasterKind::Height) { height = &r; break; }
     const double sm = ss.world.sampleMetres;
+    const std::int64_t chunkSamples = source->chunkSamples();
     // The samples each chunk takes, from every disc.
     std::map<ChunkKey, std::set<std::pair<std::int64_t, std::int64_t>>> touched;
     for (const auto& dab : dabs) {
@@ -895,7 +966,7 @@ std::optional<ImportReport> paintCategorical(const std::filesystem::path& source
             for (auto sx = sx0; sx <= sx1; ++sx) {
                 const double cx = (double(sx) + 0.5) * sm, cy = (double(sy) + 0.5) * sm;
                 if (std::hypot(cx - dab.x, cy - dab.y) > dab.radius) continue;
-                touched[WorldSource::chunkOfSample(sx, sy)].insert({sx, sy});
+                touched[source->chunkAtSample(sx, sy)].insert({sx, sy});
             }
     }
     for (const auto& [key, samples] : touched) {
@@ -908,9 +979,9 @@ std::optional<ImportReport> paintCategorical(const std::filesystem::path& source
         const Tile ground = height ? source->tile(*chunk, height->name) : Tile{};
         const double sea = height ? height->channels[0].defaultValue + 0.05 : 0.0;
         for (const auto& [sx, sy] : samples) {
-            const std::int64_t lx = sx - key.x * kChunkSamples, ly = sy - key.y * kChunkSamples;
+            const std::int64_t lx = sx - key.x * chunkSamples, ly = sy - key.y * chunkSamples;
             if (landOnly && height && height->decode(0, ground.at(lx, ly, 0)) <= sea) continue;
-            tile.values[std::size_t(ly * kChunkSamples + lx) * tile.channels] = std::uint16_t(id);
+            tile.values[std::size_t(ly * chunkSamples + lx) * tile.channels] = std::uint16_t(id);
         }
         tile.settle();
         chunk->rasters[layer] = std::move(tile);
@@ -937,6 +1008,7 @@ std::optional<ExportReport> exportPackage(const std::filesystem::path& sourceRoo
     if (!source) return std::nullopt;
     const Schema& ss = source->schema();
     const double sm = ss.world.sampleMetres;
+    const std::int64_t chunkSamples = source->chunkSamples();
     // --- the rectangle, snapped outward to whole samples ---
     double x0 = 0, y0 = 0, x1 = ss.world.widthMetres, y1 = ss.world.heightMetres;
     if (options.rect) {
@@ -998,14 +1070,14 @@ std::optional<ExportReport> exportPackage(const std::filesystem::path& sourceRoo
         out.schema.rasters.push_back(described);
     }
     if (!images.empty())
-        for (auto cy = world_store::floorDiv(sy0, kChunkSamples); cy <= world_store::floorDiv(sy0 + sh - 1, kChunkSamples); ++cy)
-            for (auto cx = world_store::floorDiv(sx0, kChunkSamples); cx <= world_store::floorDiv(sx0 + sw - 1, kChunkSamples); ++cx) {
+        for (auto cy = world_store::floorDiv(sy0, chunkSamples); cy <= world_store::floorDiv(sy0 + sh - 1, chunkSamples); ++cy)
+            for (auto cx = world_store::floorDiv(sx0, chunkSamples); cx <= world_store::floorDiv(sx0 + sw - 1, chunkSamples); ++cx) {
                 const ChunkKey key{ChunkLevel::SourceChunk, cx, cy};
                 auto chunk = source->read(key, why);
                 if (!chunk) return std::nullopt;
-                const std::int64_t ox = cx * kChunkSamples, oy = cy * kChunkSamples;
-                const std::int64_t ax = std::max(ox, sx0), bx = std::min(ox + kChunkSamples, sx0 + sw);
-                const std::int64_t ay = std::max(oy, sy0), by = std::min(oy + kChunkSamples, sy0 + sh);
+                const std::int64_t ox = cx * chunkSamples, oy = cy * chunkSamples;
+                const std::int64_t ax = std::max(ox, sx0), bx = std::min(ox + chunkSamples, sx0 + sw);
+                const std::int64_t ay = std::max(oy, sy0), by = std::min(oy + chunkSamples, sy0 + sh);
                 for (auto& [layer, image] : images) {
                     const Tile tile = source->tile(*chunk, layer->name);
                     for (auto y = ay; y < by; ++y)
@@ -1049,6 +1121,56 @@ std::optional<ExportReport> exportPackage(const std::filesystem::path& sourceRoo
     if (wanted("details")) transferDetails(sourceRoot / "details", package / "details", x0, y0, x1, y1, false);
     if (!world_store::writeFileAtomic(package / "world.json", packageJson(out).dump(2), why)) return std::nullopt;
     return report;
+}
+
+bool resampleSource(const std::filesystem::path& sourceRoot, const WorldExtent& world, std::string* why) {
+    auto source = WorldSource::open(sourceRoot, why);
+    if (!source) return false;
+    const auto& before = source->schema().world;
+    if (before.widthMetres != world.widthMetres || before.heightMetres != world.heightMetres ||
+        before.chunkMetres != world.chunkMetres) {
+        fail(why, "resampling changes only the sample spacing, not world extent or chunk size");
+        return false;
+    }
+    if (before.sampleMetres == world.sampleMetres) return true;
+    const auto package = sourceRoot.parent_path() / (sourceRoot.filename().string() + ".resample-package");
+    const auto fresh = sourceRoot.parent_path() / (sourceRoot.filename().string() + ".resample");
+    const auto backup = sourceRoot.parent_path() / (sourceRoot.filename().string() + ".resample-old");
+    std::error_code ec;
+    std::filesystem::remove_all(package, ec);
+    std::filesystem::remove_all(fresh, ec);
+    std::filesystem::remove_all(backup, ec);
+    ExportOptions options;
+    if (!exportPackage(sourceRoot, package, options, why)) return false;
+    ImportTarget target;
+    target.world = world;
+    target.rect = std::array<double, 4>{0, 0, world.widthMetres, world.heightMetres};
+    if (!importPackage(package, fresh, target, why)) {
+        std::filesystem::remove_all(package, ec);
+        std::filesystem::remove_all(fresh, ec);
+        return false;
+    }
+    const auto details = sourceRoot / "details";
+    if (std::filesystem::exists(details, ec)) {
+        std::filesystem::copy(details, fresh / "details", std::filesystem::copy_options::recursive, ec);
+        if (ec) {
+            fail(why, "could not preserve source detail edits: " + ec.message());
+            std::filesystem::remove_all(package, ec);
+            std::filesystem::remove_all(fresh, ec);
+            return false;
+        }
+    }
+    std::filesystem::rename(sourceRoot, backup, ec);
+    if (ec) { fail(why, "could not move old source aside: " + ec.message()); return false; }
+    std::filesystem::rename(fresh, sourceRoot, ec);
+    if (ec) {
+        std::filesystem::rename(backup, sourceRoot, ec);
+        fail(why, "could not install resampled source: " + ec.message());
+        return false;
+    }
+    std::filesystem::remove_all(backup, ec);
+    std::filesystem::remove_all(package, ec);
+    return true;
 }
 
 } // namespace engine::world_source

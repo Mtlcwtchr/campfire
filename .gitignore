@@ -54,6 +54,7 @@ __pycache__/
 # The source maps and packed.json files under assets/terrain are content. The
 # baked texture maps and mip levels are reproducible outputs of pack_terrain.py.
 /assets/generated/
+/assets/downloaded/
 /assets/retired/
 # Poly Haven scene-model sources: reproducible with tools/fetch_models.py from
 # content/config/scene_model_sources.json (md5-checked), and hundreds of MB.

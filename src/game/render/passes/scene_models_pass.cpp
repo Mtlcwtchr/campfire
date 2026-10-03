@@ -103,6 +103,7 @@ void SceneModelsPass::reset() {
     for (auto& slot:massSlots_) slot.live=false;
     entities_.clear();published_=nullptr;
     gathered_={};
+    cullIndex_={};
     representationHistory_.clear();selectionTime_=0;viewReady_=false;
 }
 void SceneModelsPass::updatePlacement(const engine::Scene& scene,double viewportWidth) {
@@ -112,7 +113,7 @@ void SceneModelsPass::updatePlacement(const engine::Scene& scene,double viewport
     std::copy_n(engine::cullMatrix(scene),16,view.matrix.begin());
     view.world=worldBounds_;view.viewportWidth=viewportWidth;
     view.pixelsPerMetre=eye[3];
-    for (const auto& model:models_) view.maxExtent=std::max(view.maxExtent,model.extent()*1.4);
+    for (const auto& model:models_) view.maxExtent=std::max(view.maxExtent,model.extent()*1.65);
     const bool perspective=view.matrix[12]!=0 || view.matrix[13]!=0 || view.matrix[14]!=0;
     view.priorityX=perspective?eye[0]:x_;
     view.priorityY=perspective?eye[1]:y_;
@@ -146,7 +147,7 @@ std::string SceneModelsPass::report() const {
     static const world::decor::Scatter empty;
     const auto& scatter_ = placement_ ? placement_->scatter : empty;
     return Json{{"ready",ready()},{"enabled",enabled_},{"failed",failed_},
-        {"objects",scatter_.objects.size()},{"mesh_instances",meshes_},{"impostor_instances",cards_},
+        {"objects",placement_?placement_->objectCount():std::size_t(0)},{"mesh_instances",meshes_},{"impostor_instances",cards_},
         {"culled",culled_},{"culled_outside_view",outside_},{"culled_faded",faded_},
         {"draws",draws_},{"triangles",triangles_},
         // One recorded command, and how many draws the card reads out of it.
@@ -212,7 +213,10 @@ engine::PassPlace SceneModelsPass::setup(engine::Device& device,engine::RenderPi
         std::ifstream input(root/"manifest.json");Json content;input>>content;
         require(content.at("version")==2 && content.at("views")==8,
             "rebuild scene assets: the manifest predates mesh level chains");
-        require(content.at("models").size()==world::decor::kModels.size(),"scene model catalogue mismatch");
+        require(content.at("models").size()==world::decor::kModels.size(),
+            "scene model catalogue mismatch: run python3 tools/prepare_environment_models.py after preparing the base catalogue");
+        require(content.contains("environment") && content.at("environment").at("moss_layer").get<std::size_t>()+1==
+            content.at("colours").size(),"prepare environment models: missing final moss material layer");
         const auto safePath=[&](const std::string& file) {
             const auto p=std::filesystem::path(file);
             require(p==p.filename() && file!="." && file!="..","invalid model resource path");return root/p;
@@ -220,7 +224,7 @@ engine::PassPlace SceneModelsPass::setup(engine::Device& device,engine::RenderPi
         std::vector<std::filesystem::path> colourPaths,normalPaths,depthPaths;
         for (const auto& p:content.at("colours")) colourPaths.push_back(safePath(p.get<std::string>()));
         for (const auto& p:content.at("normals")) normalPaths.push_back(safePath(p.get<std::string>()));
-        require(!colourPaths.empty() && colourPaths.size()==normalPaths.size() && colourPaths.size()<=512,"invalid model layers");
+        require(!colourPaths.empty() && colourPaths.size()==normalPaths.size() && colourPaths.size()<=1280,"invalid model layers");
         std::vector<std::vector<std::filesystem::path>> colourMips,normalMips;
         for (const auto& p:colourPaths) colourMips.push_back({p});
         for (const auto& p:normalPaths) normalMips.push_back({p});
@@ -807,6 +811,16 @@ int SceneModelsPass::massSlotOf(const world::decor::ScatterBounds& region) const
 
 // Members, grouped by the region that would replace them. Only when the
 // placement changes: this is the whole scatter, and it does not move.
+void SceneModelsPass::publishPlacement() {
+    // Region by region: only what changed becomes or stops being entities.
+    if (!placement_) {
+        static const std::vector<world::decor::ScatterBounds> none;
+        world::decor::publishParts(entities_, none, {}, std::uint32_t(models_.size()));
+        return;
+    }
+    world::decor::publishParts(entities_, placement_->regions, placement_->parts, std::uint32_t(models_.size()));
+}
+
 void SceneModelsPass::updateRegionMembers() {
     if (placement_.get()==massPublished_) return;
     if (placement_ && placement_->objectsVersion==massObjectsVersion_) {
@@ -814,7 +828,6 @@ void SceneModelsPass::updateRegionMembers() {
         return;
     }
     massObjectsVersion_=placement_?placement_->objectsVersion:0;
-    massMembers_.clear();
     const auto changed = [&](const auto& region) {
         if (!placement_) return true;
         const auto old = massRevisions_.find(region);
@@ -824,25 +837,33 @@ void SceneModelsPass::updateRegionMembers() {
     std::erase_if(massRefused_, [&](const auto& key) { return changed(key.first); });
     std::erase_if(massError_, [&](const auto& entry) { return changed(entry.first.first); });
     for (auto& slot:massSlots_) if (slot.live && changed(slot.region)) slot.live=false;
+    // Members of the regions that changed or left; the rest stand as they are
+    // (this used to be every object in view, regrouped on every publication).
+    std::erase_if(massMembers_, [&](const auto& entry) { return changed(entry.first); });
+    const auto before = massRevisions_;
     massRevisions_ = placement_ ? placement_->regionRevisions : decltype(massRevisions_){};
     massPublished_=placement_.get();
     if (placement_) {
         const auto floorRegion=[](double v) {
             return std::int64_t(std::floor(v/world::decor::kRegion))*world::decor::kRegion;
         };
-        for (const auto& object:placement_->scatter.objects) {
-            if (object.model>=models_.size() || !models_[object.model].mass) continue;
-            const world::decor::ScatterBounds region{floorRegion(object.x),floorRegion(object.y),
-                floorRegion(object.x)+world::decor::kRegion,
-                floorRegion(object.y)+world::decor::kRegion};
-            engine::geometry::RegionMember member;
-            member.model=object.model;
-            member.position[0]=float(object.x-double(region.minX));
-            member.position[1]=float(object.y-double(region.minY));
-            member.position[2]=float(object.z);
-            member.scale=object.scale;
-            member.yaw=object.yaw;
-            massMembers_[region].push_back(member);
+        for (std::size_t i=0;i<placement_->regions.size() && i<placement_->parts.size();++i) {
+            const auto& r=placement_->regions[i];
+            if (const auto was=before.find(r); was!=before.end() && was->second==placement_->parts[i]->revision) continue;
+            for (const auto& object:placement_->parts[i]->objects) {
+                if (object.model>=models_.size() || !models_[object.model].mass) continue;
+                const world::decor::ScatterBounds region{floorRegion(object.x),floorRegion(object.y),
+                    floorRegion(object.x)+world::decor::kRegion,
+                    floorRegion(object.y)+world::decor::kRegion};
+                engine::geometry::RegionMember member;
+                member.model=object.model;
+                member.position[0]=float(object.x-double(region.minX));
+                member.position[1]=float(object.y-double(region.minY));
+                member.position[2]=float(object.z);
+                member.scale=object.scale;
+                member.yaw=object.yaw;
+                massMembers_[region].push_back(member);
+            }
         }
     }
     // A region whose members changed must not keep geometry baked from the
@@ -1074,14 +1095,19 @@ void SceneModelsPass::prepareDensity(const engine::Scene& input, double viewport
     // the geometry cut it describes.
     updatePlacement(input,viewportWidth);
     if (input.extra[2]<=0.01f) return;
-    static const world::decor::Scatter empty;
-    const auto& scatter=placement_?placement_->scatter:empty;
     if (placement_.get()!=published_ && (!placement_ || placement_->objectsVersion!=publishedObjectsVersion_)) {
-        world::decor::publishScatter(entities_,scatter,std::uint32_t(models_.size()));
+        publishPlacement();
         published_=placement_.get();
         publishedObjectsVersion_=placement_?placement_->objectsVersion:0;
         gathered_=engine::render::gatherInstances(entities_);
+        cullIndex_=engine::render::buildInstanceCullIndex(gathered_,assets_);
         representationHistory_.clear(); // registry identities can be reused on publication
+    } else if (placement_ && placement_.get()!=published_) {
+        // A new snapshot with the same objects (regions or flags moved on):
+        // already published. Without this the draw pass below saw a snapshot
+        // it had not published and republished every object, every frame
+        // regions were streaming in.
+        published_=placement_.get();
     }
     const auto* m=engine::cullMatrix(input);
     engine::render::ScreenScale screen;
@@ -1167,8 +1193,6 @@ void SceneModelsPass::collect(const engine::Frame& frame,engine::DrawQueue& queu
     ASR_DIAGNOSTIC(proxyBlocks_=proxyBytes_=0;proxyReach_=0);
     // Placement was frozen by prepareDensity before scene uniforms were uploaded.
     // Polling here could mix one snapshot's density with another one's objects.
-    static const world::decor::Scatter empty;
-    const auto& scatter_ = placement_ ? placement_->scatter : empty;
     if (!frame.instances) return;
     // One batch per model and level, then the baked per-object impostor card.
     // Spatial aggregate geometry is submitted only when it was baked from that
@@ -1205,7 +1229,13 @@ void SceneModelsPass::collect(const engine::Frame& frame,engine::DrawQueue& queu
     // frame is three passes over flat arrays and never looks at a decor::Object
     // again. See src/engine/render/systems/ for what each pass promises.
     if (placement_.get()!=published_) {
-        world::decor::publishScatter(entities_,scatter_,std::uint32_t(models_.size()));
+        if (!placement_ || placement_->objectsVersion!=publishedObjectsVersion_) {
+            publishPlacement();
+            publishedObjectsVersion_=placement_?placement_->objectsVersion:0;
+            gathered_=engine::render::gatherInstances(entities_);
+            cullIndex_=engine::render::buildInstanceCullIndex(gathered_,assets_);
+            representationHistory_.clear();
+        }
         published_=placement_.get();
     }
     engine::render::ScreenScale screen;
@@ -1269,7 +1299,7 @@ void SceneModelsPass::collect(const engine::Frame& frame,engine::DrawQueue& queu
         }
     }
     collectHorizonMs_=clock.lap();
-    const auto culled=engine::render::cullToFrustum(gathered_,assets_,screen,horizon);
+    const auto culled=engine::render::cullToFrustum(gathered_,assets_,screen,horizon,&cullIndex_);
     collectCullMs_=clock.lap();
     // Culled before selected, so the triangle budget below is computed over
     // what is drawn: a forest behind the camera must not decide how coarsely
@@ -1464,6 +1494,13 @@ void SceneModelsPass::collect(const engine::Frame& frame,engine::DrawQueue& queu
     // the chain, a dense wood always "fitted", so the budget never bit.
     vegetationMeshFloor_=0;
     vegetationBudgetUsed_=0;
+    // Low plants need their leaf shape at foot distance while occupying fewer
+    // pixels than a crown. Rank them against their own 60 px mesh threshold;
+    // charge the same actual triangle cost to the shared vegetation budget.
+    const auto meshPriority=[this](std::uint32_t model) {
+        return (world::decor::groundCoverModel(model) || model==world::decor::kDenseShrub)
+            ?std::max(1.0,double(vegetationMeshPixels_)/60.0):1.0;
+    };
     if (vegetationMeshPixels_>0) {
         vegetationDemand_.clear();
         for (const auto& batch:selected.batches) {
@@ -1474,11 +1511,12 @@ void SceneModelsPass::collect(const engine::Frame& frame,engine::DrawQueue& queu
             const std::size_t chain=model.levels[level].count/3+cards;
             for (std::uint32_t i=0;i<batch.count;++i) {
                 const auto at=batch.first+i;
-                if (!keep[at] || hierarchyReplaced[at] || pixels[at]<vegetationMeshPixels_) continue;
+                const double demandPixels=pixels[at]*meshPriority(batch.mesh);
+                if (!keep[at] || hierarchyReplaced[at] || demandPixels<vegetationMeshPixels_) continue;
                 std::size_t cost=chain;
                 if (model.clusterReady && pixels[at]>0)
                     cost=sourceTriangles(batch.mesh,screen.allowance*model.extent()/pixels[at])+cards;
-                vegetationDemand_.push_back({pixels[at],std::max<std::size_t>(cost,1)});
+                vegetationDemand_.push_back({demandPixels,std::max<std::size_t>(cost,1)});
             }
         }
         vegetationMeshFloor_=std::max(vegetationMeshPixels_,
@@ -1550,7 +1588,7 @@ void SceneModelsPass::collect(const engine::Frame& frame,engine::DrawQueue& queu
                 // impostor whatever the error says. A little hysteresis so a
                 // tree on the line does not flicker between the two.
                 if (model.vegetation && vegetationMeshFloor_>0 && target>0 &&
-                    pixels[at]<vegetationMeshFloor_*(history.mesh>0.5f?0.92:1.0) &&
+                    pixels[at]*meshPriority(batch.mesh)<vegetationMeshFloor_*(history.mesh>0.5f?0.92:1.0) &&
                     (model.hemisphereImpostor<0 || hemisphereAllowed[at])) target=0.0f;
                 // Same dissolve length as the proxies: a representation change
                 // is never faster than ~0.4 s, so it never reads as a pop.
@@ -1597,7 +1635,7 @@ void SceneModelsPass::collect(const engine::Frame& frame,engine::DrawQueue& queu
             if (!keep[at] || hierarchyReplaced[at]) continue;
             const auto& source=selected.instances[at];
             auto lod=world::decor::objectLod(pixels[at],0,
-                model.vegetation && vegetationMeshFloor_>0 ? vegetationMeshFloor_ : meshStartPixels_);
+                model.vegetation && vegetationMeshFloor_>0 ? vegetationMeshFloor_/meshPriority(batch.mesh) : meshStartPixels_);
             if (viewReady_) lod.mesh=meshWeights[at];
             // Only an eye far below the tree (see kHemisphereBelow) has no
             // hemisphere view; a model without the 8 side views then stays a
@@ -1621,7 +1659,7 @@ void SceneModelsPass::collect(const engine::Frame& frame,engine::DrawQueue& queu
             const auto views=world::decor::impostorPair(objectRightAngle,source.yaw);
             Instance instance{{source.position[0],source.position[1],source.position[2]},
                 source.scale,source.yaw,source.phase,source.tint,
-                model.vegetation?1.0f:0.0f,model.width,model.height,
+                model.vegetation?1.0f:-std::clamp(source.surface,0.0f,1.0f),model.width,model.height,
                 float(model.impostor+views.view),lod.mesh,0,lod.coverage,
                 float(model.impostor+views.next),views.blend};
             if (lod.mesh>0) {

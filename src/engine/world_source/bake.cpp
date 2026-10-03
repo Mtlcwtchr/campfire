@@ -53,6 +53,7 @@ std::optional<std::uint64_t> heightKeyOf(const std::filesystem::path& root, std:
     std::uint64_t key = 0xBA4EDull;
     key = mix(key, std::uint64_t(source->schema().world.widthMetres));
     key = mix(key, std::uint64_t(source->schema().world.heightMetres));
+    key = mix(key, std::uint64_t(source->schema().world.sampleMetres));
     for (const auto& [chunk, record] : source->chunks()) {
         const auto it = record.layers.find(height->name);
         if (it == record.layers.end()) continue;
@@ -81,6 +82,7 @@ std::optional<BakeReport> bakeSource(const std::filesystem::path& root, const st
     auto source = WorldSource::open(root, why);
     if (!key || !source) return std::nullopt;
     const Schema& schema = source->schema();
+    const std::int64_t chunkSamples = source->chunkSamples();
     const RasterDesc* height = heightOf(schema);
     const std::int64_t W = schema.world.samplesX(), H = schema.world.samplesY();
     const std::size_t N = std::size_t(W) * std::size_t(H);
@@ -105,9 +107,9 @@ std::optional<BakeReport> bakeSource(const std::filesystem::path& root, const st
         if (!read) return std::nullopt;
         const Tile tile = source->tile(*read, height->name);
         const Tile lakes = water ? source->tile(*read, water->name) : Tile{};
-        for (std::int64_t y = 0; y < kChunkSamples; ++y)
-            for (std::int64_t x = 0; x < kChunkSamples; ++x) {
-                const std::int64_t gx = chunk.x * kChunkSamples + x, gy = chunk.y * kChunkSamples + y;
+        for (std::int64_t y = 0; y < chunkSamples; ++y)
+            for (std::int64_t x = 0; x < chunkSamples; ++x) {
+                const std::int64_t gx = chunk.x * chunkSamples + x, gy = chunk.y * chunkSamples + y;
                 if (gx >= W || gy >= H) continue;
                 h[std::size_t(gy * W + gx)] = std::int32_t(std::lround(height->decode(0, tile.at(x, y, 0)) * 10.0));
                 if (water) lake[std::size_t(gy * W + gx)] = std::uint8_t((lakes.at(x, y, 0) >> lakeBit) & 1u);
@@ -198,14 +200,14 @@ std::optional<BakeReport> bakeSource(const std::filesystem::path& root, const st
         Chunk out;
         Tile heights = source->tile(*read, height->name);
         heights.expand();
-        Tile flows = defaultTile(flowLayer);
+        Tile flows = defaultTile(flowLayer, chunkSamples);
         flows.expand();
-        for (std::int64_t y = 0; y < kChunkSamples; ++y)
-            for (std::int64_t x = 0; x < kChunkSamples; ++x) {
-                const std::int64_t gx = chunk.x * kChunkSamples + x, gy = chunk.y * kChunkSamples + y;
+        for (std::int64_t y = 0; y < chunkSamples; ++y)
+            for (std::int64_t x = 0; x < chunkSamples; ++x) {
+                const std::int64_t gx = chunk.x * chunkSamples + x, gy = chunk.y * chunkSamples + y;
                 if (gx >= W || gy >= H) continue;
                 const std::size_t i = std::size_t(gy * W + gx);
-                const std::size_t k = std::size_t(y * kChunkSamples + x);
+                const std::size_t k = std::size_t(y * chunkSamples + x);
                 // Unchanged samples keep the very number the source has.
                 if (changed[i]) heights.values[k] = height->encode(0, double(h[i]) / 10.0);
                 if (flow[i] > 1) flows.values[k] = flowLayer.encode(0, std::log2(double(flow[i])));

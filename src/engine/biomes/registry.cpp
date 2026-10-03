@@ -110,7 +110,7 @@ struct RegistryReader {
         n.name = text(j, "name");
         const auto kind = text(j, "kind", "fbm");
         const auto it = std::find(std::begin(kNoiseKindNames), std::end(kNoiseKindNames), kind);
-        if (it == std::end(kNoiseKindNames)) problem("noise kind \"" + kind + "\" is not fbm, cellular, streaks or ridged");
+        if (it == std::end(kNoiseKindNames)) problem("noise kind \"" + kind + "\" is not fbm, cellular, streaks, ridged or patch");
         else n.kind = NoiseKind(it - std::begin(kNoiseKindNames));
         n.metres = number(j, "metres", 8.0);
         n.contrast = number(j, "contrast", 0.5);
@@ -195,6 +195,7 @@ std::shared_ptr<Registry> Registry::load(const fs::path& dir, std::vector<Proble
         l.name = rd.text(e, "name");
         l.metres = rd.number(e, "metres", 2.0);
         l.role = rd.text(e, "role");
+        l.path = rd.text(e, "path");
         r.layers_.push_back(l);
     }
     for (const auto& e : rd.read(dir / "noises.json", "noises")) r.noises_.push_back(rd.noiseObject(e));
@@ -252,7 +253,7 @@ std::shared_ptr<Registry> Registry::load(const fs::path& dir, std::vector<Proble
         d.name = rd.text(e, "name");
         const auto kind = rd.text(e, "kind", "speckle");
         const auto it = std::find(std::begin(kDecalKindNames), std::end(kDecalKindNames), kind);
-        if (it == std::end(kDecalKindNames)) rd.problem(d.name + ": kind \"" + kind + "\" is not speckle, stain, streak or instance");
+        if (it == std::end(kDecalKindNames)) rd.problem(d.name + ": unknown decal kind \"" + kind + "\"");
         else d.kind = DecalKind(it - std::begin(kDecalKindNames));
         d.cellMetres = rd.number(e, "cell_m", d.cellMetres);
         d.density = rd.number(e, "density", d.density);
@@ -274,6 +275,7 @@ std::shared_ptr<Registry> Registry::load(const fs::path& dir, std::vector<Proble
         d.alongWind = rd.text(e, "along") == "wind";
         d.angle = rd.number(e, "angle", 0.0);
         d.model = rd.text(e, "model");
+        d.texture = rd.text(e, "texture");
         r.decals_.push_back(d);
     }
     for (const auto& e : rd.read(dir / "water_biomes.json", "water_biomes")) {
@@ -499,9 +501,10 @@ std::vector<Problem> Registry::validate(const fs::path& assets) const {
         if (!textureLayer(layer)) { bad(file, who + ": texture layer \"" + layer + "\" is not in layers.json"); return; }
         if (!assets.empty()) {
             std::error_code ec;
-            const auto dir = assets / "terrain" / "ph" / layer;
-            if (!fs::exists(dir / ("ph_" + layer + "_albedo.png"), ec))
-                bad(file, who + ": texture layer \"" + layer + "\" has no packed albedo in " + dir.string());
+            const auto& configured = layers_[*textureLayer(layer)];
+            const auto stem = configured.path.empty() ? fs::path("terrain") / "ph" / layer / ("ph_" + layer) : fs::path(configured.path);
+            if (!fs::exists(assets / (stem.string() + "_albedo.png"), ec))
+                bad(file, who + ": texture layer \"" + layer + "\" has no packed albedo at " + stem.string());
         }
     };
     const auto sharesSum = [&](const char* file, const std::string& who, const Weighted& w) {
@@ -513,8 +516,12 @@ std::vector<Problem> Registry::validate(const fs::path& assets) const {
         }
         if (std::fabs(total - 1.0) > 1e-3) bad(file, who + ": shares sum to " + std::to_string(total) + ", not 1");
     };
-    for (const auto& l : layers_)
+    for (const auto& l : layers_) {
         if (!(l.metres > 0)) bad("layers.json", l.name + ": metres must be positive");
+        const auto p = fs::path(l.path);
+        if (p.is_absolute() || std::any_of(p.begin(), p.end(), [](const auto& part) { return part == ".."; }))
+            bad("layers.json", l.name + ": path must stay relative to assets");
+    }
     if (layers_.size() > 64) bad("layers.json", "more than 64 texture layers");
     for (std::size_t i = 0; i < std::size(kBuiltInLayers); ++i)
         if (i >= layers_.size() || layers_[i].name != kBuiltInLayers[i])
@@ -537,6 +544,7 @@ std::vector<Problem> Registry::validate(const fs::path& assets) const {
         if (p.model.empty()) bad("props.json", p.name + ": no model");
     for (const auto& d : decals_) {
         if (d.kind == DecalKind::Instance && d.model.empty()) bad("decals.json", d.name + ": an instance decal needs a model");
+        if (d.kind == DecalKind::Texture) layerKnown("decals.json", d.name, d.texture);
         if (!(d.cellMetres > 0)) bad("decals.json", d.name + ": cell_m must be positive");
         if (d.sizeMetres[0] > d.sizeMetres[1]) bad("decals.json", d.name + ": size_m is [smallest, largest]");
     }

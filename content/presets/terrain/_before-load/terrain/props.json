@@ -1,0 +1,119 @@
+{
+ "_comment": "Decoration: logs, stumps, branches, mushrooms, stones, bones - which scene model and the scale it is drawn at (smallest, largest).",
+ "props": [
+  {
+   "name": "fallen_log",
+   "model": "Deadwood_Log",
+   "scale": [
+    0.9,
+    1.2
+   ]
+  },
+  {
+   "name": "half_sunk_log",
+   "model": "Deadwood_Log",
+   "scale": [
+    0.8,
+    1.1
+   ]
+  },
+  {
+   "name": "driftwood",
+   "model": "Deadwood_Log",
+   "scale": [
+    0.5,
+    0.8
+   ]
+  },
+  {
+   "name": "stump",
+   "model": "Deadwood_Stump",
+   "scale": [
+    0.9,
+    1.1
+   ]
+  },
+  {
+   "name": "snag",
+   "model": "Deadwood_Stump",
+   "scale": [
+    1.2,
+    1.6
+   ]
+  },
+  {
+   "name": "charred_stump",
+   "model": "Deadwood_Stump",
+   "scale": [
+    0.8,
+    1.0
+   ]
+  },
+  {
+   "name": "branches",
+   "model": "Deadwood_Branch",
+   "scale": [
+    0.8,
+    1.2
+   ]
+  },
+  {
+   "name": "dry_branches",
+   "model": "Deadwood_Branch",
+   "scale": [
+    0.6,
+    0.9
+   ]
+  },
+  {
+   "name": "mushrooms",
+   "model": "Mushroom_Common",
+   "scale": [
+    0.8,
+    1.2
+   ]
+  },
+  {
+   "name": "mossy_stone",
+   "model": "Rock_Medium_1",
+   "scale": [
+    0.4,
+    0.9
+   ]
+  },
+  {
+   "name": "grey_boulder",
+   "model": "Rock_Medium_1",
+   "scale": [
+    0.8,
+    1.6
+   ]
+  },
+  {
+   "name": "bone_pile",
+   "model": "Rock_Medium_1",
+   "scale": [
+    0.2,
+    0.35
+   ]
+  },
+  {
+   "name": "stones",
+   "model": "Rock_Medium_1",
+   "scale": [
+    0.3,
+    0.6
+   ]
+  },
+  {
+   "name": "cliff_face_grey",
+   "model": "Cliff_Face_Grey",
+   "scale": [0.55, 1.48]
+  },
+  {
+   "name": "cliff_face_warm",
+   "model": "Cliff_Face_Warm",
+   "scale": [0.55, 1.65]
+  }
+ ]
+}

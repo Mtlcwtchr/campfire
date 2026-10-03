@@ -6,7 +6,8 @@
 
 namespace world::weather {
 inline constexpr int kHistory = 17;
-inline constexpr std::array<const char*,5> kPresets{"auto","clear","rain","storm","drought"};
+inline constexpr std::array<const char*,6> kPresets{"auto","clear","rain","storm","drought","fog"};
+inline constexpr int kFogPreset = 5;
 struct Sample { WeatherAir air; WeatherSurface surface; };
 struct Snapshot {
     // Upload ABI: control, local climate, local readout, then 17 daily forcings.
@@ -46,7 +47,7 @@ inline Snapshot snapshot(std::uint64_t seed, double day, int daysPerSeason=15,
     const auto key=static_cast<uint>(seed^(seed>>32));
     s.data[0]={1.0f,static_cast<float>(day-std::floor(day)),
                static_cast<float>(std::fmod(day/std::max(1,daysPerSeason),4.0)),
-               static_cast<float>(std::clamp(preset,0,4))};
+               static_cast<float>(std::clamp(preset,0,5))};
     for (int i=0;i<kHistory;++i) {
         const auto d=whole-kHistory+2+i;
         // Two-day synoptic episodes; local interpolation removes cell edges.

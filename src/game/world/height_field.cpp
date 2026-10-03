@@ -1,3 +1,5 @@
+#include "engine/biomes/category_field.hpp"
+#include "engine/biomes/patch_field.hpp"
 #include "game/world/height_field.hpp"
 
 #include "game/world/terrain_streaming/hydrology_builder.hpp"
@@ -10,6 +12,64 @@
 #include "game/generation/world_map_gen.hpp"
 
 namespace world {
+
+struct HeightField::QueryCache::State {
+    template<class Value, std::size_t Count> struct Memo {
+        struct Entry {
+            std::int64_t x = 0, y = 0, stride = 0;
+            std::uint64_t epoch = 0;
+            Value value{};
+            bool matches(std::int64_t sx, std::int64_t sy, std::int64_t step,
+                         std::uint64_t version) const {
+                return epoch == version && x == sx && y == sy && stride == step;
+            }
+            Value put(std::int64_t sx, std::int64_t sy, std::int64_t step,
+                      std::uint64_t version, Value result) {
+                x = sx; y = sy; stride = step; epoch = version; value = result;
+                return result;
+            }
+        };
+        std::array<Entry, Count> entries{};
+        Entry& at(std::int64_t x, std::int64_t y, std::int64_t stride) {
+            const auto h = core::splitmix64(std::uint64_t(x) * 0x9e3779b97f4a7c15ull ^
+                std::uint64_t(y) * 0xc2b2ae3d27d4eb4full ^ std::uint64_t(stride));
+            return entries[h & (Count - 1)];
+        }
+    };
+    Memo<core::Fixed, 4096> heights;
+    Memo<core::Fixed, 2048> slopes;
+    Memo<MaterialWeights, 2048> materials;
+    const EditLayer* edits = nullptr;
+    std::uint64_t revision = 0, epoch = 1;
+    generation::TerrainStage stage = generation::TerrainStage::Final;
+    void prepare(const HeightField& field) {
+        const auto current = field.edits_ ? field.edits_->revision() : 0;
+        const auto terrainStage = field.coarse_ ? field.coarse_->terrainStage : generation::TerrainStage::Final;
+        if (edits != field.edits_ || revision != current || stage != terrainStage) {
+            edits = field.edits_; revision = current; stage = terrainStage; ++epoch;
+        }
+    }
+};
+
+thread_local HeightField::QueryCache* HeightField::QueryCache::active_ = nullptr;
+
+HeightField::QueryCache::QueryCache(HeightField& field)
+    : field_(field), previous_(active_), state_(std::make_unique<State>()) {
+    active_ = this;
+}
+HeightField::QueryCache::~QueryCache() { active_ = previous_; }
+
+HeightField::QueryCache::State* HeightField::cachedQueries() const {
+    // A copied field must not inherit another field's active cache. Workers
+    // and nested scopes have independent lifetimes, even when seeds match.
+    for (auto* scope = QueryCache::active_; scope; scope = scope->previous_) {
+        if (&scope->field_ == this) {
+            scope->state_->prepare(*this);
+            return scope->state_.get();
+        }
+    }
+    return nullptr;
+}
 
 // How far down the open sea's floor lies. Shallow on purpose: it is something
 // for the water to sit on rather than a bathymetry, and nothing goes down there.
@@ -984,6 +1044,27 @@ const streaming::HydrologyGraph* HeightField::graph() const {
     return hydrology_.get();
 }
 
+bool HeightField::hasBogPools() const {
+    return coarse_ != nullptr && coarse_->categories && !coarse_->categories->empty();
+}
+
+Fixed HeightField::bogPoolDepth(Fixed x, Fixed y) const {
+    if (!hasBogPools()) return core::kZero;
+    // The category ids of moor_marsh, peat_plain and river_fen (content/config/terrain/categories.json).
+    const auto bog = [](std::uint8_t id) { return id == 32 || id == 33 || id == 34; };
+    const auto pair = coarse_->categories->groundPair(x.toDouble(), y.toDouble());
+    const double share = (bog(pair.a) ? 1.0 - pair.share : 0.0) + (bog(pair.b) ? pair.share : 0.0);
+    if (share <= 0.35) return core::kZero;
+    // The one field of islands (engine/biomes/patch_field.hpp): the soil puts
+    // moss where it is high and mud where it is low, and water stands where it
+    // is lowest - so the pools lie between the moss islands, not beside them.
+    const double field = engine::biomes::patchField(x.toDouble(), y.toDouble());
+    const double pit = std::clamp((0.37 - field) / 0.12, 0.0, 1.0);
+    if (pit <= 0.0) return core::kZero;
+    const Fixed inside = rampFixed(Fixed::fromDoubleForContent(share), Fixed::ratio(35, 100), Fixed::ratio(80, 100));
+    return Fixed::fromDoubleForContent(pit * pit * (3.0 - 2.0 * pit)) * inside * Fixed::ratio(60, 100);
+}
+
 streaming::CarvedSample HeightField::carved(WorldPos at, Fixed country, Fixed detail) const {
     if (coarse_ && coarse_->terrainFoundation && coarse_->terrainStage < generation::TerrainStage::Water) {
         streaming::CarvedSample dry;
@@ -1140,6 +1221,12 @@ HeightField::Pieces HeightField::piecesAt(Fixed x, Fixed y, std::int64_t strideM
 
 Fixed HeightField::sampleHeight(std::int64_t sx, std::int64_t sy,
                                 std::int64_t strideMetres) const {
+    auto* cache = cachedQueries();
+    const auto epoch = cache ? cache->epoch : 0;
+    if (cache) {
+        const auto& entry = cache->heights.at(sx, sy, strideMetres);
+        if (entry.matches(sx, sy, strideMetres, epoch)) return entry.value;
+    }
     const Fixed worldX = Fixed::fromInt(sx * kSampleMetres);
     const Fixed worldY = Fixed::fromInt(sy * kSampleMetres);
     const Pieces ground = piecesAt(worldX, worldY, strideMetres);
@@ -1155,11 +1242,19 @@ Fixed HeightField::sampleHeight(std::int64_t sx, std::int64_t sy,
     // be MacroWorld, told how narrow a valley was worth cutting at this
     // stride - so the ground itself moved when the camera pulled back, which
     // is the one thing a base surface may never do.
-    return carved({worldX, worldY}, ground.country, ground.moved).floor;
+    const auto height = carved({worldX, worldY}, ground.country, ground.moved).floor;
+    return cache ? cache->heights.at(sx, sy, strideMetres).put(sx, sy, strideMetres, epoch, height) : height;
 }
 
 MaterialWeights HeightField::sampleMaterials(std::int64_t sx, std::int64_t sy) const {
-    return materialsGiven(sx, sy, core::kZero, core::kZero);
+    auto* cache = cachedQueries();
+    const auto epoch = cache ? cache->epoch : 0;
+    if (cache) {
+        const auto& entry = cache->materials.at(sx, sy, 1);
+        if (entry.matches(sx, sy, 1, epoch)) return entry.value;
+    }
+    const auto materials = materialsGiven(sx, sy, core::kZero, core::kZero);
+    return cache ? cache->materials.at(sx, sy, 1).put(sx, sy, 1, epoch, materials) : materials;
 }
 
 MaterialWeights HeightField::materialsGiven(std::int64_t sx, std::int64_t sy, Fixed height,
@@ -1450,12 +1545,19 @@ Normal HeightField::normalAcross(std::int64_t sx, std::int64_t sy, std::int64_t 
 }
 
 Fixed HeightField::sampleSlope(std::int64_t sx, std::int64_t sy) const {
+    auto* cache = cachedQueries();
+    const auto epoch = cache ? cache->epoch : 0;
+    if (cache) {
+        const auto& entry = cache->slopes.at(sx, sy, 1);
+        if (entry.matches(sx, sy, 1, epoch)) return entry.value;
+    }
     const Fixed west = sampleHeight(sx - 1, sy), east = sampleHeight(sx + 1, sy);
     const Fixed north = sampleHeight(sx, sy - 1), south = sampleHeight(sx, sy + 1);
     const Fixed run = Fixed::fromInt(2 * kSampleMetres);
     const Fixed dzdx = (east - west) / run;
     const Fixed dzdy = (south - north) / run;
-    return core::sqrt(dzdx * dzdx + dzdy * dzdy);
+    const auto slope = core::sqrt(dzdx * dzdx + dzdy * dzdy);
+    return cache ? cache->slopes.at(sx, sy, 1).put(sx, sy, 1, epoch, slope) : slope;
 }
 
 bool HeightField::sampleBrokenExcept(std::int64_t sx, std::int64_t sy, std::int64_t ignoreX,

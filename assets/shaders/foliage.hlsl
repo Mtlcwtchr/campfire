@@ -56,6 +56,13 @@ static const int kCardDryGrass = 12;
 static const int kCardReeds = 13;
 static const int kCardUndergrowth = 14;
 static const int kCardFlowersRed = 15;
+// Real species (tools/make_flower_cards.py, cards.json layers 16..21).
+static const int kCardFlowersPink = 16;
+static const int kCardFlowersLilac = 17;
+static const int kCardFlowersGazania = 18;
+static const int kCardFlowersCelandine = 19;
+static const int kCardFlowersDandelion = 20;
+static const int kCardFlowersUrsinia = 21;
 
 // Width and height of a card against the imported meadow grass at the same
 // scale. The imported views stand knee to hip high rather than at a man's
@@ -97,7 +104,18 @@ FoliageOut FoliageVS(FoliageVertexIn vertex, FoliageInstanceIn instance)
     // Across the screen rather than across the world, so a blade always faces
     // the camera edge-on and never turns into a line. This is the card's width
     // only - which way it *leans* is a question about the world, below.
-    const float2 right = normalize(viewProjection[0].xy);
+    float2 right = normalize(viewProjection[0].xy);
+    // Close to the eye each card stands at its own angle (up to 37 degrees
+    // either side of facing the camera, never edge-on), so a tuft is seen as
+    // several planes in depth and not as one cut-out turned to follow the view.
+    // Far away they all face the camera again: a distant card is a smudge.
+    {
+        const float eyeDistance = length(instance.position.xy - camera.xy);
+        const float near = 1.0 - smoothstep(14.0, 55.0, eyeDistance);
+        const float turn = (frac(instance.phase * 7.31 + 0.37) - 0.5) * 1.3 * near;
+        const float c = cos(turn), s = sin(turn);
+        right = float2(right.x * c - right.y * s, right.x * s + right.y * c);
+    }
     const float t = viewport.z;
     const float2 direction = wind.xy;
     const float2 sideways = float2(-direction.y, direction.x);
@@ -175,7 +193,7 @@ FoliageOut FoliageVS(FoliageVertexIn vertex, FoliageInstanceIn instance)
     output.position = project(p);
     output.uvLayer = float3(vertex.uv, instance.variant);
     output.tint = instance.tint;
-    output.tint.rgb *= lerp(float3(0.95, 0.98, 0.91), float3(1.05, 1.01, 0.96), frac(own * 0.91));
+    output.tint.rgb *= lerp(float3(0.95, 0.98, 0.91), float3(1.05, 1.01, 0.96), frac(own * 0.91)) * 1.10;
     const bool perspective = dot(abs(viewProjection[3].xyz), float3(1.0, 1.0, 1.0)) > 0.0;
     // The screen-size fade is a decision: in the scene view it belongs to the
     // frozen cull camera, so flying away does not thin or fill the meadow.

@@ -15,8 +15,8 @@
    ],
    "noise": {
     "kind": "fbm",
-    "metres": 14,
-    "contrast": 0.6,
+    "metres": 25.2,
+    "contrast": 0.48,
     "warp": 0.3
    },
    "tint": [
@@ -92,8 +92,8 @@
    ],
    "noise": {
     "kind": "cellular",
-    "metres": 6,
-    "contrast": 0.8
+    "metres": 10.8,
+    "contrast": 0.64
    }
   },
   {
@@ -322,8 +322,8 @@
    ],
    "noise": {
     "kind": "streaks",
-    "metres": 12,
-    "contrast": 0.4,
+    "metres": 21.6,
+    "contrast": 0.32,
     "angle": 20
    }
   },
@@ -354,6 +354,242 @@
     ]
    ],
    "noise": "cellular_6m"
+  },
+  {
+   "name": "glade_grass",
+   "layers": [
+    [
+     "leafy_grass",
+     0.85
+    ],
+    [
+     "forest_leaves_02",
+     0.15
+    ]
+   ],
+   "noise": "patch",
+   "tint": [
+    0.98,
+    1.08,
+    0.9
+   ]
+  },
+  {
+   "name": "amber_floor",
+   "layers": [
+    [
+     "dirt_floor",
+     0.35
+    ],
+    [
+     "forest_leaves_02",
+     0.65
+    ]
+   ],
+   "noise": "patch",
+   "tint": [
+    1.04,
+    0.96,
+    0.84
+   ]
+  },
+  {
+   "name": "amber_grass",
+   "layers": [
+    [
+     "forest_leaves_02",
+     0.35
+    ],
+    [
+     "withered_grass",
+     0.45
+    ],
+    [
+     "leafy_grass",
+     0.2
+    ]
+   ],
+   "noise": "patch",
+   "tint": [
+    1.04,
+    0.98,
+    0.84
+   ]
+  },
+  {
+   "name": "blossom_grass",
+   "layers": [
+    [
+     "leafy_grass",
+     0.8
+    ],
+    [
+     "withered_grass",
+     0.2
+    ]
+   ],
+   "noise": "patch",
+   "tint": [
+    1.0,
+    1.05,
+    1.0
+   ]
+  },
+  {
+   "name": "silver_grass",
+   "layers": [
+    [
+     "leafy_grass",
+     0.7
+    ],
+    [
+     "withered_grass",
+     0.3
+    ]
+   ],
+   "noise": "patch",
+   "tint": [
+    0.96,
+    1.04,
+    1.02
+   ]
+  },
+  {
+   "name": "moor_moss",
+   "layers": [
+    [
+     "brown_mud_leaves_01",
+     0.4
+    ],
+    [
+     "ms_tileable_moss",
+     0.6
+    ]
+   ],
+   "noise": "patch",
+   "tint": [
+    0.92,
+    1.0,
+    0.88
+   ]
+  },
+  {
+   "name": "peat_grass",
+   "layers": [
+    [
+     "brown_mud_02",
+     0.45
+    ],
+    [
+     "ms_tileable_moss",
+     0.55
+    ]
+   ],
+   "noise": "patch",
+   "tint": [
+    0.95,
+    0.96,
+    0.88
+   ]
+  },
+  {
+   "name": "fen_grass",
+   "layers": [
+    [
+     "brown_mud_leaves_01",
+     0.35
+    ],
+    [
+     "leafy_grass",
+     0.65
+    ]
+   ],
+   "noise": "patch",
+   "tint": [
+    0.92,
+    1.02,
+    0.88
+   ]
+  },
+  {
+   "name": "moss_floor",
+   "layers": [
+    [
+     "mud_forest",
+     0.4
+    ],
+    [
+     "ms_tileable_moss",
+     0.6
+    ]
+   ],
+   "noise": "patch",
+   "tint": [
+    0.82,
+    0.92,
+    0.84
+   ]
+  },
+  {
+   "name": "pearl_sand",
+   "layers": [
+    [
+     "coast_sand_04",
+     0.8
+    ],
+    [
+     "damp_beach_sand",
+     0.2
+    ]
+   ],
+   "noise": "fbm_30m",
+   "tint": [
+    1.06,
+    1.05,
+    1.02
+   ]
+  },
+  {
+   "name": "isle_grass",
+   "layers": [
+    [
+     "leafy_grass",
+     0.85
+    ],
+    [
+     "coast_sand_04",
+     0.15
+    ]
+   ],
+   "noise": "patch",
+   "tint": [
+    1.0,
+    1.08,
+    0.92
+   ]
+  },
+  {
+   "name": "golden_sand",
+   "layers": [
+    [
+     "sand_01",
+     0.55
+    ],
+    [
+     "red_sand",
+     0.3
+    ],
+    [
+     "sandy_gravel_02",
+     0.15
+    ]
+   ],
+   "noise": "fbm_30m",
+   "tint": [
+    1.05,
+    0.98,
+    0.85
+   ]
   }
  ]
 }

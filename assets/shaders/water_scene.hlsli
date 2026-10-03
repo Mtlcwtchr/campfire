@@ -48,7 +48,34 @@ SamplerState sceneGrabSampler : register(s10, space2);
 static WsCoast gCoast;
 static float2 gCoastShoreward = float2(0.0, 0.0);
 static float2 gCoastFace = float2(0.0, 0.0);
+static float2 gSheetSwellSlope = float2(0.0, 0.0);
 static bool gSheetHasCoast = false;
+static float gCoastFoamPattern = 0.5;
+
+// Fixed world scale with explicit footprint filtering. Moving the camera only
+// selects mip levels; it never stretches bubbles or moves their seams. Shared
+// by water and exposed sand, evaluated once by the sea sheet (two fetches).
+float2 wsTextureUv(float2 anchor, float2 local, float angle, float metres)
+{
+    const float c = cos(angle), s = sin(angle);
+    const float2 x = float2(c, -s) / metres;
+    const float2 y = float2(s, c) / metres;
+    const float2 start = float2(
+        frameTurns(anchor.x, x.x, 1.0) + frameTurns(anchor.y, x.y, 1.0),
+        frameTurns(anchor.x, y.x, 1.0) + frameTurns(anchor.y, y.y, 1.0));
+    return start + spun(local, angle) / metres;
+}
+
+float wsFoamPattern(float2 anchor, float2 local, float pixel)
+{
+    const float netStep = max(pixel, 0.0001) / 6.0;
+    const float bubbleStep = max(pixel, 0.0001) / 5.0;
+    const float net = waterTex.SampleGrad(waterSampler, float3(wsTextureUv(anchor, local, 0.0, 6.0), 2),
+        float2(netStep, 0.0), float2(0.0, netStep)).w;
+    const float bubbles = waterTex.SampleGrad(waterSampler, float3(wsTextureUv(anchor, local, 0.67, 5.0), 3),
+        float2(bubbleStep, 0.0), float2(0.0, bubbleStep)).w;
+    return net * 0.4 + bubbles * 0.6;
+}
 
 float2 wsScreenUv(float3 world, out float w)
 {
@@ -196,10 +223,12 @@ float3 wsRefraction(float3 position, float2 straight, float waterDistance, float
 
 // Light focused by the ripples onto the bed: two drifting height fields, and
 // the web where they agree. Cheap, and the pattern is the right one.
-float wsCaustics(float2 p, float clock)
+float wsCaustics(float2 anchor, float2 local, float clock, float pixel)
 {
-    const float a = waterTex.SampleLevel(waterSampler, float3(p / 3.3 + float2(clock * 0.031, clock * 0.017), 0), 0).a;
-    const float b = waterTex.SampleLevel(waterSampler, float3(spun(p, 1.3) / 2.6 - float2(clock * 0.023, -clock * 0.029), 0), 0).a;
+    const float a = waterTex.SampleGrad(waterSampler, float3(wsTextureUv(anchor, local, 0.0, 3.3) + float2(clock * 0.031, clock * 0.017), 0),
+        float2(pixel / 3.3, 0.0), float2(0.0, pixel / 3.3)).a;
+    const float b = waterTex.SampleGrad(waterSampler, float3(wsTextureUv(anchor, local, 1.3, 2.6) - float2(clock * 0.023, -clock * 0.029), 0),
+        float2(pixel / 2.6, 0.0), float2(0.0, pixel / 2.6)).a;
     return pow(saturate(1.0 - abs(a - b) * 3.2), 6.0);
 }
 
@@ -215,14 +244,12 @@ float wsJitter(float2 pixel)
 // hold one: born at its own moment, bright for a breath, then a lace that
 // tears open, drifts downwind and is gone after a few seconds - and more of
 // the cells light the harder it blows.
-float wsWhitecaps(float2 p, float2 downwind, float clock, float wind, float metresPerPixel)
+float wsWhitecaps(float2 p, float2 anchor, float2 local, float2 downwind, float clock, float wind, float metresPerPixel)
 {
     const float size = 26.0;
     const float2 q = p / size - downwind * (clock * 0.07);
     const float2 base = floor(q - 0.5);
-    const float netTurn = max(5.0, 20.0 * metresPerPixel);
-    const float net = waterTex.Sample(waterSampler, float3(spun(p, 0.9) / netTurn + downwind * clock * 0.02, 2)).w * 0.6 +
-                      waterTex.Sample(waterSampler, float3(p / (netTurn * 0.43) + 0.31, 3)).w * 0.4;
+    const float net = wsFoamPattern(anchor, local + downwind * clock * 0.1, metresPerPixel);
     float cap = 0.0;
     [unroll] for (int j = 0; j < 2; ++j) {
         [unroll] for (int i = 0; i < 2; ++i) {
@@ -262,7 +289,7 @@ float4 WaterScenePS(WaterOut input)
     const float seaLook = 1.0 - smoothstep(0.0, 0.8, river + lake * 4.0);
     const float2 downstream = input.motion.xy / max(length(input.motion.xy), 0.0001);
     // The water's own slope (for falls), before any discard.
-    const float2 headDx = ddx(input.worldXY), headDy = ddy(input.worldXY);
+    const float2 headDx = ddx(input.frameXY), headDy = ddy(input.frameXY);
     const float headDet = headDx.x * headDy.y - headDx.y * headDy.x;
     const float inverseHeadDet = abs(headDet) > 1e-7 ? 1.0 / headDet : 0.0;
     const float2 waterGradient = float2(ddx(input.baseLevel) * headDy.y - ddy(input.baseLevel) * headDx.y,
@@ -277,6 +304,7 @@ float4 WaterScenePS(WaterOut input)
 
     // --- where the water ends (unchanged: see WaterPS) --------------------
     const float2 p = input.worldXY;
+    const float2 anchor = frameAnchorFrom(p, input.frameXY);
     const float ragged = noiseAt(p / 7.4) * 0.62 + noiseAt(p / 2.3 + 13.1) * 0.38 - 0.5;
     const float sampled = max(length(headDx), length(headDy));
     // Depth is trusted to draw the waterline once the sampling is fine enough
@@ -294,13 +322,14 @@ float4 WaterScenePS(WaterOut input)
     }
 
     const float3 position = float3(p, input.worldHeight);
-    const float2 direction = lerp(windPS.xy, downstream, river);
+    const float4 waterWind = gSheetHasCoast ? swellWindPS : windPS;
+    const float2 direction = lerp(waterWind.xy, downstream, river);
     const float2 dir = direction / max(length(direction), 0.0001);
     const float2 across = float2(-dir.y, dir.x);
     const float clock = viewportPS.z;
-    const float blowing = 0.45 + 0.55 * windPS.z;
+    const float blowing = 0.45 + 0.55 * waterWind.z;
     // The sea is never still: a floor under its roughness whatever the wind.
-    const float rough = lerp(blowing, 0.75 + 0.45 * windPS.z, ocean);
+    const float rough = lerp(blowing, 0.75 + 0.45 * waterWind.z, ocean);
     const float metresPerPixel = landscapePerspective() ? max(0.0001, sampled) :
                                  2.0 / max(cameraPS.w, 1e-4);
     // The coast's state here, worked out once by the sheet (water_surf.hlsli).
@@ -320,31 +349,35 @@ float4 WaterScenePS(WaterOut input)
     // water goes calm and mirror-like, which is what the eye expects.
     float2 slope, capSlope;
     const float swell = swellAt(p, dir, clock, capSlope);
-    waveField(p, dir, clock, max(4.0, ringState.w), slope);
-    slope *= waterWaveRoom(input.depth, input.cover) * waterWaveAmplitude(windPS.z) *
-             (1.0 - fall.x) * (1.0 - ice) * ocean * (1.0 + 0.6 * ocean) * coast.calm;
+    if (gSheetHasCoast) slope = gSheetSwellSlope;
+    else {
+        waveField(p, dir, clock, max(4.0, ringState.w), slope);
+        slope *= waterWaveRoom(input.depth, input.cover) * waterWaveAmplitude(waterWind.z) *
+                 (1.0 - fall.x) * (1.0 - ice) * ocean * (1.0 + 0.6 * ocean) * coast.calm;
+    }
     const float2 drift = float2(noiseAt(p / 620.0) - 0.5, noiseAt(p / 710.0 + 31.7) - 0.5);
-    const float2 q = p + drift * 9.0;
+    const float2 q = input.frameXY + drift * 9.0;
     const float2 current = ocean * (dir * (0.65 + 0.45 * blowing) + drift * 0.9 +
                            across * (sin(dot(p, across) / 83.0 - clock * 0.23) * 0.24)) +
                            river * downstream * (0.65 + min(waterSlope, 0.5) * 1.5) +
-                           lake * windPS.xy * 0.12;
+                           lake * waterWind.xy * 0.12;
     const float fineSeen = 1.0 - smoothstep(0.05, 0.35, metresPerPixel);
     const float midSeen = 1.0 - smoothstep(0.25, 2.5, metresPerPixel);
     const float broadSeen = 1.0 - smoothstep(3.0, 30.0, metresPerPixel);
+    // The run-up is a shallow sheet, not three superimposed rough surfaces.
+    const float shoreQuiet = lerp(1.0, 0.18 + 0.82 * smoothstep(0.25, 3.0, input.depth), ocean);
     float2 lying = -slope;
     [branch] if (fineSeen > 0.0) {
-        const float3 fineN = flowingNormal(q / 2.4, current * 8.0 / 2.4, clock);
-        lying += fineN.xy / max(fineN.z, 0.25) * 0.20 * rough * fineSeen * (1.0 + 0.5 * ocean);
+        const float3 fineN = flowingNormal(wsTextureUv(anchor, q, 0.0, 2.4), current * 8.0 / 2.4, clock);
+        lying += fineN.xy / max(fineN.z, 0.25) * 0.07 * rough * fineSeen * shoreQuiet;
     }
     [branch] if (midSeen > 0.0) {
-        const float3 midN = flowingNormal(spun(q, 2.1) / 9.5, spun(current, 2.1) * 8.0 / 9.5, clock + 3.7);
-        lying += spun(midN.xy / max(midN.z, 0.25), -2.1) * 0.24 * rough * midSeen * (1.0 + 0.7 * ocean);
+        const float3 midN = flowingNormal(wsTextureUv(anchor, q, 2.1, 9.5), spun(current, 2.1) * 8.0 / 9.5, clock + 3.7);
+        lying += spun(midN.xy / max(midN.z, 0.25), -2.1) * 0.12 * rough * midSeen * shoreQuiet;
     }
     const float3 broadN = waterTex.Sample(waterSampler,
-            float3(spun(q - dir * (clock * 0.62) + across * (clock * 0.30), 0.8) / 41.0, 1)).xyz * 2.0 - 1.0;
-    lying += spun(broadN.xy / max(broadN.z, 0.25), -0.8) * 0.12 * (1.0 - river) * broadSeen *
-             (1.0 + 0.8 * ocean);
+            float3(wsTextureUv(anchor, q - dir * (clock * 0.62) + across * (clock * 0.30), 0.8, 41.0), 1)).xyz * 2.0 - 1.0;
+    lying += spun(broadN.xy / max(broadN.z, 0.25), -0.8) * 0.08 * (1.0 - river) * broadSeen * shoreQuiet;
     // The incoming wave's own face (the sheet's surface, as built).
     lying -= gCoastFace * ocean;
     lying *= (1.0 - ice) * (ocean + (0.42 * river + 0.20 * lake) * (1.0 - ocean));
@@ -377,7 +410,7 @@ float4 WaterScenePS(WaterOut input)
     // never faces. Past that the sky is what the water shows.
     const float traced = 1.0 - smoothstep(12000.0, 24000.0, waterDistance);
     [branch] if (fresnel > 0.035 && traced > 0.0) {
-        found = wsTraceReflection(position + up * 0.05, mirrored, waterDistance, wsJitter(input.position.xy));
+        found = wsTraceReflection(position + up * 0.05, mirrored, waterDistance, hashAt(floor(p * 4.0)));
         found.a *= traced;
     }
     const float3 sky = landscapeSkyRay(mirrored);
@@ -423,7 +456,7 @@ float4 WaterScenePS(WaterOut input)
     const float3 bedThrough = viewThrough * exp(-body.extinction * wet / cosSun);
     float caustic = 0.0;
     [branch] if (wet < 8.0 && midSeen > 0.0)
-        caustic = wsCaustics(p, clock) * exp(-wet * 0.35) * smoothstep(0.03, 0.5, wet) *
+        caustic = wsCaustics(anchor, input.frameXY, clock, metresPerPixel) * exp(-wet * 0.35) * smoothstep(0.03, 0.5, wet) *
                   saturate(sun.z * 2.0) * sunshine * (1.0 - ice) * midSeen * (1.0 - coast.broken);
     const float3 daylight = landscapeDaylight(up, 1.0);
 
@@ -433,7 +466,7 @@ float4 WaterScenePS(WaterOut input)
 
     // The sun's glint: GGX, roughened by wind and by the footprint (what the
     // ripples inside one pixel would have averaged to).
-    const float roughness = clamp(0.045 + 0.06 * windPS.z + 0.04 * ocean +
+    const float roughness = clamp(0.045 + 0.06 * waterWind.z + 0.04 * ocean +
                                   0.22 * smoothstep(0.3, 15.0, metresPerPixel), 0.04, 0.45);
     const float glint = min(waterSunHighlight(surface, eye, sun, roughness), 30.0);
 
@@ -456,8 +489,8 @@ float4 WaterScenePS(WaterOut input)
     // falls) are weighted by what is river, the sea's (swash, breakers,
     // whitecaps) by what is sea, so a river mouth blends from one to the other.
     float white = 0.0;
-    {
-        const float2 flowUv = (p - downstream * clock * 0.85) / max(14.0, 48.0 * metresPerPixel);
+    [branch] if (fall.x > 0.001 && ocean < 0.999) {
+        const float2 flowUv = (p - downstream * clock * 0.85) / 14.0;
         const float authoredFoam = waterTex.Sample(waterSampler, float3(flowUv, 2)).w;
         white = fall.x * smoothstep(0.35, 0.85, authoredFoam) * 0.55 * (1.0 - ice) * (1.0 - ocean);
     }
@@ -465,10 +498,7 @@ float4 WaterScenePS(WaterOut input)
     [branch] if (ocean > 0.001) {
         // Foam floating on the water, carried in with the bore and back with
         // the backwash, so it moves with the water instead of sliding under it.
-        const float turn = max(6.0, 32.0 * metresPerPixel);
-        const float2 foamUv = (p - gCoastShoreward * coast.carried) / turn;
-        const float net = waterTex.Sample(waterSampler, float3(foamUv, 2)).w * 0.6 +
-                          waterTex.Sample(waterSampler, float3(spun(foamUv * 2.1, 1.3) + 0.37, 3)).w * 0.4;
+        const float net = gCoastFoamPattern;
         // Fresh foam is nearly solid; as it ages it tears into lace and the
         // holes grow until nothing is left - settling, not switching off.
         const float thinning = saturate(coast.trailAge / 6.0);
@@ -478,9 +508,7 @@ float4 WaterScenePS(WaterOut input)
         // The swash: a churned lip along its edge and lace riding the sheet
         // behind it, in the same bubbles the sand is left with when it drains
         // (wsSandDecal), so the foam does not change pattern as the water goes.
-        const float bubbles = waterTex.Sample(waterSampler,
-                float3(spun(p, 0.67) / max(5.0, 26.0 * metresPerPixel), 3)).w;
-        const float churn = net * 0.4 + bubbles * 0.6;
+        const float churn = net;
         const float lip = coast.lip * smoothstep(0.05, 0.40, churn + 0.25);
         const float sheet = coast.sheetFoam * smoothstep(0.30, 0.80, churn);
         float shoreFoam = max(max(roller, trail), max(lip, sheet));
@@ -488,8 +516,10 @@ float4 WaterScenePS(WaterOut input)
         // to rather than let it sparkle.
         shoreFoam = lerp(shoreFoam, max(max(coast.roller, coast.lip), coast.trail * 0.45) * 0.8,
                          smoothstep(0.6, 4.0, metresPerPixel));
-        const float caps = wsWhitecaps(p, dir, clock, windPS.z, metresPerPixel) *
-                           (1.0 - coast.broken) * smoothstep(2.0, 6.0, input.depth);
+        float caps = 0.0;
+        [branch] if (input.depth > 2.0 && waterWind.z > 0.107 && coast.broken < 0.999)
+            caps = wsWhitecaps(p, anchor, input.frameXY, dir, clock, waterWind.z, metresPerPixel) *
+                   (1.0 - coast.broken) * smoothstep(2.0, 6.0, input.depth);
         white = lerp(white, saturate(max(shoreFoam, caps * 0.8)), ocean);
         // Sand under a sheet of swash is wet sand, darker than the dry sand
         // the picture behind the water was taken with.
@@ -524,9 +554,10 @@ float4 WaterScenePS(WaterOut input)
     // thins to nothing at its own edge; the lip's foam holds that edge white.
     const float edge = clamp(perPixel * 1.5, 0.02, 0.40);
     const float inlandAlpha = wbSmooth(0.0, edge, input.depth) * wbSmooth(0.0, 0.20, input.cover);
-    const float wobble = (surface.x + surface.y) * 0.20 * (1.0 - film * 0.8);
     const float edgeSoft = max(0.03, perPixel * 1.5);
-    const float seaAlpha = saturate((input.depth + wobble) / edgeSoft);
+    // Normal-map ripples affect lighting, never shoreline coverage. Adding
+    // them to depth cut alternating transparent stripes through thin swash.
+    const float seaAlpha = smoothstep(0.0, edgeSoft, input.depth);
     float alpha = lerp(inlandAlpha, seaAlpha, ocean);
     alpha = max(alpha, white * 0.85);
     alpha = lerp(alpha, wbIceAlpha(input.depth, input.cover, perPixel), ice);
@@ -543,10 +574,7 @@ float4 WaterScenePS(WaterOut input)
 float4 wsSandDecal(float3 position, WsCoast c, float metresPerPixel)
 {
     const float2 p = position.xy;
-    const float bubbles = waterTex.Sample(waterSampler,
-            float3(spun(p, 0.67) / max(5.0, 26.0 * metresPerPixel), 3)).w;
-    const float net = waterTex.Sample(waterSampler, float3(p / max(6.0, 32.0 * metresPerPixel), 2)).w;
-    const float churn = net * 0.4 + bubbles * 0.6;
+    const float churn = gCoastFoamPattern;
     // Dense at first, then the holes open and grow until nothing is left:
     // dissolving where it lies, never a line sliding off down the beach.
     const float gone = saturate(c.residueAge / 3.6);
@@ -568,4 +596,3 @@ float4 wsSandDecal(float3 position, WsCoast c, float metresPerPixel)
     return float4(finish.scale * wsHighlight(colour * finish.exposure) + finish.offset, alpha);
 }
 #endif
-

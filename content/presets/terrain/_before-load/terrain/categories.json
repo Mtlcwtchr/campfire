@@ -1,0 +1,684 @@
+{
+ "_comment": "Terrain categories: what an id of the ground control map is. Each chooses from the libraries beside this file - soils per material class (grass, dirt, sand, rock, marsh, snow; a class it does not name is its parent's, and a parent of none is the engine's own), rock on slopes and the scree at their foot, ground foliage (or none), decal sets with density weights, the layer biomes where the forest, water and decor layers say 0, a look (tint, saturation) and the values the control channels take where a map does not say (tools/assemble_controls.py reads them). inherit takes everything from another category first. derive: rules that name a category for ground no map paints (generated worlds) - first match wins. climate: what the ground stands under while an import is at its primary stage (heights only, no climate worked out): a zone, warmth 0..1, fertility 0..1 - with the moisture_bias map it decides the grass, the forest and what the ground is made of before the world's own climate exists.",
+ "categories": [
+  {
+   "name": "default",
+   "id": 0,
+   "_comment": "The engine's own ground, exactly as before categories: every class on its built-in layers. Every other category inherits it."
+  },
+  {
+   "name": "fertile",
+   "id": 1,
+   "defaults": {
+    "forest": "beech_mixed",
+    "decor": "deadwood_mossy"
+   },
+   "controls": {
+    "moisture": 0.62,
+    "forest": 0.8,
+    "erosion": 0.45
+   },
+   "climate": {
+    "zone": "temperate_forest",
+    "warmth": 0.55,
+    "fertility": 0.8
+   }
+  },
+  {
+   "name": "sparse",
+   "id": 2,
+   "defaults": {
+    "forest": "sparse_wood",
+    "decor": "deadwood_mossy"
+   },
+   "controls": {
+    "moisture": 0.56,
+    "forest": 0.45,
+    "erosion": 0.5
+   },
+   "climate": {
+    "zone": "temperate_forest",
+    "warmth": 0.55,
+    "fertility": 0.55
+   }
+  },
+  {
+   "name": "rough",
+   "id": 3,
+   "_comment": "Coarse open soil, stony, dryish: grit and shale, cooler.",
+   "soils": {
+    "grass": "rough_grass",
+    "dirt": "rough_ground"
+   },
+   "slopes": {
+    "rock": "grey_slate_strata",
+    "scree": "slate_rubble",
+    "steep_from": 0.42
+   },
+   "decals": [
+    [
+     "slate_chips",
+     1.0
+    ]
+   ],
+   "defaults": {
+    "forest": "sparse_wood",
+    "decor": "stones_stumps"
+   },
+   "look": {
+    "tint": [
+     0.97,
+     0.98,
+     1.0
+    ],
+    "saturation": 0.92
+   },
+   "controls": {
+    "moisture": 0.4,
+    "forest": 0.22,
+    "erosion": 0.58
+   },
+   "climate": {
+    "zone": "steppe",
+    "warmth": 0.5,
+    "fertility": 0.35
+   }
+  },
+  {
+   "name": "rock",
+   "id": 4,
+   "_comment": "Mountains and massifs: grey slate with strata, scree at the foot.",
+   "soils": {
+    "dirt": "rough_ground"
+   },
+   "slopes": {
+    "rock": "grey_slate_strata",
+    "scree": "slate_rubble",
+    "steep_from": 0.4
+   },
+   "defaults": {
+    "decor": "stones_stumps"
+   },
+   "controls": {
+    "moisture": 0.42,
+    "forest": 0.06,
+    "erosion": 0.65
+   },
+   "climate": {
+    "zone": "alpine",
+    "warmth": 0.45,
+    "fertility": 0.15
+   }
+  },
+  {
+   "name": "swamp",
+   "id": 5,
+   "_comment": "Bog, marsh and flooded ground: mossy mud under the grass, peat in the hollows, tussocks and sedge, brown water.",
+   "soils": {
+    "grass": "swamp_grass",
+    "dirt": "peat",
+    "marsh": "peat"
+   },
+   "slopes": {
+    "rock": "peat_bank",
+    "steep_from": 0.5
+   },
+   "ground_foliage": "tussocks",
+   "decals": [
+    [
+     "duckweed",
+     1.0
+    ]
+   ],
+   "defaults": {
+    "forest": "swamp_thin",
+    "water": "bog",
+    "decor": "bog_snags"
+   },
+   "look": {
+    "tint": [
+     0.95,
+     0.97,
+     0.92
+    ],
+    "saturation": 0.9
+   },
+   "controls": {
+    "moisture": 0.95,
+    "forest": 0.55,
+    "erosion": 0.3
+   },
+   "climate": {
+    "zone": "temperate_forest",
+    "warmth": 0.55,
+    "fertility": 0.6
+   }
+  },
+  {
+   "name": "wastes",
+   "id": 6,
+   "_comment": "The Wastes: grey dead powder, grit and stone; no grass; rotten green water.",
+   "soils": {
+    "grass": "grey_dust",
+    "dirt": "grey_dust_rubble",
+    "sand": "grey_dust",
+    "marsh": "grey_sludge"
+   },
+   "slopes": {
+    "rock": "grey_crumbling_cliff",
+    "scree": "grey_rubble",
+    "steep_from": 0.55
+   },
+   "ground_foliage": "none",
+   "decals": [
+    [
+     "dust_streaks",
+     1.0
+    ],
+    [
+     "grey_stain",
+     0.6
+    ]
+   ],
+   "defaults": {
+    "forest": "barren",
+    "water": "rotten_green",
+    "decor": "wastes_debris"
+   },
+   "look": {
+    "tint": [
+     0.92,
+     0.92,
+     0.95
+    ],
+    "saturation": 0.35
+   },
+   "controls": {
+    "moisture": 0.06,
+    "forest": 0.0,
+    "erosion": 0.75
+   },
+   "climate": {
+    "zone": "steppe",
+    "warmth": 0.55,
+    "fertility": 0.02
+   }
+  },
+  {
+   "name": "conifer",
+   "id": 7,
+   "inherit": "fertile",
+   "_comment": "A forest zone over fertile ground (Elnor). Packages now write it as the forest layer's conifer over fertile; the id stays for packages that do not.",
+   "defaults": {
+    "forest": "conifer"
+   },
+   "controls": {
+    "forest": 0.82
+   },
+   "climate": {
+    "zone": "taiga",
+    "warmth": 0.45,
+    "fertility": 0.6
+   }
+  },
+  {
+   "name": "old_oak",
+   "id": 8,
+   "inherit": "fertile",
+   "_comment": "Rare old dark oak on bare dark soil, peat in patches; fallen leaves.",
+   "soils": {
+    "dirt": "dark_oak_floor"
+   },
+   "decals": [
+    [
+     "fallen_leaves",
+     1.0
+    ]
+   ],
+   "defaults": {
+    "forest": "old_oak",
+    "decor": "elnor_deadwood"
+   },
+   "controls": {
+    "forest": 0.62,
+    "moisture": 0.45
+   },
+   "climate": {
+    "zone": "temperate_forest",
+    "warmth": 0.55,
+    "fertility": 0.55
+   }
+  },
+  {
+   "name": "eerie",
+   "id": 9,
+   "inherit": "fertile",
+   "defaults": {
+    "forest": "eerie",
+    "decor": "elnor_deadwood"
+   },
+   "look": {
+    "saturation": 0.85
+   },
+   "controls": {
+    "forest": 0.5
+   },
+   "climate": {
+    "zone": "temperate_forest",
+    "warmth": 0.5,
+    "fertility": 0.45
+   }
+  },
+  {
+   "name": "charred",
+   "id": 10,
+   "inherit": "wastes",
+   "_comment": "The Wastes' far north-east: rare charred trunks.",
+   "defaults": {
+    "forest": "charred_dead"
+   },
+   "controls": {
+    "forest": 0.1
+   },
+   "climate": {
+    "zone": "steppe",
+    "warmth": 0.55,
+    "fertility": 0.05
+   }
+  },
+  {
+   "name": "jagged",
+   "id": 11,
+   "inherit": "rock",
+   "_comment": "Atrod's south ridge: sharp toothed grey rock, little scree.",
+   "slopes": {
+    "rock": "jagged_grey",
+    "scree": "",
+    "steep_from": 0.34
+   },
+   "controls": {
+    "erosion": 0.3
+   },
+   "climate": {
+    "zone": "alpine",
+    "warmth": 0.45,
+    "fertility": 0.1
+   }
+  },
+  {
+   "name": "lake",
+   "id": 12,
+   "defaults": {
+    "water": "clear"
+   },
+   "controls": {
+    "moisture": 0.95,
+    "forest": 0.0
+   },
+   "climate": {
+    "zone": "temperate_forest",
+    "warmth": 0.55,
+    "fertility": 0.6
+   }
+  },
+  {
+   "name": "tropical_forest",
+   "id": 13,
+   "_comment": "The Flame Islands: tropical forest, ferns, dark volcanic rock.",
+   "soils": {
+    "grass": "tropical_grass",
+    "dirt": "laterite"
+   },
+   "slopes": {
+    "rock": "dark_volcanic",
+    "steep_from": 0.45
+   },
+   "ground_foliage": "tropical_ferns",
+   "defaults": {
+    "forest": "tropical",
+    "water": "tropical",
+    "decor": "driftwood_vines"
+   },
+   "look": {
+    "tint": [
+     0.98,
+     1.03,
+     0.97
+    ]
+   },
+   "controls": {
+    "moisture": 0.86,
+    "forest": 0.92,
+    "erosion": 0.42
+   },
+   "climate": {
+    "zone": "tropical_forest",
+    "warmth": 0.9,
+    "fertility": 0.85
+   }
+  },
+  {
+   "name": "tropical_soil",
+   "id": 14,
+   "_comment": "Sand mixed with wet tropical soil (laterite).",
+   "soils": {
+    "grass": "laterite",
+    "dirt": "laterite"
+   },
+   "slopes": {
+    "rock": "dark_volcanic",
+    "steep_from": 0.45
+   },
+   "ground_foliage": "tropical_ferns",
+   "defaults": {
+    "forest": "tropical",
+    "water": "tropical",
+    "decor": "driftwood_vines"
+   },
+   "controls": {
+    "moisture": 0.72,
+    "forest": 0.45,
+    "erosion": 0.5
+   },
+   "climate": {
+    "zone": "tropical_forest",
+    "warmth": 0.88,
+    "fertility": 0.6
+   }
+  },
+  {
+   "name": "savanna",
+   "id": 15,
+   "_comment": "Xairinis: dry grass over dry soil and sand, warm rock.",
+   "soils": {
+    "grass": "laterite_dry",
+    "dirt": "laterite",
+    "sand": "savanna_sand"
+   },
+   "slopes": {
+    "rock": "warm_cliff",
+    "scree": "warm_scree",
+    "steep_from": 0.45
+   },
+   "ground_foliage": "dry_tussocks",
+   "decals": [
+    [
+     "dry_tufts",
+     1.0
+    ]
+   ],
+   "defaults": {
+    "forest": "savanna_dry",
+    "water": "shallow_clear",
+    "decor": "dry_branches_stones"
+   },
+   "controls": {
+    "moisture": 0.3,
+    "forest": 0.22,
+    "erosion": 0.52
+   },
+   "climate": {
+    "zone": "savanna",
+    "warmth": 0.8,
+    "fertility": 0.3
+   }
+  },
+  {
+   "name": "dunes",
+   "id": 16,
+   "inherit": "savanna",
+   "_comment": "Xairinis' sandy heart.",
+   "soils": {
+    "grass": "dune_sand",
+    "dirt": "savanna_sand",
+    "sand": "dune_sand"
+   },
+   "ground_foliage": "none",
+   "decals": [],
+   "defaults": {
+    "forest": "barren"
+   },
+   "controls": {
+    "moisture": 0.1,
+    "forest": 0.02,
+    "erosion": 0.6
+   },
+   "climate": {
+    "zone": "desert",
+    "warmth": 0.85,
+    "fertility": 0.02
+   }
+  },
+  {
+   "name": "savanna_wood",
+   "id": 17,
+   "inherit": "savanna",
+   "defaults": {
+    "forest": "savanna_coast"
+   },
+   "controls": {
+    "moisture": 0.4,
+    "forest": 0.45,
+    "erosion": 0.5
+   },
+   "climate": {
+    "zone": "savanna",
+    "warmth": 0.8,
+    "fertility": 0.45
+   }
+  },
+  {
+   "name": "beach",
+   "id": 18,
+   "_comment": "Sand along a coast.",
+   "soils": {
+    "grass": "beach_sand",
+    "dirt": "beach_sand",
+    "sand": "beach_sand"
+   },
+   "ground_foliage": "thin_litter",
+   "defaults": {
+    "forest": "barren",
+    "water": "tropical",
+    "decor": "driftwood_vines"
+   },
+   "controls": {
+    "moisture": 0.55,
+    "forest": 0.04,
+    "erosion": 0.55
+   },
+   "climate": {
+    "zone": "mediterranean",
+    "warmth": 0.75,
+    "fertility": 0.15
+   }
+  },
+  {
+   "name": "scarlet",
+   "id": 19,
+   "inherit": "tropical_soil",
+   "_comment": "The Flame Islands, P and A: scarlet grodomantite in the ground.",
+   "decals": [
+    [
+     "grodomantite",
+     1.0
+    ]
+   ],
+   "controls": {
+    "moisture": 0.6,
+    "forest": 0.35,
+    "erosion": 0.5
+   },
+   "climate": {
+    "zone": "tropical_forest",
+    "warmth": 0.88,
+    "fertility": 0.5
+   }
+  },
+  {
+   "name": "crater",
+   "id": 20,
+   "inherit": "tropical_soil",
+   "_comment": "The Flame Islands, E: craters dark with the black wind's power.",
+   "soils": {
+    "grass": "burned",
+    "dirt": "burned"
+   },
+   "ground_foliage": "none",
+   "decals": [
+    [
+     "black_wind_stain",
+     1.0
+    ]
+   ],
+   "defaults": {
+    "forest": "barren"
+   },
+   "look": {
+    "saturation": 0.7
+   },
+   "controls": {
+    "moisture": 0.3,
+    "forest": 0.0,
+    "erosion": 0.3
+   },
+   "climate": {
+    "zone": "savanna",
+    "warmth": 0.85,
+    "fertility": 0.05
+   }
+  },
+  {
+   "name": "desert",
+   "id": 21,
+   "_comment": "Generated worlds' deserts (derive). Draws as the default until someone gives it a look."
+  },
+  {
+   "name": "atrod_valley",
+   "id": 22,
+   "inherit": "fertile",
+   "_comment": "Atrod's valleys and plains: leafy and withered grass, few trees, much shrub, stones.",
+   "soils": {
+    "grass": "valley_grass"
+   },
+   "ground_foliage": "shrubby_grass",
+   "defaults": {
+    "forest": "shrubland",
+    "decor": "stones_stumps"
+   },
+   "controls": {
+    "moisture": 0.56,
+    "forest": 0.38,
+    "erosion": 0.45
+   },
+   "climate": {
+    "zone": "mediterranean",
+    "warmth": 0.62,
+    "fertility": 0.55
+   }
+  },
+  {
+   "name": "atrod_rock",
+   "id": 23,
+   "inherit": "rock",
+   "_comment": "Atrod's massifs: smoother grey rock than Kagar's slate.",
+   "slopes": {
+    "rock": "smooth_grey",
+    "scree": "grey_rubble",
+    "steep_from": 0.44
+   },
+   "climate": {
+    "zone": "alpine",
+    "warmth": 0.5,
+    "fertility": 0.15
+   }
+  },
+  {
+   "name": "volcanic_rock",
+   "id": 24,
+   "inherit": "rock",
+   "_comment": "The Flame Islands' rock mountains: dark stone.",
+   "soils": {
+    "dirt": "burned"
+   },
+   "slopes": {
+    "rock": "dark_volcanic",
+    "scree": "grey_rubble",
+    "steep_from": 0.4
+   },
+   "defaults": {
+    "water": "tropical",
+    "decor": "driftwood_vines"
+   },
+   "climate": {
+    "zone": "alpine",
+    "warmth": 0.85,
+    "fertility": 0.2
+   }
+  },
+  {
+   "name": "warm_rock",
+   "id": 25,
+   "inherit": "rock",
+   "_comment": "Xairinis' rock: warm cliffs.",
+   "soils": {
+    "dirt": "warm_scree"
+   },
+   "slopes": {
+    "rock": "warm_cliff",
+    "scree": "warm_scree",
+    "steep_from": 0.44
+   },
+   "defaults": {
+    "water": "shallow_clear",
+    "decor": "dry_branches_stones"
+   },
+   "climate": {
+    "zone": "alpine",
+    "warmth": 0.8,
+    "fertility": 0.15
+   }
+  },
+  {
+   "name": "elnor_fertile",
+   "id": 26,
+   "inherit": "fertile",
+   "_comment": "Elnor's valleys: beech and mixed wood, deadwood and stumps.",
+   "defaults": {
+    "forest": "beech_mixed",
+    "decor": "elnor_deadwood"
+   },
+   "climate": {
+    "zone": "temperate_forest",
+    "warmth": 0.52,
+    "fertility": 0.8
+   }
+  },
+  {
+   "name": "kagar_fertile",
+   "id": 27,
+   "inherit": "fertile",
+   "_comment": "Kagar's ring of old forests: dense old mixed wood.",
+   "defaults": {
+    "forest": "old_mixed",
+    "decor": "deadwood_mossy"
+   },
+   "controls": {
+    "moisture": 0.64,
+    "forest": 0.88,
+    "erosion": 0.45
+   },
+   "climate": {
+    "zone": "temperate_forest",
+    "warmth": 0.5,
+    "fertility": 0.85
+   }
+  }
+ ],
+ "derive": [
+  {
+   "category": "desert",
+   "desert_above": 0.6
+  }
+ ]
+}

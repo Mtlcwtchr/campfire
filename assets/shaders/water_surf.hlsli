@@ -1,5 +1,6 @@
 #ifndef WATER_SURF_HLSLI
 #define WATER_SURF_HLSLI
+#include "water_swash.hlsli"
 // The sea meeting its shore.
 //
 // One model, evaluated by the vertex stage (which moves the water: the wave
@@ -44,8 +45,6 @@ static const float kWsNone = -1.0e4;
 // The highest the swash can climb in the strongest wind, metres: callers only
 // need to look for the sea's reach below this.
 static const float kWsMaxRunup = 1.6;
-// Share of a swash spent climbing; the rest it drains back.
-static const float kWsSwashPeak = 0.38;
 
 // How much of this water is the open sea, from the page's filtered river and
 // lake shares. One smooth ramp, not a switch at their first non-zero texel -
@@ -75,6 +74,7 @@ struct WsCoastIn {
     float bed;         // the ground's height, metres above sea level
     float level;       // the still water's level here (0 for the sea)
     float slope;       // how fast the ground rises towards the shore, smoothed
+    float2 bedRise;    // world-space ground gradient, not a screen derivative
     float2 windDir;    // unit, the way the swell runs
     float sea;         // 0..1 how much of this water is the open sea's
     float reach;       // 0..1 whether the sea can run up this ground at all
@@ -85,6 +85,7 @@ struct WsCoastIn {
 
 struct WsCoast {
     float wave;        // the incoming wave's height above the still level, metres
+    float2 waveSlope;  // analytic face; texture sampling terraces are not waves
     float swashTop;    // the swash sheet's surface above the still level, or kWsNone
     float swept;       // how high up the beach this and the last wave reach
     float calm;        // share of the open-sea swell left here
@@ -121,38 +122,8 @@ float wsWaveSize(float wave, float2 p)
     return (0.55 + 0.60 * one) * (0.72 + 0.45 * sets);
 }
 
-// One wave passing a point: 0 at the trough, 1 at the crest, over u in [0, 1)
-// periods since the trough. The face takes `rise` of the period and the back
-// the rest, as (1 - v)^b (1 + b v), which is level at the crest and at the next
-// trough - so the profile is smooth through its own wrap, and a phase that
-// wraps somewhere never draws a seam there.
-float wsProfile(float u, float rise, float back)
-{
-    if (u < rise) {
-        const float x = u / rise;
-        return x * x * (3.0 - 2.0 * x);
-    }
-    const float v = saturate((u - rise) / (1.0 - rise));
-    return pow(max(1.0 - v, 1.0e-6), back) * (1.0 + back * v);
-}
-// Its mean over a period, so the wave moves water about without raising the sea.
-float wsProfileMean(float rise, float back) { return rise * 0.5 + 2.0 * (1.0 - rise) / (back + 2.0); }
-
-// The swash's leading edge, as a share of its run-up, over q in [0, 1] of its
-// duration: decelerating up the slope, a moment at the top, draining back.
-float wsSwashEnvelope(float q)
-{
-    if (q <= 0.0 || q >= 1.0) return 0.0;
-    if (q < kWsSwashPeak) {
-        const float a = 1.0 - q / kWsSwashPeak;
-        return 1.0 - a * a;
-    }
-    return 1.0 - pow((q - kWsSwashPeak) / (1.0 - kWsSwashPeak), 1.6);
-}
-// When the edge passed a share h of the run-up on the way up, and on the way down.
-float wsSwashCame(float h) { return kWsSwashPeak * (1.0 - sqrt(saturate(1.0 - h))); }
-float wsSwashWent(float h) { return kWsSwashPeak + (1.0 - kWsSwashPeak) * pow(saturate(1.0 - h), 1.0 / 1.6); }
-
+// Wave profiles, their means and the swash's smooth rise/retreat are shared
+// scalar functions in water_swash.hlsli.
 struct WsSwash {
     float height;     // how far up it climbs, metres above the still level
     float duration;   // share of a period it takes, up and back
@@ -182,17 +153,18 @@ void wsStranded(WsSwash w, float t, float e, float up, float period,
 {
     if (e >= w.height || w.height <= 0.0) return;
     const float h = e / w.height;
-    if (t <= wsSwashCame(h) * w.duration) return;          // it has not got here yet
     const float dry = (t - wsSwashWent(h) * w.duration) * period;
-    if (dry <= 0.0) return;                                   // it is still here
-    // Most of it along the line where the water turned back - a crisp line,
-    // as a swash mark is, but a quarter of a metre across the sand rather
-    // than a pixel.
-    const float edge = smoothstep(w.height, w.height - max(0.25 * up, 0.006), e);
+    const float edge = 1.0 - smoothstep(w.height - max(0.9 * up, 0.018), w.height, e);
     const float made = lerp(0.45, 1.0, smoothstep(0.55, 0.97, h)) * edge;
-    const float left = made * exp(-dry / 2.6);
-    if (left > residue) { residue = left; age = dry; }
-    wet = max(wet, exp(-dry / 6.5) * edge);
+    // Fade in as the film drains, and finish before this wave drops out of
+    // the two-wave history. No bright line appears at the frame of exposure.
+    const float ageNow = max(dry, 0.0);
+    const float memory = smoothstep(0.0, 0.35, dry) * wsResidueLifetime(ageNow, period);
+    const float left = made * exp2(-ageNow * 0.5549) * memory;
+    const float total = residue + left;
+    if (total > 0.00001) age = (age * residue + ageNow * left) / total;
+    residue = total;
+    wet = max(wet, exp2(-ageNow * 0.2220) * edge * memory);
 }
 
 WsCoast wsCoastAt(WsCoastIn i)
@@ -238,15 +210,20 @@ WsCoast wsCoastAt(WsCoastIn i)
         // bore is a step with a long back. Never sharper than the surface can
         // carry: a face narrower than the mesh would alias.
         float rise = lerp(lerp(0.45, 0.24, shoaling), 0.08, broken);
-        rise = clamp(max(rise, 1.6 * i.spacing / wavelength), 0.02, 0.5);
+        // Mesh spacing filters amplitude below; changing the phase profile with
+        // mesh/pixel spacing made adjacent LODs place the crest differently.
         const float back = lerp(lerp(2.0, 3.2, shoaling), 1.6, broken);
         const float resolved = 1.0 - smoothstep(0.12 * wavelength, 0.30 * wavelength, i.spacing);
         // Taller as it shoals (Green's law), then a fixed share of the depth
         // once broken - which is what takes it down to nothing at the waterline.
-        const float shoaled = height * pow(breakDepth / max(d, breakDepth), 0.25);
+        const float shoaled = height * sqrt(sqrt(breakDepth / max(d, breakDepth)));
         const float amplitude = lerp(shoaled, min(0.6 * d, height), broken) * band;
         const float profile = wsProfile(u, rise, back);
         c.wave = amplitude * resolved * (profile - wsProfileMean(rise, back));
+        const float2 phaseSlope = -i.bedRise /
+            (clamp(i.slope, 0.02, 0.12) * sqrt(kWsGravity * max(d, 0.15)) * period) -
+            i.windDir * (1.0 / 350.0);
+        c.waveSlope = amplitude * resolved * wsProfileDerivative(u, rise, back) * phaseSlope;
         c.broken = broken * band;
 
         // White water on the face and the crest of a breaking wave, brightest
@@ -256,20 +233,19 @@ WsCoast wsCoastAt(WsCoastIn i)
                            (1.0 - smoothstep(rise, rise + 0.07 + 0.10 * broken, u));
         const float vigour = (0.7 + 0.3 * smoothstep(breakDepth * 0.35, breakDepth * 0.9, d)) *
                              saturate(0.45 + 0.6 * size);
+        const float peak2 = profile * profile;
         c.roller = max(white * face * vigour,
-                       band * shoaling * (1.0 - broken) * pow(profile, 6.0) * 0.35 * saturate(size));
+                       band * shoaling * (1.0 - broken) * peak2 * peak2 * peak2 * 0.35 * saturate(size));
         // And the foam it leaves floating behind it: this wave's, and what is
         // left of the last one's, so nothing switches off when the next arrives.
         const float lasts = 3.4;
         const float ageNow = max(u - rise, 0.0) * period;
         const float ageBefore = (u + 1.0 - rise) * period;
-        const float now = smoothstep(rise * 0.5, rise + 0.03, u) * exp(-ageNow / lasts);
-        const float before = exp(-ageBefore / lasts);
-        c.trail = white * vigour * max(now, before);
-        c.trailAge = now >= before ? ageNow : ageBefore;
-        // Dragged in with the bore for a second or two, then pulled back.
-        c.carried = 2.6 * (1.0 - exp(-c.trailAge / 1.1)) -
-                    1.4 * smoothstep(0.35 * period, 1.1 * period, c.trailAge);
+        const float renewal = wsFoamRenewal(u, rise);
+        c.trail = white * vigour * lerp(exp(-ageBefore / lasts), exp(-ageNow / lasts), renewal);
+        c.trailAge = lerp(ageBefore, ageNow, renewal);
+        // Periodic velocity/displacement: renewing foam cannot teleport UVs.
+        c.carried = 1.1 * sin(6.2831853 * (phase - rise));
     }
 
     // --- the swash -------------------------------------------------------
@@ -279,23 +255,28 @@ WsCoast wsCoastAt(WsCoastIn i)
         const float up = clamp(i.slope, 0.008, 0.5);
         const WsSwash now = wsSwashOf(n + 0.5, i.p, i.slope, breaker, i.reach, period);
         const WsSwash before = wsSwashOf(n - 0.5, i.p, i.slope, breaker, i.reach, period);
-        c.swept = max(now.height, before.height);
+        // Geometry support must not jump when the wave ID changes. The pixel
+        // shader limits the actual wet footprint within this stable apron.
+        c.swept = min(kWsMaxRunup, up * 22.0) * saturate(i.reach);
         const float q = since / now.duration;
         const float top = now.height * wsSwashEnvelope(q);
         const float onSand = smoothstep(-0.04, 0.02, e);
+        const float edgeHeight = max(0.025, up * 0.8);
+        const float covered = smoothstep(0.0, edgeHeight, top - e) * smoothstep(0.0, 0.03, top);
         if (top > 0.0 && e < top) {
             // Under the sheet: thin at its edge, never more than a hand or two
             // deep behind it, lying on the sand rather than levelling it.
             c.swashTop = min(top, e + 0.05 + 0.3 * now.height);
-            c.film = onSand;
-            c.wetSand = onSand;
+            c.film = onSand * covered;
+            c.wetSand = onSand * covered;
             const float behind = (top - e) / up;          // metres behind the edge
             const float climbing = 1.0 - 0.65 * smoothstep(kWsSwashPeak, kWsSwashPeak + 0.35, q);
             const float lipWidth = 0.5 + 1.2 * saturate(now.height / 0.8);
-            c.lip = (1.0 - smoothstep(0.0, lipWidth, behind)) * climbing * smoothstep(0.0, 0.03, top);
+            c.lip = (1.0 - smoothstep(0.0, lipWidth, behind)) * climbing * covered;
             c.sheetFoam = lerp(0.75, 0.2, saturate(behind / max(now.height / up, 0.5))) *
-                          (1.0 - 0.6 * smoothstep(kWsSwashPeak, 1.0, q)) * onSand;
-        } else if (e > 0.0) {
+                          (1.0 - 0.6 * smoothstep(kWsSwashPeak, 1.0, q)) * onSand * covered;
+        }
+        if (e > 0.0) {
             // Sand the sea has lately been over: this wave's (once it has
             // drained past) and the one before's, so the foam it stranded
             // dissolves in its own time instead of vanishing when the next
@@ -305,12 +286,13 @@ WsCoast wsCoastAt(WsCoastIn i)
             wsStranded(before, since + 1.0, e, up, period, residue, age, wet);
             c.residue = residue;
             c.residueAge = age;
-            c.wetSand = wet;
+            c.wetSand = max(c.wetSand, wet);
         }
         // Against a steep bank the wave does not run up, it strikes: white at
         // the waterline as each one arrives, falling back.
         const float steep = smoothstep(0.18, 0.55, i.slope);
-        c.lip = max(c.lip, steep * exp(-since * period / 0.9) *
+        c.lip = max(c.lip, steep * smoothstep(0.0, 0.06, since) * exp(-since * period / 0.9) *
+                           (1.0 - smoothstep(0.65, 1.0, since)) *
                            (1.0 - smoothstep(0.0, 0.8, abs(e))) * saturate(breaker * 1.5));
     }
     return c;
@@ -319,4 +301,3 @@ WsCoast wsCoastAt(WsCoastIn i)
 // The water's surface above the still level: the wave, or the swash over it.
 float wsCoastSurface(WsCoast c) { return max(c.wave, c.swashTop); }
 #endif
-

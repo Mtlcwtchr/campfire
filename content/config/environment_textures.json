@@ -1,0 +1,9 @@
+{
+  "comment": "User-downloaded Fab/Quixel archives. Normal maps are DirectX (+Y height correlation), converted to OpenGL during preparation. Keep original licences and metadata. Packed by the existing terrain packer.",
+  "textures": [
+    {"id": "ms_moss_atlas", "archive": "moss_readl2_1k.zip", "asset_id": "reAdL2", "metres": 0.25, "normal_convention": "dx", "url": "https://www.fab.com/listings/29307c07-c07f-4b0d-8d91-6581481a7431"},
+    {"id": "ms_tileable_moss", "archive": "tileable_moss_patches_sfdnqii_1k.zip", "asset_id": "sfdnqii", "metres": 2.0, "normal_convention": "dx", "url": "https://www.fab.com/listings/a9a94514-dfba-43cb-92bc-c550d79b8d5d"},
+    {"id": "ms_moss_patch", "archive": "moss_patch_tjxpndh_1k.zip", "asset_id": "tjxpndh", "metres": 0.5, "normal_convention": "dx", "url": "https://www.fab.com/listings/b5fad446-5ca0-44b1-96cf-74051936b0e6"},
+    {"id": "ms_fallen_branches", "archive": "fallen_branches_se1kxrh_1k.zip", "asset_id": "se1kxrh", "metres": 2.0, "normal_convention": "dx", "url": "https://www.fab.com/listings/874d948f-b6a2-4846-bdeb-49840d70658b"}
+  ]
+}

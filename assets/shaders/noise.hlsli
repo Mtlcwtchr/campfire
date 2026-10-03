@@ -18,6 +18,24 @@ float hashAt(float2 cell)
     return float(h & 0xffffu) / 65535.0;
 }
 
+float noiseAt(float2 at);
+// The one field of islands (engine/biomes/patch_field.hpp - the same arithmetic):
+// moss and water, flowers, shrub islands. 0..1; patchRegionAt: 0 small and
+// ragged islands, 1 broad fields.
+float patchRegionAt(float2 p)
+{
+    return smoothstep(0.42, 0.62, noiseAt(p / 760.0 + float2(9.1, -3.3)));
+}
+float patchFieldAt(float2 p)
+{
+    p.x += (noiseAt(p / 90.0 + float2(5.3, -1.1)) - 0.5) * 56.0;
+    p.y += (noiseAt(p / 90.0 + float2(-7.7, 2.9)) - 0.5) * 56.0;
+    const float small = noiseAt(p / 46.0 + float2(3.1, 7.7)) * 0.6 + noiseAt(p / 21.0 + float2(11.3, -4.2)) * 0.4;
+    const float large = noiseAt(p / 190.0 + float2(1.7, 5.3)) * 0.65 + noiseAt(p / 80.0 + float2(-6.4, 2.2)) * 0.35;
+    const float p01 = lerp(small, large, patchRegionAt(p));
+    return saturate((p01 - 0.5) * 1.9 + 0.5);
+}
+
 float noiseAt(float2 at)
 {
     float2 whole = floor(at);

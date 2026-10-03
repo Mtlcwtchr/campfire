@@ -160,6 +160,7 @@ float4 GradePS(GradeOut input) : SV_Target0
     const float spill = smoothstep(0.48, 0.90, gradeLuma(halo));
     const float3 bloom = halo * spill * float3(1.0, 0.84, 0.60) * grade.y;
     c = c + bloom * (1.0 - c);   // screened: it brightens, never clips
+    c *= gradeSpare0.x;          // the settings' brightness
 
     // --- gold in the light, blue in the shade -------------------------------
     //
@@ -181,7 +182,7 @@ float4 GradePS(GradeOut input) : SV_Target0
     // soft toe into a deep black that is not crushed, and a shoulder that
     // rolls the whites off instead of clipping them.
     const float pivot = 0.42;
-    float3 graded = pivot + (c - pivot) * 1.16;
+    float3 graded = pivot + (c - pivot) * (1.16 * gradeSpare0.y);
     graded = max(graded, 0.0);
     graded = graded * graded * (3.0 - 2.0 * saturate(graded));   // toe and shoulder
     c = lerp(c, saturate(graded), 0.55);
@@ -198,7 +199,7 @@ float4 GradePS(GradeOut input) : SV_Target0
     luma = gradeLuma(c);
     const float chroma = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
     const float vibrance = 1.0 + 0.30 * (1.0 - saturate(chroma * 2.5));
-    c = lerp(float3(luma, luma, luma), c, vibrance);
+    c = lerp(float3(luma, luma, luma), c, vibrance * gradeSpare0.z);
     // Greens kept green: a hair warmer in the light, never pushed to olive.
     const float green = saturate((c.g - max(c.r, c.b)) * 6.0);
     c += float3(0.010, 0.006, -0.008) * green;

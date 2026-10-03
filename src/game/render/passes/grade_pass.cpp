@@ -62,12 +62,17 @@ void GradePass::collect(const engine::Frame& frame, engine::DrawQueue& queue) {
     // the copy has, so the shader never asks for one beyond its end.
     item.own[0] = strength;
     item.own[1] = 0.50f;   // bloom
-    item.own[2] = 0.45f;   // vignette
+    item.own[2] = 0.28f;   // vignette
     item.own[3] = 0.012f;  // grain
     float levels = 1.0f;
     for (Uint32 side = std::max(frame.width, frame.height); side > 1; side /= 2) levels += 1.0f;
     item.own[4] = levels;
     item.own[5] = frame.scene.quality[3] > 0.0f ? 1.0f : 0.0f;   // FXAA
+    // brightness, contrast, saturation: the settings' own, or the built-in look
+    const bool dials = frame.scene.grading[3] > 0.5f;
+    item.own[8] = dials ? frame.scene.grading[0] : 1.0f;
+    item.own[9] = dials ? frame.scene.grading[1] : 1.0f;
+    item.own[10] = dials ? frame.scene.grading[2] : 1.0f;
     queue.push(item);
 }
 

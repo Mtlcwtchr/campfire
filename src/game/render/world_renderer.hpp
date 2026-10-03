@@ -1,4 +1,5 @@
 #pragma once
+#include "game/render/passes/character_pass.hpp"
 #include <chrono>
 #include <filesystem>
 
@@ -11,6 +12,7 @@
 #include "game/render/calc/sprite_queue.hpp"
 #include "game/render/climate_textures.hpp"
 #include "game/render/graphics_settings.hpp"
+#include "game/render/terrain_look.hpp"
 #include "game/render/passes/sketch_pass.hpp"
 #include "game/render/passes/highlight_pass.hpp"
 #include "game/world/environment.hpp"
@@ -67,6 +69,10 @@ public:
               world::WorldSystem& source, Overlay overlay = {},
               int headlessWidth = 0, int headlessHeight = 0);
     bool draw(const client::Camera& camera, const WorldRenderSettings& settings = {});
+    // The player's character for the next frames (CharacterPass); not visible
+    // until set. Kept here, not in the pass, so a rebuilt pipeline keeps it.
+    void character(const CharacterPass::State& state) { characterState_ = state; }
+    [[nodiscard]] const CharacterPass* characterPass() const { return character_; }
     bool screenshot(const std::string& path);
     void holdTime(double seconds);
     void forgetTheWorld();
@@ -97,6 +103,8 @@ public:
     bool terrainSkirts() const { return skirts_; }
     void toggleTerrainSkirts();
     void cycleTerrainGrid();
+    [[nodiscard]] int terrainGrid() const { return grid_; }
+    void setTerrainGrid(int grid) { while (grid_ != grid % 3) cycleTerrainGrid(); }
     // Draws scene objects as edges: what the cluster cut, the impostor cards
     // and the region aggregates actually put on screen.
     void toggleObjectWireframe();
@@ -113,6 +121,9 @@ private:
     void pollBiomes();
     std::chrono::steady_clock::time_point biomesPolled_{};
     std::filesystem::file_time_type biomesWritten_{};
+    // content/config/terrain_look.json, read again when it is written.
+    TerrainLook terrainLook_{};
+    std::filesystem::file_time_type terrainLookWritten_{};
     bool rebuildShaders_ = false;
     bool restoredShaders_ = false;
     world::WorldSystem* source_ = nullptr; // requests/leases, never worker callbacks
@@ -131,6 +142,8 @@ private:
     SpritePass* sprites_ = nullptr;
     SceneModelsPass* models_ = nullptr;
     FarTreesPass* farTrees_ = nullptr;
+    CharacterPass* character_ = nullptr;
+    CharacterPass::State characterState_;
     bool objectWireframe_ = false;
     FoliagePass* foliage_ = nullptr;
     engine::RenderPipeline* render_ = nullptr;

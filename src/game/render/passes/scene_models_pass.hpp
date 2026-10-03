@@ -87,6 +87,7 @@ private:
     // Groups the published objects into the 128 m regions both the aggregate
     // and the terrain density speak in. Once per placement, never per frame.
     void updateRegionMembers();
+    void publishPlacement();
     [[nodiscard]] int massSlotOf(const world::decor::ScatterBounds&) const;
     // What a bake needs from a model, kept on the processor after upload. A
     // worker holds it by shared_ptr, so a reload cannot pull it out from under
@@ -317,6 +318,7 @@ private:
     // and rebuilding these every frame cost milliseconds for geometry that does
     // not move: a tree is where the scatter put it until the scatter changes.
     engine::render::GatheredInstances gathered_;
+    engine::render::InstanceCullIndex cullIndex_;
     engine::Texture colours_,normals_,depths_;
     engine::Sampler sampler_,depthSampler_;
     engine::MeshRenderer renderer_;

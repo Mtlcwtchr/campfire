@@ -1,0 +1,57 @@
+{
+ "_comment": "Kinds of noise the soils, forest floors, clearings and decals mix by. kind: fbm (soft clouds), cellular (patches with edges - mud, peat, stones), streaks (lines along `angle` degrees), ridged (sharp crests). metres: the feature's size; contrast 0 soft .. 1 hard; warp: how far the domain is pushed about, in feature sizes. Which kinds a category uses is code (a recompile); the numbers are a table (live).",
+ "noises": [
+  {
+   "name": "fbm_8m",
+   "kind": "fbm",
+   "metres": 8,
+   "contrast": 0.5
+  },
+  {
+   "name": "fbm_14m",
+   "kind": "fbm",
+   "metres": 14,
+   "contrast": 0.6,
+   "warp": 0.3
+  },
+  {
+   "name": "fbm_30m",
+   "kind": "fbm",
+   "metres": 30,
+   "contrast": 0.55,
+   "warp": 0.25
+  },
+  {
+   "name": "cellular_6m",
+   "kind": "cellular",
+   "metres": 6,
+   "contrast": 0.8
+  },
+  {
+   "name": "cellular_18m",
+   "kind": "cellular",
+   "metres": 18,
+   "contrast": 0.7
+  },
+  {
+   "name": "cellular_120m",
+   "kind": "cellular",
+   "metres": 120,
+   "contrast": 0.6
+  },
+  {
+   "name": "streaks_9m",
+   "kind": "streaks",
+   "metres": 9,
+   "contrast": 0.5,
+   "angle": 30
+  },
+  {
+   "name": "ridged_20m",
+   "kind": "ridged",
+   "metres": 20,
+   "contrast": 0.6,
+   "warp": 0.2
+  }
+ ]
+}

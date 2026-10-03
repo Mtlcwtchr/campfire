@@ -268,16 +268,12 @@ struct WorldMapData {
     // it shaped and the water it forced or kept out. Nought where nothing was
     // painted - which is everywhere in a world nobody painted water on.
     CellField<std::uint8_t> waterPaintField;
-    // How much of the drainage holds water, as a share of the generator's own
-    // (AuthoringDials::rivers): read again by the drainage graph, which decides
-    // which valleys are streams.
+    // River abundance (AuthoringDials::rivers): the drainage graph uses it to
+    // select main catchments and the length/flow needed by attached branches.
     float riverShare = 1.0f;
-    // The least drainage (log2 of the macro cells passed, as drainSize) that
-    // a watercourse must gather to be one: nought, the world's own share rule.
-    // A world put together from many regions sets it (world_compose.cpp):
-    // there the share rule, scaled to a region, made a river of every gully
-    // on a continent, and a stream that small is the runtime's to draw from
-    // the drainage, not a course the graph has to fit.
+    // Minimum flow (log2) of an independent river's catchment; zero uses the
+    // graph's basin selection rule. Attached tributaries may be smaller.
+    // Composed continents set this in world_compose.cpp.
     std::uint8_t graphRiverFlow = 0;
     CellField<std::uint8_t> waterfallField;
     CellField<std::int32_t> sedimentPotentialField;

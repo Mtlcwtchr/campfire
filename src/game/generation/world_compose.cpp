@@ -687,10 +687,8 @@ WorldMapData generateLayoutWorld(const WorldLayout& layout, ComposeReport* repor
     // again: the world has one, and a run that was made with it carries it.
     for (const Run& run : runs)
         if (run.map->riverShare != 1.0f) world.riverShare = run.map->riverShare;
-    // A continent of many regions: a course for the drainage graph is a
-    // river gathering five hundred square kilometres or more (2^11 macro
-    // cells); what is smaller the runtime draws from the drainage itself.
-    // Worlds of up to 4 x 4 regions keep the share rule they were made with.
+    // Large continents require substantial independent catchments. Smaller
+    // tributaries are retained inside the river trees selected by the graph.
     if (std::int64_t(layout.regionsX) * layout.regionsY > 16) world.graphRiverFlow = 11;
     for (const Run& run : runs) {
         world.lakesKept += run.map->lakesKept;

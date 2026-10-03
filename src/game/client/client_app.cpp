@@ -8,7 +8,9 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
+#include <iterator>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -16,6 +18,7 @@
 #include <thread>
 
 #include "engine/core/progress.hpp"
+#include "engine/biomes/registry.hpp"
 #include "engine/ui/canvas.hpp"
 #include "engine/ui/font.hpp"
 #include "engine/ui/ui.hpp"
@@ -24,6 +27,7 @@
 #include "engine/world_store/world_root.hpp"
 #include "game/client/client_ui.hpp"
 #include "game/client/controls.hpp"
+#include "game/client/hero_camera.hpp"
 #include "game/client/explore_menu.hpp"
 #include "game/client/explore_view.hpp"
 #include "game/generation/world_compose.hpp"
@@ -200,6 +204,15 @@ int runClientApp(SDL_Window* window, const fs::path& assets, const ClientOptions
     CameraControl controls;
     controls.edgePan = false;
     bool relativeMouse = false;
+    // The player's character (hero_camera.hpp): put down where the world
+    // starts when the world is shown; C lets it go and takes it back, V
+    // cycles third person, first person and the map while it is held. Only
+    // in Explore: Edit's tools want the pointer.
+    HeroCamera hero;
+    bool heroJump = false;
+    const auto heroGround = [&](double x, double y) {
+        return field.heightAt(pos(std::clamp(x, 0.0, worldW - 1), std::clamp(y, 0.0, worldH - 1))).toDouble();
+    };
     bool leftWasDown = false;
     bool strokeOnGround = false;                   // the current press began on the world
     double lastApplyX = 0, lastApplyY = 0;
@@ -276,6 +289,7 @@ int runClientApp(SDL_Window* window, const fs::path& assets, const ClientOptions
         return ok;
     };
     const auto closeSession = [&]() {
+        if (hero.active()) hero.release(camera);
         if (!session) return;
         if (session->editing) session->editing->end();
         save(false);
@@ -377,6 +391,32 @@ int runClientApp(SDL_Window* window, const fs::path& assets, const ClientOptions
                 request.featherKm = shape.import->featherKm;
                 editor.importMaps(request);
             }
+            // Or the same maps generated, a layer at a time.
+            const auto generateRequest = [&](const GenerateForm& form) {
+                WorldEditor::GenerateRequest request;
+                // A number is that seed; anything else is a word, hashed.
+                std::uint64_t seed = 0;
+                bool digits = !form.seed.empty() && form.seed.size() <= 19;
+                for (const char c : form.seed) digits = digits && c >= '0' && c <= '9';
+                if (digits) seed = std::stoull(form.seed);
+                else {
+                    seed = 1469598103934665603ull;
+                    for (const char c : form.seed) seed = (seed ^ std::uint8_t(c)) * 1099511628211ull;
+                }
+                request.seed = seed;
+                if (form.preset >= 0 && std::size_t(form.preset) < presets.size())
+                    request.settings = generation::regionSettingsFrom(presets[std::size_t(form.preset)], seed);
+                request.settings.seed = seed;
+                request.settings.seaPercent = std::clamp(int(std::lround(form.seaPercent)), 0, 100);
+                request.settings.erosionPasses = std::clamp(int(std::lround(form.erosionPasses)), 0, 24);
+                request.settings.rainfallPercent = std::clamp(int(std::lround(form.rainPercent)), 20, 250);
+                request.ownSeeds = form.ownSeeds;
+                request.featherKm = form.featherKm;
+                request.variation = std::clamp(form.variation / 100.0f, 0.0f, 2.0f);
+                return request;
+            };
+            if (shape.generateHeights) editor.generateHeights(generateRequest(*shape.generateHeights));
+            if (shape.generateControls) editor.generateControls(generateRequest(*shape.generateControls));
             if (shape.importStage) editor.stageImported(*shape.importStage);
             if (shape.clearImport) editor.clearImport();
             if (shape.exportTo) editor.exportMaps(world::saves::pathOf(*shape.exportTo));
@@ -432,7 +472,9 @@ int runClientApp(SDL_Window* window, const fs::path& assets, const ClientOptions
             const auto label = session->editing->redoLabel();
             if (session->editing->redo()) screens.toast("Redone: " + label, since(start));
         }
-        if (a.cycleCamera) {
+        if (a.cycleCamera && hero.active() && screens.mode == WorldMode::Explore) {
+            hero.cycleView(camera);
+        } else if (a.cycleCamera) {
             camera.setMode(camera.mode == Camera::Mode::Map ? Camera::Mode::Orbit
                            : camera.mode == Camera::Mode::Orbit ? Camera::Mode::Free : Camera::Mode::Map);
             controls.dragging = controls.orbiting = false;
@@ -616,7 +658,31 @@ int runClientApp(SDL_Window* window, const fs::path& assets, const ClientOptions
             if (key == SDLK_F3) { shown.developer = !shown.developer; menu.panelChanged(); continue; }
             if (key == SDLK_P && (event.key.mod & (SDL_KMOD_CTRL | SDL_KMOD_GUI))) { if (window) profiler.toggle(); continue; }
             if (key == SDLK_ESCAPE && menu.panelVisible()) { menu.togglePanel(); continue; }
-            screens.key(key, SDL_Keymod(event.key.mod), actions, false);
+            {
+                const bool exploring = screens.screen == Screen::World && !screens.paused &&
+                                       screens.mode == WorldMode::Explore;
+                if (exploring && key == SDLK_C) {
+                    if (hero.active()) hero.release(camera); else hero.take(camera, heroGround);
+                    controls.dragging = controls.orbiting = false;
+                    controls.velocityX = controls.velocityY = 0;
+                    continue;
+                }
+                if (exploring && hero.active() && key == SDLK_SPACE) { heroJump = true; continue; }
+                if (exploring && hero.active() && key == SDLK_V) { hero.cycleView(camera); continue; }
+            }
+            if (screens.key(key, SDL_Keymod(event.key.mod), actions, false)) continue;
+            // The developer's views of the ground, which the explorer has and
+            // the game lost when it got its own key handling: Shift+G cycles
+            // the overlay (off, source step, real triangle edges), Shift+M the
+            // objects' wireframe, M / 0 / F2..F8 the map views, Shift+1..8 the
+            // generation stage. Only what the screens did not take.
+            if (screens.screen != Screen::World || screens.paused) continue;
+            const bool shift = (event.key.mod & SDL_KMOD_SHIFT) != 0;
+            if (shift && key == SDLK_G) { renderer.cycleTerrainGrid(); continue; }
+            if (shift && key == SDLK_M) { renderer.toggleObjectWireframe(); continue; }
+            const bool stage = shift && event.key.scancode >= SDL_SCANCODE_1 && event.key.scancode <= SDL_SCANCODE_8;
+            const bool map = !shift && (key == SDLK_M || key == SDLK_0 || (key >= SDLK_F2 && key <= SDLK_F8));
+            if (stage || map) menu.handle(event);
         }
         if (window) {
             if (ui.typing() && !SDL_TextInputActive(window)) SDL_StartTextInput(window);
@@ -899,6 +965,10 @@ int runClientApp(SDL_Window* window, const fs::path& assets, const ClientOptions
             screens.screen = Screen::World;
             screens.mode = settlingMode;
             screens.paused = false;
+            // The character where the world starts, the camera behind it.
+            // (A tour takes it only when asked: its pictures are of the country.)
+            if (settlingMode == WorldMode::Explore && (!touring || std::getenv("CAMPFIRE_TOUR_HERO")))
+                hero.take(camera, heroGround);
             if (settlingMode == WorldMode::Explore) screens.showHints(seconds);
         }
         // A file the dialog picked goes into its field; an import that has
@@ -921,7 +991,10 @@ int runClientApp(SDL_Window* window, const fs::path& assets, const ClientOptions
         // --- the camera ------------------------------------------------------------------
         const bool playing = inWorld && !screens.paused && !menu.panelVisible();
         const bool focused = window && (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) != 0;
-        const bool capture = playing && focused && camera.mode == Camera::Mode::Free && input.rightDown && !overUi;
+        const bool heroOn = hero.active() && screens.mode == WorldMode::Explore;
+        const bool capture = playing && focused &&
+                             ((heroOn && hero.wantsMouse(camera)) ||
+                              (!heroOn && camera.mode == Camera::Mode::Free && input.rightDown && !overUi));
         if (window && capture != relativeMouse) {
             if (SDL_SetWindowRelativeMouseMode(window, capture)) relativeMouse = capture;
             controls.orbiting = false;
@@ -930,9 +1003,11 @@ int runClientApp(SDL_Window* window, const fs::path& assets, const ClientOptions
         ui::Input pointer = input;
         pointer.mouseX = px;
         pointer.mouseY = py;
+        float heroDx = 0, heroDy = 0;
         if (relativeMouse) {
             float rdx = 0, rdy = 0;
             SDL_GetRelativeMouseState(&rdx, &rdy);
+            heroDx = rdx; heroDy = rdy;
             pointer.mouseX = controls.orbiting ? float(controls.dragFromX) + rdx : 0;
             pointer.mouseY = controls.orbiting ? float(controls.dragFromY) + rdy : 0;
         }
@@ -940,7 +1015,18 @@ int runClientApp(SDL_Window* window, const fs::path& assets, const ClientOptions
         if (playing && focused && !touring) {
             {
                 static const bool none[SDL_SCANCODE_COUNT]{};
-                controls.update(camera, pointer, profiler.hasKeyboard() ? none : SDL_GetKeyboardState(nullptr), dt, overUi);
+                const bool* keys = profiler.hasKeyboard() ? none : SDL_GetKeyboardState(nullptr);
+                if (heroOn) {
+                    HeroCamera::Input in;
+                    in.keys = keys;
+                    in.mouseDx = heroDx; in.mouseDy = heroDy;
+                    in.wheel = overUi ? 0.0f : float(input.wheel);
+                    in.jump = heroJump;
+                    hero.update(camera, in, dt, heroGround);
+                } else {
+                    controls.update(camera, pointer, keys, dt, overUi);
+                }
+                heroJump = false;
             }
         } else if ((screens.screen == Screen::Menu || screens.screen == Screen::Host) && !touring) {
             // The world behind the menu turns slowly, like a globe on a desk.
@@ -948,7 +1034,10 @@ int runClientApp(SDL_Window* window, const fs::path& assets, const ClientOptions
             controls.dragging = controls.orbiting = false;
         }
         camera.clampTo(int(worldW), int(worldH));
-        if (camera.mode != Camera::Mode::Free) {
+        if (heroOn) {
+            const auto* pass = renderer.characterPass();
+            hero.follow(camera, heroGround, pass ? pass->model() : nullptr);
+        } else if (camera.mode != Camera::Mode::Free) {
             camera.heightOffset = std::clamp(camera.heightOffset, -10000.0, 10000.0);
             // The ground under the centre, never under the water (the sea bed
             // put the eye below the sea), eased towards rather than snapped
@@ -1058,7 +1147,7 @@ int runClientApp(SDL_Window* window, const fs::path& assets, const ClientOptions
                 if (onGround && !overUi)
                     m[2] = {float(gx), float(gy), screens.terrain.radius,
                             kind == world::BrushKind::Lower ? 2.0f : procedural ? 3.0f : 1.0f};
-            } else {
+            } else if (screens.tab == EditTab::Objects) {
                 const auto& tool = screens.objects;
                 if (tool.mode == ObjectMode::Remove) {
                     if (input.pressed && stroking) { edit.begin("Remove objects"); applied = false; }
@@ -1352,7 +1441,36 @@ int runClientApp(SDL_Window* window, const fs::path& assets, const ClientOptions
                 case 12: screens.tab = EditTab::Objects; next(); break;
                 case 13: if (tourFrames > 10) { tourShot("07-edit-objects.png"); next(); } break;
                 case 14: screens.objects.mode = ObjectMode::Plant; next(); break;
-                case 15: if (tourFrames > 10) { tourShot("08-edit-plant.png"); next(); } break;
+                case 15:
+                    if (tourFrames == 11) {
+                        tourShot("08-edit-plant.png");
+                        screens.tab = EditTab::Ground;
+                        // Ground presets round trip: saved, loaded back over
+                        // the same files, byte for byte, and both tour presets
+                        // taken away again.
+                        std::string why;
+                        const auto file = engine::biomes::defaultDirectory() / "categories.json";
+                        const auto read = [](const std::filesystem::path& p) {
+                            std::ifstream in(p, std::ios::binary);
+                            return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+                        };
+                        const auto before = read(file);
+                        const bool ok = TerrainPanel::savePreset("_tour-check", &why) &&
+                                        TerrainPanel::loadPreset("_tour-check", &why) && read(file) == before;
+                        TerrainPanel::removePreset("_tour-check");
+                        TerrainPanel::removePreset("_before-load");
+                        std::cout << "tour: ground presets " << (ok ? "round trip ok" : "FAILED: " + why) << "\n";
+                    }
+                    // The Ground tab (terrain_panel.hpp): laid out and audited,
+                    // then its window over what the build has, pictures loaded.
+                    if (tourFrames == 23) { tourShot("08g-edit-ground.png"); screens.ground.openCatalogue(); }
+                    if (tourFrames > 60) {
+                        tourShot("08h-ground-catalogue.png");
+                        screens.ground.closeWindows();
+                        screens.tab = EditTab::Objects;
+                        next();
+                    }
+                    break;
                 // The world's shape changed and raised again while it is in
                 // view: the old world stays drawn until the new one is ready,
                 // and the new one arrives with its ground.
@@ -1493,6 +1611,8 @@ int runClientApp(SDL_Window* window, const fs::path& assets, const ClientOptions
             }
         }
 
+        renderer.character(hero.active() && screens.mode == WorldMode::Explore && screens.screen == Screen::World
+                                   ? hero.state(camera, heroGround, dt) : game::CharacterPass::State{});
         if (!view.draw(camera)) {
             std::cerr << "the frame would not draw: " << renderer.error() << "\n";
             break;

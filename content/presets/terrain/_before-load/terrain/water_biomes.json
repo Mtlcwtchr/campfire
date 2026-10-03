@@ -1,0 +1,59 @@
+{
+ "_comment": "Kinds of water, the water layer's ids (0: as the ground category says; a category with no water default keeps the engine's own). colour: the deep colour, left out - the engine's own (sea, lake and river differ); turbidity 0 clear .. 1 opaque, left out - the engine's own; scum: film and duckweed on the surface; foam: times the water's own; emissive: glow of the colour. A river through several categories changes along its course, blended over 256 m like the ground.",
+ "water_biomes": [
+  {
+   "name": "clear",
+   "id": 1
+  },
+  {
+   "name": "bog",
+   "id": 2,
+   "colour": [
+    0.16,
+    0.12,
+    0.06
+   ],
+   "turbidity": 0.8,
+   "scum": 0.3
+  },
+  {
+   "name": "rotten_green",
+   "id": 3,
+   "colour": [
+    0.18,
+    0.26,
+    0.06
+   ],
+   "turbidity": 0.9,
+   "scum": 0.7,
+   "foam": 0.0
+  },
+  {
+   "name": "power_slime",
+   "id": 4,
+   "colour": [
+    0.3,
+    0.85,
+    0.55
+   ],
+   "turbidity": 0.95,
+   "emissive": 0.6,
+   "foam": 0.2
+  },
+  {
+   "name": "tropical",
+   "id": 5,
+   "colour": [
+    0.05,
+    0.4,
+    0.42
+   ],
+   "turbidity": 0.1
+  },
+  {
+   "name": "shallow_clear",
+   "id": 6,
+   "turbidity": 0.08
+  }
+ ]
+}

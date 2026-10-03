@@ -82,7 +82,7 @@ WaterOut resolveWaterPageDetail(WaterOut input) { float bed, head; return resolv
 
 float4 WaterPagePS(WaterOut input) : SV_Target0
 {
-    const float pixel = max(length(ddx(input.worldXY)), length(ddy(input.worldXY)));
+    const float pixel = max(length(ddx(input.frameXY)), length(ddy(input.frameXY)));
     float bed, head;
     WaterOut water = resolveWaterPageDetail(input, bed, head);
     const float river = saturate(water.motion.z), lake = saturate(water.motion.w);

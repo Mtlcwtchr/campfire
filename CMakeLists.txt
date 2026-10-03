@@ -168,6 +168,7 @@ add_library(asr_generation STATIC
         src/game/generation/world_compose.cpp
         src/game/generation/world_sketch.cpp
         src/game/generation/world_import.cpp
+        src/game/generation/world_procedural.cpp
         src/game/generation/world_map_gen.cpp)
 target_include_directories(asr_generation PUBLIC src)
 target_compile_definitions(asr_generation PRIVATE ASR_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
@@ -425,11 +426,14 @@ if(ASR_BUILD_CLIENT)
     target_include_directories(asr_game_render PUBLIC src)
     target_sources(asr_game_render PRIVATE src/game/render/passes/scene_models_pass.cpp
             src/game/render/shadow_clipmap.cpp src/game/render/forest_proxy_cache.cpp
-            src/game/render/forest_hierarchy.cpp src/game/render/graphics_settings.cpp)
+            src/game/render/forest_hierarchy.cpp src/game/render/graphics_settings.cpp
+            src/game/render/terrain_look.cpp
+            src/game/render/character_model.cpp src/game/render/passes/character_pass.cpp
+            src/game/client/character_controller.cpp src/game/client/hero_camera.cpp)
     if(ASR_ENABLE_PROFILING)
         target_sources(asr_game_render PRIVATE src/game/render/world_renderer_diagnostics.cpp)
     endif()
-    target_link_libraries(asr_game_render PUBLIC asr_engine_render asr_world asr_camera asr_virtual_geometry_gpu
+    target_link_libraries(asr_game_render PUBLIC asr_engine_render asr_world asr_camera asr_animation asr_virtual_geometry_gpu
             asr_impostors_gpu asr_world_source PRIVATE nlohmann_json asr_warnings)
 
     add_executable(asr_client
@@ -444,6 +448,8 @@ if(ASR_BUILD_CLIENT)
             src/game/client/explore_view.cpp
             src/game/client/explore_bench.cpp
             src/game/client/client_ui.cpp
+            src/game/client/terrain_panel.cpp
+            src/game/client/asset_browser.cpp
             src/game/client/client_app.cpp
             src/game/ui/hud.cpp
             src/game/ui/editor.cpp
@@ -566,6 +572,10 @@ if(ASR_BUILD_TESTS)
     target_link_libraries(asr_engine_module_tests PRIVATE asr_representation asr_terrain_generator
             asr_virtual_geometry asr_impostors asr_world_store asr_world_source asr_biomes asr_warnings)
     add_test(NAME engine_modules COMMAND asr_engine_module_tests)
+    add_executable(asr_animation_tests tests/main.cpp tests/test_animation.cpp)
+    target_link_libraries(asr_animation_tests PRIVATE asr_animation asr_warnings)
+    add_test(NAME animation COMMAND asr_animation_tests)
+    set_tests_properties(animation PROPERTIES TIMEOUT 20)
     set_tests_properties(engine_modules PROPERTIES TIMEOUT 45)
     find_package(Python3 QUIET COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)
@@ -690,7 +700,7 @@ if(ASR_BUILD_TESTS)
             ${ASR_INSPECTOR_LIBS})
     target_sources(asr_tests PRIVATE tests/test_terrain_config.cpp)
     target_sources(asr_tests PRIVATE tests/test_world_layout.cpp tests/test_world_layers.cpp tests/test_world_compose.cpp
-            tests/test_world_stages.cpp tests/test_world_import.cpp)
+            tests/test_world_stages.cpp tests/test_world_import.cpp tests/test_world_procedural.cpp)
     target_link_libraries(asr_tests PRIVATE asr_world_source)
     target_sources(asr_tests PRIVATE tests/test_scene_scatter.cpp)
     target_sources(asr_tests PRIVATE tests/test_world_scale.cpp tests/test_land_coverage.cpp

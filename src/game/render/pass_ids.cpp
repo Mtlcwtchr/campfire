@@ -21,6 +21,7 @@ const char* nameOf(Pass pass) {
         case Pass::Hold:     return "hold";
         case Pass::Sketch:   return "sketch";
         case Pass::Highlight: return "highlight";
+        case Pass::Character: return "character";
     }
     return "?";
 }

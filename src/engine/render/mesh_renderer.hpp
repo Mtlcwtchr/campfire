@@ -31,6 +31,7 @@ public:
         item.author = author;
         material.apply(item);
         item.vertex[0] = geometry.vertices;
+        item.vertexOffset[0] = geometry.vertexOffset;
         item.index = geometry.indices; item.indexSize = geometry.indexSize;
         item.firstIndex = geometry.range.first; item.indexCount = geometry.range.count;
         item.vertexStreams = instances.arena || instances.buffer ? 2 : 1;
@@ -77,7 +78,8 @@ public:
     // stitched its morph endpoints. Submission must not simplify it a second time.
     void submitSurface(DrawQueue& queue, MeshView geometry, const SmartTerrainMesh& surface,
                        bool skirts, ObjectParameters object) const {
-        geometry.range = {0, skirts ? static_cast<std::uint32_t>(surface.indices.size()) : surface.surfaceIndices};
+        geometry.range = {geometry.range.first,
+                          skirts ? static_cast<std::uint32_t>(surface.indices.size()) : surface.surfaceIndices};
         submit(queue, geometry, {}, object);
     }
 };

@@ -37,6 +37,7 @@ cbuffer SceneVertex : register(b0, space1)
     float4 shadowClip[4];
     float4 fog;         // opaque distance, start distance, enabled, spare
     float4 look;        // sun, ambient, exposure, provided
+    float4 grading;     // brightness, contrast, saturation, provided
     float4 skyHorizon;  // rgb, skybox enabled
     float4 skyZenith;   // rgb, panorama rotation
     float4 clouds;      // coverage, density, base altitude, steps
@@ -45,6 +46,8 @@ cbuffer SceneVertex : register(b0, space1)
     float4 cullCamera;
     float4 cullState;
     float4 editor[35];   // world editor overlay (editor_overlay.hlsli); kSceneEditorVectors
+    float4 terrainLook;  // tile size, distance octaves, octave start, macro variation (terrain_material.hlsli)
+    float4 swellWind;    // world-anchored swell direction xy, strength, gust
 };
 
 cbuffer ScenePixel : register(b0, space3)
@@ -61,6 +64,7 @@ cbuffer ScenePixel : register(b0, space3)
     float4 shadowClipPS[4];
     float4 fogPS;
     float4 lookPS;
+    float4 gradingPS;
     float4 skyHorizonPS;
     float4 skyZenithPS;
     float4 cloudsPS;
@@ -69,6 +73,8 @@ cbuffer ScenePixel : register(b0, space3)
     float4 cullCameraPS;
     float4 cullStatePS;
     float4 editorPS[35];
+    float4 terrainLookPS;
+    float4 swellWindPS;
 };
 
 // Where a point of the world lands on the screen.

@@ -673,6 +673,458 @@
     "warmth": 0.5,
     "fertility": 0.85
    }
+  },
+  {
+   "name": "glade",
+   "id": 28,
+   "inherit": "fertile",
+   "_comment": "Fairy-tale: the radiant glade - bright meadow grass, flowers, sparse tall trees.",
+   "soils": {
+    "grass": "glade_grass",
+    "sand": "glade_grass",
+    "dirt": "glade_grass"
+   },
+   "ground_foliage": "flower_meadow",
+   "decals": [
+    [
+     "fine_moss",
+     0.5
+    ]
+   ],
+   "defaults": {
+    "forest": "glade_wood",
+    "decor": "glade_stones",
+    "water": "clear"
+   },
+   "look": {
+    "tint": [
+     1.0,
+     1.08,
+     0.92
+    ],
+    "saturation": 1.2
+   },
+   "controls": {
+    "moisture": 0.6,
+    "forest": 0.4,
+    "erosion": 0.4
+   },
+   "climate": {
+    "zone": "temperate_forest",
+    "warmth": 0.6,
+    "fertility": 0.9
+   }
+  },
+  {
+   "name": "amber_grove",
+   "id": 29,
+   "inherit": "fertile",
+   "_comment": "Fairy-tale: the amber grove - an autumn that never ends, copper leaves and fallen leaf litter.",
+   "soils": {
+    "grass": "amber_grass",
+    "dirt": "amber_floor",
+    "sand": "amber_grass"
+   },
+   "ground_foliage": "amber_fern",
+   "decals": [
+    [
+     "fallen_leaves",
+     1.0
+    ]
+   ],
+   "defaults": {
+    "forest": "amber_wood",
+    "decor": "amber_litter"
+   },
+   "look": {
+    "tint": [
+     1.05,
+     0.98,
+     0.86
+    ],
+    "saturation": 0.95
+   },
+   "controls": {
+    "moisture": 0.55,
+    "forest": 0.8,
+    "erosion": 0.45
+   },
+   "climate": {
+    "zone": "temperate_forest",
+    "warmth": 0.5,
+    "fertility": 0.85
+   }
+  },
+  {
+   "name": "blossom_grove",
+   "id": 30,
+   "inherit": "fertile",
+   "_comment": "Fairy-tale: the blossom grove - pale pink and white crowns over soft grass.",
+   "soils": {
+    "grass": "blossom_grass",
+    "sand": "blossom_grass",
+    "dirt": "blossom_grass"
+   },
+   "ground_foliage": "flower_meadow",
+   "defaults": {
+    "forest": "blossom_wood",
+    "decor": "oak_litter"
+   },
+   "look": {
+    "tint": [
+     1.08,
+     1.0,
+     1.06
+    ],
+    "saturation": 1.12
+   },
+   "controls": {
+    "moisture": 0.6,
+    "forest": 0.7,
+    "erosion": 0.4
+   },
+   "climate": {
+    "zone": "temperate_forest",
+    "warmth": 0.6,
+    "fertility": 0.85
+   }
+  },
+  {
+   "name": "silver_meadow",
+   "id": 31,
+   "inherit": "fertile",
+   "_comment": "Fairy-tale: the silver meadows - endless pale grass valleys, stones, a few birches.",
+   "soils": {
+    "grass": "silver_grass",
+    "sand": "silver_grass",
+    "dirt": "silver_grass"
+   },
+   "ground_foliage": "wild_meadow",
+   "defaults": {
+    "forest": "silver_birch_wood",
+    "decor": "stones_stumps"
+   },
+   "look": {
+    "tint": [
+     0.96,
+     1.04,
+     1.04
+    ],
+    "saturation": 0.95
+   },
+   "controls": {
+    "moisture": 0.5,
+    "forest": 0.25,
+    "erosion": 0.4
+   },
+   "climate": {
+    "zone": "temperate_forest",
+    "warmth": 0.5,
+    "fertility": 0.6
+   }
+  },
+  {
+   "name": "moor_marsh",
+   "id": 32,
+   "inherit": "swamp",
+   "_comment": "Irish moor: mossy marsh, sedge and heather over peat, grey stones, peaty water.",
+   "soils": {
+    "grass": "moor_moss",
+    "dirt": "peat",
+    "marsh": "peat",
+    "sand": "moor_moss"
+   },
+   "ground_foliage": "moor_sedge",
+   "decals": [
+    [
+     "forest_moss_patch",
+     0.7
+    ],
+    [
+     "fine_moss",
+     1.0
+    ],
+    [
+     "bog_pools",
+     1.0
+    ],
+    [
+     "moss_hummock",
+     1.0
+    ]
+   ],
+   "defaults": {
+    "forest": "moor_scrub",
+    "decor": "moor_stones",
+    "water": "peaty"
+   },
+   "look": {
+    "tint": [
+     0.88,
+     0.98,
+     0.84
+    ],
+    "saturation": 0.9
+   },
+   "controls": {
+    "moisture": 0.9,
+    "forest": 0.35,
+    "erosion": 0.3
+   },
+   "climate": {
+    "zone": "temperate_forest",
+    "warmth": 0.45,
+    "fertility": 0.45
+   }
+  },
+  {
+   "name": "peat_plain",
+   "id": 33,
+   "inherit": "swamp",
+   "_comment": "Lowland raised bog: brown peat flats, tussocks, black pools.",
+   "soils": {
+    "grass": "peat_grass",
+    "dirt": "peat",
+    "marsh": "peat",
+    "sand": "peat_grass"
+   },
+   "ground_foliage": "tussocks",
+   "decals": [
+    [
+     "duckweed",
+     1.0
+    ],
+    [
+     "bog_pools",
+     1.0
+    ],
+    [
+     "moss_hummock",
+     1.0
+    ]
+   ],
+   "defaults": {
+    "forest": "fen_wood",
+    "decor": "bog_snags",
+    "water": "bog"
+   },
+   "look": {
+    "tint": [
+     0.92,
+     0.92,
+     0.82
+    ],
+    "saturation": 0.88
+   },
+   "controls": {
+    "moisture": 0.97,
+    "forest": 0.25,
+    "erosion": 0.25
+   },
+   "climate": {
+    "zone": "temperate_forest",
+    "warmth": 0.5,
+    "fertility": 0.4
+   }
+  },
+  {
+   "name": "river_fen",
+   "id": 34,
+   "inherit": "swamp",
+   "_comment": "Low river fens: wet sedge meadows and alder carr along slow water.",
+   "soils": {
+    "grass": "fen_grass",
+    "dirt": "mossy_mud",
+    "marsh": "peat",
+    "sand": "fen_grass"
+   },
+   "ground_foliage": "moor_sedge",
+   "decals": [
+    [
+     "duckweed",
+     0.6
+    ],
+    [
+     "bog_pools",
+     1.0
+    ],
+    [
+     "moss_hummock",
+     1.0
+    ]
+   ],
+   "defaults": {
+    "forest": "fen_wood",
+    "decor": "bog_snags",
+    "water": "peaty"
+   },
+   "look": {
+    "tint": [
+     0.9,
+     1.02,
+     0.88
+    ],
+    "saturation": 0.95
+   },
+   "controls": {
+    "moisture": 0.9,
+    "forest": 0.5,
+    "erosion": 0.3
+   },
+   "climate": {
+    "zone": "temperate_forest",
+    "warmth": 0.55,
+    "fertility": 0.7
+   }
+  },
+  {
+   "name": "dark_wood",
+   "id": 35,
+   "inherit": "fertile",
+   "_comment": "Dark old wood: moss, mycelium, rotting logs, little light.",
+   "soils": {
+    "grass": "moss_floor",
+    "dirt": "moss_floor",
+    "sand": "moss_floor"
+   },
+   "ground_foliage": "moss_fern",
+   "decals": [
+    [
+     "forest_moss_patch",
+     1.0
+    ],
+    [
+     "fine_moss",
+     1.0
+    ],
+    [
+     "fallen_twigs",
+     0.6
+    ]
+   ],
+   "defaults": {
+    "forest": "dark_wood",
+    "decor": "mycelium_logs"
+   },
+   "look": {
+    "tint": [
+     0.78,
+     0.9,
+     0.82
+    ],
+    "saturation": 0.85
+   },
+   "controls": {
+    "moisture": 0.75,
+    "forest": 0.95,
+    "erosion": 0.45
+   },
+   "climate": {
+    "zone": "temperate_forest",
+    "warmth": 0.45,
+    "fertility": 0.9
+   }
+  },
+  {
+   "name": "pearl_coast",
+   "id": 36,
+   "inherit": "beach",
+   "_comment": "Resort islands: pearl sand and a turquoise lagoon.",
+   "soils": {
+    "grass": "pearl_sand",
+    "dirt": "pearl_sand",
+    "sand": "pearl_sand"
+   },
+   "ground_foliage": "thin_litter",
+   "defaults": {
+    "forest": "isle_grove",
+    "decor": "coast_driftwood",
+    "water": "lagoon"
+   },
+   "controls": {
+    "moisture": 0.55,
+    "forest": 0.1,
+    "erosion": 0.5
+   },
+   "climate": {
+    "zone": "mediterranean",
+    "warmth": 0.75,
+    "fertility": 0.2
+   }
+  },
+  {
+   "name": "isle_green",
+   "id": 37,
+   "inherit": "fertile",
+   "_comment": "Resort islands' green heart: lush grass, flowers and broad light trees.",
+   "soils": {
+    "grass": "isle_grass",
+    "sand": "isle_grass",
+    "dirt": "isle_grass"
+   },
+   "ground_foliage": "flower_meadow",
+   "defaults": {
+    "forest": "isle_grove",
+    "decor": "glade_stones",
+    "water": "lagoon"
+   },
+   "look": {
+    "tint": [
+     1.0,
+     1.1,
+     0.9
+    ],
+    "saturation": 1.2
+   },
+   "controls": {
+    "moisture": 0.65,
+    "forest": 0.55,
+    "erosion": 0.4
+   },
+   "climate": {
+    "zone": "temperate_forest",
+    "warmth": 0.7,
+    "fertility": 0.8
+   }
+  },
+  {
+   "name": "golden_desert",
+   "id": 38,
+   "_comment": "Fairy-tale: the golden sands - warm dunes and stony flats in the rain shadow, scattered dry shrubs.",
+   "soils": {
+    "grass": "golden_sand",
+    "dirt": "golden_sand",
+    "sand": "dune_sand"
+   },
+   "ground_foliage": "none",
+   "decals": [
+    [
+     "dry_tufts",
+     0.4
+    ]
+   ],
+   "defaults": {
+    "forest": "desert_scrub",
+    "decor": "dry_ruins",
+    "water": "clear"
+   },
+   "look": {
+    "tint": [
+     1.04,
+     1.0,
+     0.92
+    ]
+   },
+   "controls": {
+    "moisture": 0.08,
+    "forest": 0.05,
+    "erosion": 0.55
+   },
+   "climate": {
+    "zone": "mediterranean",
+    "warmth": 0.85,
+    "fertility": 0.05
+   }
   }
  ],
  "derive": [

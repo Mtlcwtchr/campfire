@@ -1,6 +1,8 @@
 #include "game/world/scene_scatter.hpp"
+#include "engine/biomes/patch_field.hpp"
 #include "engine/core/rng.hpp"
 #include "game/world/object_id.hpp"
+#include "../../../assets/shaders/environment_detail.hlsli"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -45,6 +47,110 @@ const std::string* pickWeighted(const engine::biomes::Weighted& list,double t) {
 }
 // A hectare's count to a candidate's chance: one candidate an 8 m cell.
 constexpr double kCellsPerHectare=10000.0/(kCell*kCell);
+
+std::uint64_t detailId(std::uint64_t seed,PlacementStage stage,int cell,std::int64_t gx,std::int64_t gy) {
+    const auto perPage=kPlacementPageMetres/cell;
+    const auto px=gx/perPage-(gx%perPage<0),py=gy/perPage-(gy%perPage<0);
+    return objectId(seed,stage,1,px,py,std::uint32_t((gx-px*perPage)+(gy-py*perPage)*perPage));
+}
+// Separate stages keep old removals and species choices valid. This runs in
+// the existing page traversal; extra height queries are only for admitted
+// clumps or cliff supports, never for every point of the finer lattice.
+void environmentCell(Scatter& out,std::uint64_t seed,std::int64_t gx,std::int64_t gy,
+        double x,double y,const Site& site,ScatterBounds bounds,double width,double height,
+        const SiteSample& sample,const WetTest& wet) {
+    if (!site.hasEcology || !site.hasMaterials) return;
+    if (!std::isfinite(site.ecology.moisture+site.ecology.canopy+site.ecology.disturbance+
+        site.ecology.shrubs+site.detailDensity+site.rock+site.snow+site.sand)) return;
+    const auto inside=[&](double a,double b) {
+        return a>=0 && b>=0 && a<width && b<height && a>=bounds.minX && a<bounds.maxX && b>=bounds.minY && b<bounds.maxY;
+    };
+    const auto read=[&](double a,double b) { ++out.sampled; return sample(a,b); };
+    const auto usable=[](const Site& s) { return std::isfinite(s.height+s.water+s.slope) && s.height>s.water+0.4 && s.height>=0; };
+    const auto& e=site.ecology;
+    const double habitat=environmentMossHabitat(e.moisture,e.canopy,e.disturbance,float(site.snow));
+    const double painted=std::clamp(site.detailDensity,0.0,4.0);
+    if (painted<=0) return;
+    // Outcrops occupy a 16 m lattice. No pairwise/iteration-order collision
+    // solver: the bounded footprint and lattice separation give stable spacing.
+    if (gx%2==0 && gy%2==0 && site.slope>0.8 && site.rock>0.22 && site.snow<0.4) {
+        const auto id=detailId(seed,PlacementStage::Cliff,16,gx/2,gy/2);
+        auto hash=id;
+        const auto roll=[&]() { hash=core::splitmix64(hash); return double(hash>>11)*0x1p-53; };
+        const double outcrop=smooth(0.35,0.78,noise(seed^0x7b381u,x,y,64));
+        const double chance=0.38*smooth(0.8,1.8,site.slope)*smooth(0.22,0.45,site.rock)*outcrop*painted;
+        if (inside(x,y) && roll()<chance) {
+            // Sample the real relief and normal; coarse biome slope alone does
+            // not tell which way a face looks or whether a lip has a landing.
+            const auto east=read(std::min(width-0.01,x+4),y),west=read(std::max(0.0,x-4),y);
+            const auto north=read(x,std::min(height-0.01,y+4)),south=read(x,std::max(0.0,y-4));
+            const double dx=(east.height-west.height)/8,dy=(north.height-south.height)/8;
+            const double slope=std::hypot(dx,dy);
+            if (std::isfinite(slope) && slope>0.65) {
+                const double downhillX=-dx/slope,downhillY=-dy/slope;
+                const auto model=e.moisture<0.35f && site.boreal<0.3?kCliffWarm:kCliffGrey;
+                const auto shape=kEnvironmentBounds[model-kCliffGrey];
+                // Fit the scan to a fraction of the local relief, in metres.
+                // Keep its horizontal footprint below the lattice separation.
+                const double relief=std::max({east.height,west.height,north.height,south.height})-
+                                    std::min({east.height,west.height,north.height,south.height});
+                const float scale=float(std::clamp(relief*0.6/shape.height,0.55,
+                    std::min(1.65,11.0/shape.width))*(0.90+roll()*0.1));
+                // The face is at -Y; the scan's broad uphill back is embedded.
+                // Using its full frame radius as the landing would bury the
+                // whole face on a steep slope rather than just its roots.
+                const double radius=shape.front*scale;
+                const double fx=std::clamp(x+downhillX*radius,0.0,width-0.01);
+                const double fy=std::clamp(y+downhillY*radius,0.0,height-0.01);
+                const auto foot=read(fx,fy);
+                const double bury=shape.height*scale*0.16;
+                const double z=std::min(site.height-shape.height*scale*0.30,foot.height-bury);
+                if (usable(foot) && z+shape.height*scale>foot.height+shape.height*scale*0.3 &&
+                    (!wet || (!wet(x,y) && !wet(fx,fy)))) {
+                    const float yaw=float(std::atan2(downhillY,downhillX)+std::acos(-1.0)*0.5+(roll()-0.5)*0.16);
+                    out.objects.push_back({id,x,y,z,scale,yaw,0,float(0.94+roll()*0.1),model,float(habitat)});
+                    ++out.populations[model];
+                }
+            }
+        }
+    }
+    // Four independent candidates per 8 m cell. The low-frequency habitat
+    // and a 12 m patch mask make a thicket with openings, rather than a lawn
+    // of evenly spaced specimens. Canopy suppresses tall shrubs, not ferns.
+    const double support=(1-smooth(0.12,0.45,site.sand))*(1-smooth(0.30,0.70,site.rock))*
+                         (1-smooth(0.10,0.4,site.snow))*(1-smooth(0.32,0.72,site.slope));
+    if (support<=0 || site.slope>0.72 ||
+        (site.forestBiome && site.forestBiome->undergrowth=="none")) return;
+    for (int oy=0;oy<2;++oy) for (int ox=0;ox<2;++ox) {
+        const auto sx=gx*2+ox,sy=gy*2+oy;
+        const auto id=detailId(seed,PlacementStage::Undergrowth,4,sx,sy);
+        auto hash=id;
+        const auto roll=[&]() { hash=core::splitmix64(hash); return double(hash>>11)*0x1p-53; };
+        const double px=(sx+0.12+roll()*0.76)*4,py=(sy+0.12+roll()*0.76)*4;
+        if (!inside(px,py)) continue;
+        const double patch=smooth(0.50,0.62,engine::biomes::patchField(px,py));
+        const double edge=smooth(0.06,0.25,e.canopy)*(1-smooth(0.55,0.85,e.canopy));
+        const double richness=smooth(0.18,0.65,e.moisture)*(1-smooth(0.35,0.8,e.disturbance));
+        const double chance=painted*support*patch*richness*(0.08+0.50*e.canopy+0.60*edge+0.40*e.shrubs);
+        if (roll()>=chance) continue;
+        const auto local=read(px,py);
+        if (!usable(local) || local.slope>0.55 || local.sand>0.35 || local.snow>0.2 ||
+            local.detailDensity<=0 || (wet && (wet(px+0.6,py) || wet(px-0.6,py) || wet(px,py+0.6) || wet(px,py-0.6)))) continue;
+        const double kind=roll();
+        const auto model=kind<habitat*0.28 && local.slope<0.16?kMoss:
+            kind<0.38+e.canopy*0.4?kFern:kind<0.83?kLowShrub:kDenseShrub;
+        const double sizeRoll=roll();
+        // Match the role's target height, independent of the source pack's
+        // dimensions. Keep each model's proportions and avoid metre-high litter.
+        const float scale=float(model==kDenseShrub?(0.75+sizeRoll*0.55)/kEnvironmentBounds[model-kCliffGrey].height:
+                                model==kLowShrub?(0.25+sizeRoll*0.25)/kEnvironmentBounds[model-kCliffGrey].height:
+                                0.72+sizeRoll*0.65);
+        const double sink=groundSink(model,scale);
+        out.objects.push_back({id,px,py,local.height-sink,scale,float(roll()*6.283185307),
+            float(roll()*6.283185307),float(0.94+roll()*0.12),model});
+        ++out.populations[model];
+    }
+}
 }
 
 double forestDensity(std::uint64_t seed,double x,double y) {
@@ -103,7 +209,7 @@ std::size_t ScatterBounds::cells() const {
         ? std::size_t(wide*high):std::numeric_limits<std::size_t>::max();
 }
 Scatter scatter(std::uint64_t seed,ScatterBounds bounds,double width,double height,
-                const LandTest& land,const SiteSample& sample,const WetTest& wet) {
+                const LandTest& land,const SiteSample& sample,const WetTest& wet,bool environment) {
     const auto cells=bounds.cells();
     if (!land || !sample || !(width>0 && height>0) || !std::isfinite(width+height) ||
         !cells || cells>kMaxScatterCells)
@@ -133,11 +239,15 @@ Scatter scatter(std::uint64_t seed,ScatterBounds bounds,double width,double heig
                 std::uint32_t((gx-pageX*perPage)+(gy-pageY*perPage)*perPage));
             const auto random=[&]() { hash=core::splitmix64(hash);return double(hash>>11)*0x1p-53; };
             const double x=(gx+0.15+random()*0.7)*kCell,y=(gy+0.15+random()*0.7)*kCell;
-            if (x>=width || y>=height || x<bounds.minX || x>=bounds.maxX ||
-                y<bounds.minY || y>=bounds.maxY) continue;
+            if (x>=width || y>=height) continue;
+            const bool owns=x>=bounds.minX && x<bounds.maxX && y>=bounds.minY && y<bounds.maxY;
+            if (!owns && !environment) continue;
             const Site site=sample(x,y); ++result.sampled;
             if (!std::isfinite(site.height+site.water+site.slope+site.forest+site.boreal) ||
-                site.height<=site.water+0.4 || site.height<0 || site.slope>1.8) continue;
+                site.height<=site.water+0.4 || site.height<0) continue;
+            if (environment) environmentCell(result,seed,gx,gy,x,y,site,bounds,width,height,sample,wet);
+            if (!owns) continue;
+            if (site.slope>1.8) continue;
             const double choice=random(),forest=std::clamp(site.forest,0.0,1.0);
             const double density=forestDensity(seed,x,y);
             // What the ground is. Sand, bare rock, standing water and snow do
@@ -156,6 +266,8 @@ Scatter scatter(std::uint64_t seed,ScatterBounds bounds,double width,double heig
             const double edge=smooth(0.04,0.2,density)*(1-smooth(0.45,0.8,density));
             double bushes=(site.hasEcology ? site.ecology.shrubs*0.28 : habitat*(0.018+0.23*edge))
                 *smooth(0.25,0.75,scrub)*(0.35+0.65*bare);
+            const double vegetationIsland=smooth(0.50,0.62,engine::biomes::patchField(x,y));
+            bushes*=vegetationIsland*(1.4+1.6*vegetationIsland);
             double mushrooms=(site.hasEcology ? site.ecology.canopy*site.ecology.moisture*
                 (0.01+site.ecology.deadwood*0.08) : habitat*density*0.028)*(1-smooth(0.25,0.5,site.slope))*bare;
             const double outcrop=noise(seed^0xe157u,x,y,112);
@@ -165,6 +277,9 @@ Scatter scatter(std::uint64_t seed,ScatterBounds bounds,double width,double heig
             double rocks=heap*(0.004+0.05*smooth(0.45,0.8,outcrop))*(1-0.7*trees)*
                 (site.hasEcology ? (1-site.ecology.fertility*0.8)*(1+std::min(site.slope,1.0)*4) : 1)*
                 (site.hasMaterials ? 1+3*smooth(0.30,0.70,site.rock) : 1);
+            // Where the terrain categories rule, loose boulders are rare: the decor
+            // biomes place stones where they belong, in groups.
+            if (site.decorBiome || site.forestBiome) rocks*=0.2;
             // Deadwood fills existing candidates, never adds another world
             // traversal or changes a site's stable ID. Keep logs off cliffs.
             double deadwood=(site.hasEcology ? site.ecology.deadwood*0.2 : habitat*density*0.055)
@@ -205,6 +320,13 @@ Scatter scatter(std::uint64_t seed,ScatterBounds bounds,double width,double heig
                 if (site.decorBiome) for (const auto& [n,c]:site.decorBiome->props) decorProps+=std::max(0.0,c);
                 forestProps*=std::min(1.0,woods*1.6)/kCellsPerHectare*(1-smooth(0.10,0.30,site.slope))*bare;
                 decorProps*=1.0/kCellsPerHectare*(1-smooth(0.25,0.6,site.slope));
+                // Stones lie in groups, where a noise of its own says, and not
+                // sprinkled over every metre.
+                {
+                    const double clump=smooth(0.60,0.82,noise(seed^0x57a1u,x,y,70.0));
+                    decorProps*=0.08+3.0*clump;
+                    forestProps*=0.4+1.4*smooth(0.45,0.7,noise(seed^0x71c3u,x,y,55.0));
+                }
                 const auto* registry=site.registry;
                 // Which species: mostly the grove's, a field ~50 m across,
                 // with some strays - a wood of one tree in stands, not a
@@ -271,8 +393,10 @@ Scatter scatter(std::uint64_t seed,ScatterBounds bounds,double width,double heig
             // queries each rather than four for every sample. The random
             // stream is already spent above, so dropping one here moves no
             // other object.
-            if (wet && model!=3) {
-                const double r=kShoreClearance*(model<2?1.0:0.6);
+            // Boulders may stand in shallow water; nothing else does.
+            const bool boulder=model==3 || (model>=kFirstRock2 && model<=kLastRock2);
+            if (wet && !boulder) {
+                const double r=kShoreClearance*(treeModel(model)?1.0:0.6);
                 if (wet(x+r,y) || wet(x-r,y) || wet(x,y+r) || wet(x,y-r) ||
                     wet(x+r*0.7,y+r*0.7) || wet(x-r*0.7,y-r*0.7)) continue;
             }
@@ -281,7 +405,17 @@ Scatter scatter(std::uint64_t seed,ScatterBounds bounds,double width,double heig
             const float yaw=float(random()*2*std::acos(-1.0));
             const float phase=float(random()*2*std::acos(-1.0));
             const float tint=float(0.88+random()*0.20)*tintBy;
-            result.objects.push_back({id,x,y,site.height-(model==3?0.25:0.08),scale,yaw,phase,tint,model});
+            const float moss=rockModel(model) && site.hasEcology?environmentMossHabitat(site.ecology.moisture,
+                site.ecology.canopy,site.ecology.disturbance,float(site.snow)):0;
+            // Stones of a river bed carry moss where they stand wet: a patch of
+            // it fixed to the place (not to the random stream), most on the
+            // quieter reaches.
+            float mossed=moss;
+            if (boulder && site.decorBiome && site.decorBiome->name=="river_stones") {
+                const double patch=noise(seed^0x4d05u,x,y,9.0);
+                mossed=std::max(mossed,float(0.35+0.65*smooth(0.25,0.75,patch)));
+            }
+            result.objects.push_back({id,x,y,site.height-plantSink(model),scale,yaw,phase,tint,model,mossed});
         }
     return result;
 }
@@ -294,4 +428,3 @@ Scatter scatter(std::uint64_t seed,int rx,int ry,double width,double height,
                    width,height,land,sample);
 }
 } // namespace world::decor
-

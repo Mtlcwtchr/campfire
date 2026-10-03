@@ -1,57 +1,63 @@
 {
- "_comment": "Kinds of noise the soils, forest floors, clearings and decals mix by. kind: fbm (soft clouds), cellular (patches with edges - mud, peat, stones), streaks (lines along `angle` degrees), ridged (sharp crests). metres: the feature's size; contrast 0 soft .. 1 hard; warp: how far the domain is pushed about, in feature sizes. Which kinds a category uses is code (a recompile); the numbers are a table (live).",
+ "_comment": "Soil island masks and transition edges. Broad features with restrained contrast; fine detail comes from material scans.",
  "noises": [
   {
    "name": "fbm_8m",
    "kind": "fbm",
-   "metres": 8,
-   "contrast": 0.5
+   "metres": 34.56,
+   "contrast": 0.328
   },
   {
    "name": "fbm_14m",
    "kind": "fbm",
-   "metres": 14,
-   "contrast": 0.6,
+   "metres": 60.48,
+   "contrast": 0.392,
    "warp": 0.3
   },
   {
    "name": "fbm_30m",
    "kind": "fbm",
-   "metres": 30,
-   "contrast": 0.55,
+   "metres": 129.6,
+   "contrast": 0.36,
    "warp": 0.25
   },
   {
    "name": "cellular_6m",
    "kind": "cellular",
-   "metres": 6,
-   "contrast": 0.8
+   "metres": 25.92,
+   "contrast": 0.528
   },
   {
    "name": "cellular_18m",
    "kind": "cellular",
-   "metres": 18,
-   "contrast": 0.7
+   "metres": 77.76,
+   "contrast": 0.456
   },
   {
    "name": "cellular_120m",
    "kind": "cellular",
    "metres": 120,
-   "contrast": 0.6
+   "contrast": 0.432
   },
   {
    "name": "streaks_9m",
    "kind": "streaks",
-   "metres": 9,
-   "contrast": 0.5,
+   "metres": 16.2,
+   "contrast": 0.4,
    "angle": 30
   },
   {
    "name": "ridged_20m",
    "kind": "ridged",
-   "metres": 20,
-   "contrast": 0.6,
+   "metres": 36.0,
+   "contrast": 0.48,
    "warp": 0.2
+  },
+  {
+   "name": "patch",
+   "kind": "patch",
+   "metres": 1,
+   "contrast": 0.55
   }
  ]
 }

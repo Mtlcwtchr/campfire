@@ -1,0 +1,274 @@
+{
+  "comment": "Append-only scene visual contract. Prepare with tools/prepare_environment_models.py after simplify_models.py. Source variants stay separate; physical dimensions are retained in metres. Cliff faces are oriented to local -Y before baking so scatter can face them downhill.",
+  "models": [
+    {
+      "name": "Cliff_Face_Grey",
+      "asset": "rock_face_01",
+      "variant": 0,
+      "kind": "cliff",
+      "canonical_face": true
+    },
+    {
+      "name": "Cliff_Face_Warm",
+      "asset": "rock_face_02",
+      "variant": 0,
+      "kind": "cliff",
+      "canonical_face": true
+    },
+    {
+      "name": "Moss_Clump",
+      "asset": "moss_01",
+      "variant": 0,
+      "kind": "ground_cover",
+      "cluster": {
+        "side": 7,
+        "spacing_m": 0.04
+      }
+    },
+    {
+      "name": "Fern_Clump",
+      "asset": "fern_02",
+      "variant": 0,
+      "kind": "undergrowth"
+    },
+    {
+      "name": "Shrub_Dense",
+      "asset": "gv_free_shrubs",
+      "variant": 1,
+      "kind": "shrub",
+      "url": "https://www.fab.com/listings/7ca465ab-fb9c-4d6b-bddb-82c20f604657",
+      "license": "Original UE asset-pack licence; not CC0"
+    },
+    {
+      "name": "Shrub_Low",
+      "asset": "gv_free_shrubs",
+      "variant": 0,
+      "kind": "shrub",
+      "url": "https://www.fab.com/listings/7ca465ab-fb9c-4d6b-bddb-82c20f604657",
+      "license": "Original UE asset-pack licence; not CC0"
+    },
+    {
+      "name": "Hornbeam_Forest_A",
+      "asset": "hornbeam_forest",
+      "variant": 0,
+      "kind": "tree_broadleaf",
+      "license": "Original UE asset-pack licence (AncientSettlement project); not CC0, not redistributable"
+    },
+    {
+      "name": "Hornbeam_Forest_B",
+      "asset": "hornbeam_forest",
+      "variant": 4,
+      "kind": "tree_broadleaf",
+      "license": "Original UE asset-pack licence (AncientSettlement project); not CC0, not redistributable"
+    },
+    {
+      "name": "Trident_Maple",
+      "asset": "np_trident_maple",
+      "variant": 0,
+      "kind": "tree_broadleaf",
+      "license": "Original UE asset-pack licence (AncientSettlement project); not CC0, not redistributable"
+    },
+    {
+      "name": "Island_Tree_A",
+      "asset": "island_tree_01",
+      "variant": 0,
+      "kind": "tree_broadleaf"
+    },
+    {
+      "name": "Island_Tree_B",
+      "asset": "island_tree_02",
+      "variant": 0,
+      "kind": "tree_broadleaf"
+    },
+    {
+      "name": "Small_Tree",
+      "asset": "tree_small_02",
+      "variant": 0,
+      "kind": "tree_broadleaf"
+    },
+    {
+      "name": "Jacaranda_Tree",
+      "asset": "jacaranda_tree",
+      "variant": 0,
+      "kind": "tree_broadleaf",
+      "recolour": {
+        "hue": 150,
+        "saturation": 0.95,
+        "gain": 1.25,
+        "leaves_only": true
+      }
+    },
+    {
+      "name": "Pine_Tree",
+      "asset": "pine_tree_01",
+      "variant": 0,
+      "kind": "tree_conifer"
+    },
+    {
+      "name": "Shrub_Leafy",
+      "asset": "shrub_02",
+      "variant": 0,
+      "kind": "shrub"
+    },
+    {
+      "name": "Shrub_Round",
+      "asset": "shrub_03",
+      "variant": 0,
+      "kind": "shrub"
+    },
+    {
+      "name": "Rooibos_Bush",
+      "asset": "wild_rooibos_bush",
+      "variant": 0,
+      "kind": "shrub"
+    },
+    {
+      "name": "Boulder_Round",
+      "asset": "boulder_01",
+      "variant": 0,
+      "kind": "rock",
+      "recolour": {
+        "saturation": 0.22,
+        "tint": [
+          0.96,
+          0.99,
+          1.05
+        ],
+        "gain": 1.18
+      }
+    },
+    {
+      "name": "Rock_Angular",
+      "asset": "rock_07",
+      "variant": 0,
+      "kind": "rock",
+      "recolour": {
+        "saturation": 0.22,
+        "tint": [
+          0.96,
+          0.99,
+          1.05
+        ],
+        "gain": 1.18
+      }
+    },
+    {
+      "name": "Forest_Rock_Small",
+      "asset": "ms_forest_rock_small",
+      "variant": 0,
+      "kind": "rock",
+      "license": "Original UE asset-pack licence (AncientSettlement project); not CC0, not redistributable",
+      "recolour": {
+        "saturation": 0.45,
+        "tint": [
+          0.97,
+          1.0,
+          1.04
+        ],
+        "gain": 1.1
+      }
+    },
+    {
+      "name": "Dead_Trunk",
+      "asset": "dead_tree_trunk",
+      "variant": 0,
+      "kind": "deadwood"
+    },
+    {
+      "name": "Stump_Old",
+      "asset": "tree_stump_01",
+      "variant": 0,
+      "kind": "deadwood"
+    },
+    {
+      "name": "Red_Mushrooms",
+      "asset": "ms_red_mushrooms",
+      "variant": 0,
+      "kind": "mushroom",
+      "license": "Original UE asset-pack licence (AncientSettlement project); not CC0, not redistributable"
+    },
+    {
+      "name": "Amber_Oak",
+      "asset": "island_tree_01",
+      "variant": 0,
+      "kind": "tree_broadleaf",
+      "recolour": {
+        "hue": 64,
+        "saturation": 1.6,
+        "tint": [
+          1.15,
+          1.0,
+          0.85
+        ],
+        "gain": 1.35,
+        "leaves_only": true
+      }
+    },
+    {
+      "name": "Amber_Hornbeam",
+      "asset": "hornbeam_forest",
+      "variant": 0,
+      "kind": "tree_broadleaf",
+      "license": "Original UE asset-pack licence (AncientSettlement project); not CC0, not redistributable",
+      "recolour": {
+        "hue": 64,
+        "saturation": 1.6,
+        "tint": [
+          1.15,
+          1.0,
+          0.85
+        ],
+        "gain": 1.35,
+        "leaves_only": true
+      }
+    },
+    {
+      "name": "Blossom_Maple",
+      "asset": "np_trident_maple",
+      "variant": 0,
+      "kind": "tree_broadleaf",
+      "license": "Original UE asset-pack licence (AncientSettlement project); not CC0, not redistributable",
+      "recolour": {
+        "hue": 165,
+        "saturation": 0.85,
+        "gain": 1.35,
+        "leaves_only": true
+      }
+    },
+    {
+      "name": "Blossom_Birch",
+      "asset": "tree_small_02",
+      "variant": 0,
+      "kind": "tree_broadleaf",
+      "recolour": {
+        "hue": 170,
+        "saturation": 0.8,
+        "gain": 1.4,
+        "leaves_only": true
+      }
+    },
+    {
+      "name": "Dark_Oak",
+      "asset": "island_tree_02",
+      "variant": 0,
+      "kind": "tree_broadleaf",
+      "recolour": {
+        "hue": 12,
+        "saturation": 0.85,
+        "gain": 0.55,
+        "leaves_only": true
+      }
+    }
+  ],
+  "moss_surface": "assets/terrain/environment/ms_tileable_moss/src/ms_tileable_moss",
+  "base_models": [
+    "CommonTree_1",
+    "Pine_1",
+    "Bush_Common",
+    "Rock_Medium_1",
+    "Mushroom_Common",
+    "Deadwood_Log",
+    "Deadwood_Stump",
+    "Deadwood_Branch"
+  ]
+}

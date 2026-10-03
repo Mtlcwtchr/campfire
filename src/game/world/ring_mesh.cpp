@@ -163,8 +163,8 @@ std::vector<PageGrassRoot> buildPageGrass(const terrain::AdaptiveMesh& mesh,
         for (int y=y0;y<y1;++y) for (int x=x0;x<x1;++x) {
             if (occupied[y*side+x]) continue;
             const auto gx=std::uint32_t(firstX+x),gy=std::uint32_t(firstY+y);
-            const double px=(double(firstX+x)+0.15+0.70*foliage::foliageHash(gx,gy))*cellMetres;
-            const double py=(double(firstY+y)+0.15+0.70*foliage::foliageHash(gx^0x7351u,gy))*cellMetres;
+            const double px=(double(firstX+x)+0.04+0.92*foliage::foliageHash(gx,gy))*cellMetres;
+            const double py=(double(firstY+y)+0.04+0.92*foliage::foliageHash(gx^0x7351u,gy))*cellMetres;
             const double wa=((by-cy)*(px-cx)+(cx-bx)*(py-cy))/det;
             const double wb=((cy-ay)*(px-cx)+(ax-cx)*(py-cy))/det,wc=1-wa-wb;
             if (std::min({wa,wb,wc}) < -1e-9) continue;

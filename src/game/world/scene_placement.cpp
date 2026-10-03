@@ -96,7 +96,15 @@ void ScenePlacement::startJobs() {
                 auto query = world->field(); // one macro attachment per batch, not per region
                 for (const auto& r : regions) {
                     if (cancel->load()) break;
-                    done.emplace_back(r, std::make_shared<const decor::Scatter>(world->scatter(r, *delta, query)));
+                    {
+                        // In identity order here, on the worker, so that a
+                        // publication merges sorted parts instead of sorting
+                        // the whole placed world on the frame thread.
+                        auto placed = world->scatter(r, *delta, query);
+                        std::sort(placed.objects.begin(), placed.objects.end(),
+                                  [](const auto& a, const auto& b) { return a.id < b.id; });
+                        done.emplace_back(r, std::make_shared<const decor::Scatter>(std::move(placed)));
+                    }
                 }
                 return done;
             }), std::move(regions),{},0,std::move(cancel)});
@@ -147,6 +155,15 @@ void ScenePlacement::updateRegions(std::span<const Region> regions, bool enabled
         bounds.maxX=std::max(bounds.maxX,r.maxX);bounds.maxY=std::max(bounds.maxY,r.maxY);
     }
     updateDemand({regions.begin(),regions.end()},bounds,enabled,true,limited);
+}
+
+std::vector<decor::Object> ScenePlacementSnapshot::mergedObjects() const {
+    if (!scatter.objects.empty()) return scatter.objects;
+    std::vector<decor::Object> out;
+    out.reserve(objectCount());
+    for (const auto& p:parts) if (p) out.insert(out.end(),p->objects.begin(),p->objects.end());
+    std::stable_sort(out.begin(),out.end(),[](const auto& a,const auto& b) { return a.id<b.id; });
+    return out;
 }
 
 void ScenePlacement::updateDemand(std::vector<Region> regions, Region bounds, bool enabled, bool incremental,
@@ -233,15 +250,16 @@ void ScenePlacement::updateDemand(std::vector<Region> regions, Region bounds, bo
         dirty_=true;
     const auto capResident=[&] {
         if (resident_.size()<=limits_.regions) return;
-        std::vector<Region> lingering;
-        for (const auto& r:resident_) if (!wanted_.contains(r)) lingering.push_back(r);
-        std::sort(lingering.begin(),lingering.end(),[&](const auto& a,const auto& b) {
-            return cache_.at(a).used!=cache_.at(b).used?cache_.at(a).used<cache_.at(b).used:a<b;
-        });
-        for (const auto& r:lingering) {
-            if (resident_.size()<=limits_.regions) break;
-            resident_.erase(r);dirty_=true;
-        }
+        // Least recently wanted first. Each one's age is looked up once, and
+        // only as many as must go are put in order: this ran twice a frame
+        // over every lingering region, four hash lookups a comparison.
+        using Aged=std::pair<decltype(cache_.begin()->second.used),Region>;
+        std::vector<Aged> lingering;
+        for (const auto& r:resident_) if (!wanted_.contains(r)) lingering.push_back({cache_.at(r).used,r});
+        const auto excess=std::min(lingering.size(),resident_.size()-limits_.regions);
+        if (excess<lingering.size())
+            std::nth_element(lingering.begin(),lingering.begin()+std::ptrdiff_t(excess),lingering.end());
+        for (std::size_t i=0;i<excess;++i) { resident_.erase(lingering[i].second);dirty_=true; }
     };
     capResident();
     if (enabled_ && incremental_) {
@@ -269,29 +287,54 @@ void ScenePlacement::updateDemand(std::vector<Region> regions, Region bounds, bo
         result->worldVersion=world_->version();result->version=ticket.version();
         result->bounds=bounds_;result->complete=missing_==0;
         result->capacityLimited=limited_;
-        std::size_t readyObjects=0;
-        for (const auto& r:resident_) readyObjects+=cache_.at(r).scatter->objects.size();
-        result->scatter.objects.reserve(readyObjects);
         result->regions.reserve(resident_.size());
         result->regionRevisions.reserve(resident_.size());
-        for (const auto& r:resident_) {
-            const auto found=cache_.find(r);
-            if (found==cache_.end()) continue;
-            result->regions.push_back(r);
-            const auto& part=*found->second.scatter;
-            result->regionRevisions[r] = part.revision;
-            auto& out=result->scatter;
-            out.objects.insert(out.objects.end(),part.objects.begin(),part.objects.end());
-            out.sampled+=part.sampled;out.waterTilesSkipped+=part.waterTilesSkipped;
-            for (std::size_t i=0;i<out.populations.size();++i) out.populations[i]+=part.populations[i];
-        }
-        // Stable identity order regardless of job completion or region priority.
+        // Regions in a stable order, each with its part (shared, not copied).
+        for (const auto& r:resident_) if (cache_.contains(r)) result->regions.push_back(r);
         std::sort(result->regions.begin(),result->regions.end());
-        std::sort(result->scatter.objects.begin(),result->scatter.objects.end(),
-                  [](const auto& a,const auto& b) { return a.id<b.id; });
+        result->parts.reserve(result->regions.size());
+        std::size_t readyObjects=0;
+        for (const auto& r:result->regions) {
+            const auto& part=cache_.at(r).scatter;
+            result->parts.push_back(part);
+            result->regionRevisions[r]=part->revision;
+            readyObjects+=part->objects.size();
+            auto& out=result->scatter;
+            out.sampled+=part->sampled;out.waterTilesSkipped+=part->waterTilesSkipped;
+            for (std::size_t i=0;i<out.populations.size();++i) out.populations[i]+=part->populations[i];
+        }
         const auto prior=published_.read().value;
-        result->objectsVersion=prior && prior->scatter.objects==result->scatter.objects
-            ? prior->objectsVersion : ticket.version();
+        if (limits_.merged) {
+            // Each part is already in identity order (the job sorted it), so the
+            // whole is a k-way merge: every object written once, O(n log k).
+            result->scatter.objects.reserve(readyObjects);
+            using Cursor=std::pair<const decor::Object*,const decor::Object*>;
+            std::vector<Cursor> cursors;
+            cursors.reserve(result->parts.size());
+            for (const auto& part:result->parts)
+                if (!part->objects.empty()) cursors.push_back({part->objects.data(),part->objects.data()+part->objects.size()});
+            const auto later=[](const Cursor& a,const Cursor& b) { return a.first->id>b.first->id; };
+            std::make_heap(cursors.begin(),cursors.end(),later);
+            while (!cursors.empty()) {
+                std::pop_heap(cursors.begin(),cursors.end(),later);
+                auto& next=cursors.back();
+                result->scatter.objects.push_back(*next.first);
+                if (++next.first==next.second) cursors.pop_back();
+                else std::push_heap(cursors.begin(),cursors.end(),later);
+            }
+            result->objectsVersion=prior && prior->scatter.objects==result->scatter.objects
+                ? prior->objectsVersion : ticket.version();
+        } else {
+            // The same non-empty parts in the same regions are the same
+            // objects (regions over open sea come and go and change nothing).
+            const auto filled=[](const ScenePlacementSnapshot& s) {
+                std::vector<std::pair<decor::ScatterBounds,const decor::Scatter*>> out;
+                for (std::size_t i=0;i<s.regions.size() && i<s.parts.size();++i)
+                    if (s.parts[i] && !s.parts[i]->objects.empty()) out.push_back({s.regions[i],s.parts[i].get()});
+                return out;
+            };
+            result->objectsVersion=prior && filled(*prior)==filled(*result) ? prior->objectsVersion : ticket.version();
+        }
         published_.publish(ticket,std::move(result));
         dirty_=false;
     }

@@ -23,10 +23,11 @@ float4 TerrainMaterialProbePS(float4 pixel : SV_Position) : SV_Target0
         float2 weights1 = 0.0;
         if (a < 4) weights0[a] = weight; else weights1[a - 4] = weight;
         if (b < 4) weights0[b] = 1.0 - weight; else weights1[b - 4] = 1.0 - weight;
-        const Ground ground = groundHere(weights0, weights1,
-            float3(p.xy, p.z + (p.x - cameraPS.x) * slope), normalize(float3(-slope, 0, 1)));
         // Independent signed-weight reference: no top/under sorting, texture
         // heights, normal direction or UV warp in the expected organic mask.
+        // Worked out BEFORE the production blend: that samples its materials
+        // behind per-pixel branches, and a screen derivative taken after a
+        // branch the quad did not take together is not one Metal promises.
         const float3 style = groundEdgeStyle(a, b);
         const float width = min(0.90, max(0.20, (tablePS[a].y + tablePS[b].y) * 0.5) * style.x);
         const float gap = 2.0 * weight - 1.0;
@@ -76,6 +77,8 @@ float4 TerrainMaterialProbePS(float4 pixel : SV_Position) : SV_Target0
         const float majority = gap >= 0.0 ? rawMix : 1.0 - rawMix;
         const float closed = lerp(1.0, majority, smoothstep(0.0, 0.06, lesser));
         const float expected = gap >= 0.0 ? closed : 1.0 - closed;
+        const Ground ground = groundHere(weights0, weights1,
+            float3(p.xy, p.z + (p.x - cameraPS.x) * slope), normalize(float3(-slope, 0, 1)));
         return float4(materialCoverage(a, ground.top, ground.under, ground.mix), expected, mask, 1.0);
     }
     if (mode >= 18 && mode <= 20) {
@@ -144,6 +147,7 @@ float4 TerrainMaterialProbePS(float4 pixel : SV_Position) : SV_Target0
         input.weights0 = weights0;
         input.weights1 = weights1;
         input.worldXY = position.xy;
+        input.frameXY = position.xy;   // frame origin nought: the world as it is
         input.worldHeight = position.z;
         input.waterDepth = -100;
         input.environment = float4(0.65, 0, 0.5, 0);
@@ -155,6 +159,7 @@ float4 TerrainMaterialProbePS(float4 pixel : SV_Position) : SV_Target0
         input.normal = float3(0, 0, 1);
         input.weights0 = float4(0.96, 0, 0, 0.04);
         input.worldXY = p.xy;
+        input.frameXY = p.xy;
         input.worldHeight = p.z;
         input.waterDepth = -100;
         input.environment = float4(0.65, 0, 0.5, 0);

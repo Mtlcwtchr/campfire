@@ -15,16 +15,14 @@ namespace generation {
 namespace {
 namespace ws = engine::world_source;
 
-constexpr std::int64_t kRegionSamples = kRegionMetres / ImportedGround::kSampleMetres;   // 512
-
 std::uint64_t mix(std::uint64_t h, std::uint64_t v) {
     h ^= v + 0x9E3779B97F4A7C15ull + (h << 6) + (h >> 2);
     return h * 0xFF51AFD7ED558CCDull;
 }
 
 // Catmull-Rom weights at t/256 of the way from p1 to p2, summing to 2 * 256^3.
-std::array<std::int64_t, 4> cubicWeights(std::int64_t t) {
-    const std::int64_t T = 256, t2 = t * t, t3 = t2 * t;
+std::array<std::int64_t, 4> cubicWeights(std::int64_t t, std::int64_t T) {
+    const std::int64_t t2 = t * t, t3 = t2 * t;
     return {-t * T * T + 2 * t2 * T - t3, 2 * T * T * T - 5 * t2 * T + 3 * t3, t * T * T + 4 * t2 * T - 3 * t3,
             -t2 * T + t3};
 }
@@ -36,9 +34,10 @@ std::int64_t floorDiv(std::int64_t a, std::int64_t b) { return a >= 0 ? a / b : 
 std::int32_t ImportedGround::heightAt(std::int64_t x, std::int64_t y) const {
     if (side <= 0) return -600;
     // Sample centres are half a sample in.
-    const std::int64_t u = x - kSampleMetres / 2, v = y - kSampleMetres / 2;
-    const std::int64_t i0 = floorDiv(u, kSampleMetres), j0 = floorDiv(v, kSampleMetres);
-    const auto wx = cubicWeights(u - i0 * kSampleMetres), wy = cubicWeights(v - j0 * kSampleMetres);
+    const std::int64_t T = sampleMetres;
+    const std::int64_t u = x - T / 2, v = y - T / 2;
+    const std::int64_t i0 = floorDiv(u, T), j0 = floorDiv(v, T);
+    const auto wx = cubicWeights(u - i0 * T, T), wy = cubicWeights(v - j0 * T, T);
     const auto at = [&](std::int64_t i, std::int64_t j) {
         i = std::clamp<std::int64_t>(i + kMargin, 0, side - 1);
         j = std::clamp<std::int64_t>(j + kMargin, 0, side - 1);
@@ -51,24 +50,25 @@ std::int32_t ImportedGround::heightAt(std::int64_t x, std::int64_t y) const {
         sum += wy[std::size_t(b)] * (row / 1024);   // keeps the product inside 64 bits
     }
     // Both weights sum to 2 * 256^3 = 2^25; the row was divided by 2^10.
-    const std::int64_t whole = std::int64_t(1) << 40;
+    const std::int64_t whole = (2 * T * T * T) * (2 * T * T * T) / 1024;
     return std::int32_t(sum >= 0 ? (sum + whole / 2) / whole : -((-sum + whole / 2) / whole));
 }
 
 std::int32_t ImportedGround::maskAt(const std::vector<std::uint8_t>& mask, std::int64_t x, std::int64_t y,
                                     std::int32_t fallback) const {
     if (mask.empty() || side <= 0) return fallback;
-    const std::int64_t u = x - kSampleMetres / 2, v = y - kSampleMetres / 2;
-    const std::int64_t i0 = floorDiv(u, kSampleMetres), j0 = floorDiv(v, kSampleMetres);
-    const std::int64_t fx = u - i0 * kSampleMetres, fy = v - j0 * kSampleMetres;
+    const std::int64_t T = sampleMetres;
+    const std::int64_t u = x - T / 2, v = y - T / 2;
+    const std::int64_t i0 = floorDiv(u, T), j0 = floorDiv(v, T);
+    const std::int64_t fx = u - i0 * T, fy = v - j0 * T;
     const auto at = [&](std::int64_t i, std::int64_t j) {
         i = std::clamp<std::int64_t>(i + kMargin, 0, side - 1);
         j = std::clamp<std::int64_t>(j + kMargin, 0, side - 1);
         return std::int64_t(mask[std::size_t(j * side + i)]);
     };
-    const std::int64_t top = at(i0, j0) * (kSampleMetres - fx) + at(i0 + 1, j0) * fx;
-    const std::int64_t bottom = at(i0, j0 + 1) * (kSampleMetres - fx) + at(i0 + 1, j0 + 1) * fx;
-    return std::int32_t((top * (kSampleMetres - fy) + bottom * fy) / (kSampleMetres * kSampleMetres));
+    const std::int64_t top = at(i0, j0) * (T - fx) + at(i0 + 1, j0) * fx;
+    const std::int64_t bottom = at(i0, j0 + 1) * (T - fx) + at(i0 + 1, j0 + 1) * fx;
+    return std::int32_t((top * (T - fy) + bottom * fy) / (T * T));
 }
 
 ImportedSource::~ImportedSource() = default;
@@ -83,9 +83,13 @@ std::shared_ptr<const ImportedSource> ImportedSource::open(const std::filesystem
     if (!height) return nullptr;
     std::shared_ptr<ImportedSource> out(new ImportedSource());
     out->root_ = root;
+    // Imported samples and their spacing together determine the region skeleton.
     // Which regions hold height, and what they hold: a region's key is its
     // chunks' and its margin's, so a change beside it reaches it too.
-    const std::int64_t perRegion = kRegionSamples / ws::kChunkSamples;   // 4
+    const auto sampleMetres = std::int64_t(source->schema().world.sampleMetres);
+    // The source key changes when the same stored values are interpreted on a new grid.
+    const std::int64_t regionSamples = kRegionMetres / sampleMetres;
+    const std::int64_t perRegion = regionSamples / source->chunkSamples();
     std::map<std::pair<std::int32_t, std::int32_t>, bool> any;
     for (const auto& [key, record] : source->chunks())
         if (record.layers.count(height->name))
@@ -150,8 +154,10 @@ std::shared_ptr<const ImportedGround> ImportedSource::ground(std::int32_t rx, st
         if (const auto it = grounds_.find({rx, ry, drained}); it != grounds_.end()) return it->second;
     }
     auto g = std::make_shared<ImportedGround>();
+    g->sampleMetres = std::int32_t(source_->schema().world.sampleMetres);
+    const std::int64_t regionSamples = kRegionMetres / g->sampleMetres;
     g->key = drained ? drainedKeys_.at({rx, ry}) : held->second;
-    g->side = std::int32_t(kRegionSamples) + 2 * ImportedGround::kMargin + 1;
+    g->side = std::int32_t(regionSamples) + 2 * ImportedGround::kMargin + 1;
     const std::size_t n = std::size_t(g->side) * std::size_t(g->side);
     const auto& schema = source_->schema();
     const ws::RasterDesc* height = nullptr;
@@ -159,8 +165,9 @@ std::shared_ptr<const ImportedGround> ImportedSource::ground(std::int32_t rx, st
         if (r.kind == ws::RasterKind::Height) { height = &r; break; }
     // Each control mask by its name, wherever the schema keeps it.
     struct Mask { const char* name; std::vector<std::uint8_t>* into; const ws::RasterDesc* desc = nullptr; std::uint8_t channel = 0; };
-    std::array<Mask, 4> masks{{{"erosion_strength", &g->erosion}, {"moisture_bias", &g->moisture},
-                               {"forest_bias", &g->forest}, {"mountain_strength", &g->mountain}}};
+    std::array<Mask, 6> masks{{{"erosion_strength", &g->erosion}, {"moisture_bias", &g->moisture},
+                               {"forest_bias", &g->forest}, {"mountain_strength", &g->mountain},
+                               {"river_strength", &g->river}, {"temperature_bias", &g->temperature}}};
     for (auto& m : masks)
         for (const auto& r : schema.rasters)
             for (std::size_t c = 0; c < r.channels.size(); ++c)
@@ -181,8 +188,8 @@ std::shared_ptr<const ImportedGround> ImportedSource::ground(std::int32_t rx, st
     const ws::WorldSource& heightSource = drained ? *baked_ : *source_;
     const ws::RasterDesc* heightDesc = drained ? baked_->schema().raster("height") : height;
     if (!heightDesc) { heightDesc = height; }
-    const std::int64_t sx0 = std::int64_t(rx) * kRegionSamples - ImportedGround::kMargin;
-    const std::int64_t sy0 = std::int64_t(ry) * kRegionSamples - ImportedGround::kMargin;
+    const std::int64_t sx0 = std::int64_t(rx) * regionSamples - ImportedGround::kMargin;
+    const std::int64_t sy0 = std::int64_t(ry) * regionSamples - ImportedGround::kMargin;
     const std::int64_t maxX = schema.world.samplesX() - 1, maxY = schema.world.samplesY() - 1;
     // Chunk by chunk, each read once; samples past the world's edge repeat it.
     std::map<ws::ChunkKey, ws::Chunk> chunks;
@@ -209,8 +216,8 @@ std::shared_ptr<const ImportedGround> ImportedSource::ground(std::int32_t rx, st
     for (std::int32_t j = 0; j < g->side; ++j)
         for (std::int32_t i = 0; i < g->side; ++i) {
             const std::int64_t sx = std::clamp<std::int64_t>(sx0 + i, 0, maxX), sy = std::clamp<std::int64_t>(sy0 + j, 0, maxY);
-            const auto key = ws::WorldSource::chunkOfSample(sx, sy);
-            const std::int64_t lx = sx - key.x * ws::kChunkSamples, ly = sy - key.y * ws::kChunkSamples;
+            const auto key = source_->chunkAtSample(sx, sy);
+            const std::int64_t lx = sx - key.x * source_->chunkSamples(), ly = sy - key.y * source_->chunkSamples();
             const std::size_t k = std::size_t(j) * std::size_t(g->side) + std::size_t(i);
             // The one place a float is read: the stored number to decimetres.
             g->heightDm[k] = std::int32_t(std::lround(heightDesc->decode(0, heightTileOf(key).at(lx, ly, 0)) * 10.0));
@@ -249,6 +256,7 @@ std::shared_ptr<const engine::biomes::CategoryField> ImportedSource::categories(
                 biasChannel = std::uint8_t(c);
             }
     auto field = std::make_shared<engine::biomes::CategoryField>();
+    field->setSampleMetres(std::int64_t(schema.world.sampleMetres));
     for (const auto& [key, record] : source_->chunks()) {
         bool holds = false;
         for (const auto* r : layers) holds = holds || (r && record.layers.count(r->name));
@@ -260,8 +268,9 @@ std::shared_ptr<const engine::biomes::CategoryField> ImportedSource::categories(
             if (layers[k]) tiles[k] = source_->tile(*chunk, layers[k]->name);
         const bool biased = control && record.layers.count(control->name);
         const ws::Tile bias = biased ? source_->tile(*chunk, control->name) : ws::Tile{};
-        for (std::int64_t y = 0; y < ws::kChunkSamples; ++y)
-            for (std::int64_t x = 0; x < ws::kChunkSamples; ++x) {
+        const auto side = std::int64_t(source_->chunkSamples());
+        for (std::int64_t y = 0; y < side; ++y)
+            for (std::int64_t x = 0; x < side; ++x) {
                 engine::biomes::CategoryField::Ids ids{};
                 for (std::size_t k = 0; k < tiles.size(); ++k)
                     if (layers[k]) ids[k] = std::uint8_t(std::min<std::uint16_t>(tiles[k].at(x, y, 0), 255));
@@ -272,7 +281,7 @@ std::shared_ptr<const engine::biomes::CategoryField> ImportedSource::categories(
                     ids[4] = engine::biomes::CategoryField::forestBiasByte(c.max > c.min ? (v - c.min) / (c.max - c.min) : v);
                 }
                 if (ids != engine::biomes::CategoryField::Ids{})
-                    field->set(key.x * ws::kChunkSamples + x, key.y * ws::kChunkSamples + y, ids);
+                    field->set(key.x * side + x, key.y * side + y, ids);
             }
     }
     field->settle();

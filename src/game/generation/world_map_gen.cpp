@@ -2404,6 +2404,15 @@ WorldMapData generateWorldMap(const WorldMapParams& params) {
             // The rain: wetter ground sheds more, which is what puts the big
             // rivers where the weather is rather than only where the hills are.
             flow[static_cast<std::size_t>(index)] += 1 + here.moisture / 64;
+            // Main rivers painted on a control map (river_strength): that cell
+            // is given water enough to be a river, from 94 (a stream, 64) to
+            // 1500 (a trunk, 255), and everything downhill of it carries it.
+            if (params.imported && !params.imported->river.empty()) {
+                const auto strength = params.imported->maskAt(params.imported->river,
+                    std::int64_t(p.x) * kMetresPerCell + kMetresPerCell / 2,
+                    std::int64_t(p.y) * kMetresPerCell + kMetresPerCell / 2, 0);
+                flow[static_cast<std::size_t>(index)] += strength * strength * 1500 / 65025;
+            }
 
             // Downhill in any of the eight directions, not only the four.
             // Four made the whole drainage of the world Manhattan - every river
@@ -2666,6 +2675,11 @@ WorldMapData generateWorldMap(const WorldMapParams& params) {
             const WorldCell& c = world.cells[i];
             std::int32_t warmth = world.baseTemperatureField[i];
             warmth += world.coastalClimateBiasField[i] / 3;
+            // A painted temperature (temperature_bias): the climate warmer or colder there.
+            if (params.imported && !params.imported->temperature.empty())
+                warmth += (params.imported->maskAt(params.imported->temperature,
+                    std::int64_t(i % std::size_t(params.width)) * kMetresPerCell + kMetresPerCell / 2,
+                    std::int64_t(i / std::size_t(params.width)) * kMetresPerCell + kMetresPerCell / 2, 128) - 128) * 45 / 128;
             if (c.sea) warmth += world.seaSurfaceTemperatureBiasField[i] / 3;
             if (c.sea) warmth = warmth * 4 / 5 + 25;
             warmth = std::clamp(warmth, 0, 255);

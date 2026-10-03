@@ -338,6 +338,21 @@ BakedPage BaseTileBaker::bakePage(TileKey key, std::int32_t sampleMetres, std::u
                     carved.wet=carved.wet && carved.body!=kInvalidWaterBodyId && carved.surface>carved.floor;
                 }
             }
+            // A bog's pools: the ground lowered a few decimetres, water standing
+            // a hand below the old surface, wet where the pit is deeper than that.
+            if (!carved.wet && field_.hasBogPools()) {
+                const Fixed pit = field_.bogPoolDepth(position.x, position.y);
+                if (pit.raw > 0) {
+                    const Fixed rim = carved.floor;
+                    carved.floor = rim - pit;
+                    carved.surface = rim - Fixed::ratio(1, 10);
+                    if (pit > Fixed::ratio(12, 100)) {
+                        carved.wet = true;
+                        carved.body = kBogPoolWaterBodyId;
+                        carved.bankDistance = -pit;
+                    }
+                }
+            }
             tile.heightQuantized[at] = quantisation_.quantise(carved.floor);
             tile.waterBodyId[at] = carved.wet
                                            ? static_cast<std::uint16_t>(carved.body)

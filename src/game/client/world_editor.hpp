@@ -170,6 +170,26 @@ public:
     // went into is at the Primary stage - the skeleton as drawn, no drainage,
     // no climate, no water - until it is taken further (stageImported).
     void importMaps(const ImportRequest& request);
+    // The same maps made by the generator instead of read from pictures
+    // (generation/world_procedural.hpp), at any time, a layer at a time, into
+    // the selected regions or the whole world when none are selected. Each
+    // runs on a thread of its own, like an import, and is built when done.
+    struct GenerateRequest {
+        generation::RegionSettings settings;   // what a region is generated with
+        std::uint64_t seed = 1;
+        bool ownSeeds = true;                  // each region its own seed, derived from `seed`
+        double featherKm = 4;                  // the selection's edge blended over this
+        float variation = 1.0f;                // how far the control maps wander, 0..2
+    };
+    // Phase 1: heights. The generator over the rectangle around the selection
+    // (one planet over the whole world), taken to its primary stage and laid
+    // into the source as an imported height map would be: the regions become
+    // imported ones, at their heights alone (Primary).
+    void generateHeights(const GenerateRequest& request);
+    // Phase 2: control maps (moisture, forest, mountains, erosion) worked out
+    // from the heights the source holds - generated or imported - under the
+    // selection (or everywhere it holds any). Stages stay as they are.
+    void generateControls(const GenerateRequest& request);
     // The selected imported regions (or every imported one when none are
     // selected) taken to a stage: Relief is the drainage (the height's
     // hollows breached - baked beside the source first when it is not - the
@@ -368,6 +388,7 @@ private:
         bool clearing = false;
         bool heights = false;                                          // new heights went in
         std::optional<generation::RegionStage> raiseTo;                // the regions taken this far after
+        std::string packageStage;                                      // what the package asked for
     };
     std::future<Job> job_;
     std::string importLine_;

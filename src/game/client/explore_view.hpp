@@ -80,6 +80,14 @@ struct ExploreViewOptions {
     std::string shotList;
     // --clean: no developer strip or progress panel, the picture only.
     bool clean = false;
+    // --character: start holding the player's character at the start point
+    // (third person). --character-run N: shots and benches walk it forward
+    // at N (0.5 walk, 1 jog, 2 sprint), for pictures of the gait.
+    bool character = false;
+    double characterRun = 0;
+    double characterTurn = 0;
+    int characterView = 0;
+    double characterDistance = 0;   // --character-distance M: third-person camera distance (shots)      // --character-view N: 0 third person, 1 first, 2 the map   // --character-turn RADIANS: its facing off the camera's (pi: towards it)
 };
 
 class ExploreView {

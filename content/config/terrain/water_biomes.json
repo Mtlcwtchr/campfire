@@ -54,6 +54,27 @@
    "name": "shallow_clear",
    "id": 6,
    "turbidity": 0.08
+  },
+  {
+   "name": "peaty",
+   "id": 7,
+   "colour": [
+    0.14,
+    0.13,
+    0.07
+   ],
+   "turbidity": 0.5,
+   "scum": 0.1
+  },
+  {
+   "name": "lagoon",
+   "id": 8,
+   "colour": [
+    0.08,
+    0.55,
+    0.58
+   ],
+   "turbidity": 0.05
   }
  ]
 }

@@ -13,7 +13,7 @@ namespace world::streaming {
 // Bumped whenever the extraction changes what a stored graph means. It is
 // folded into `sourceFingerprint`, so an old cache is a miss rather than a
 // silently different river network.
-inline constexpr std::uint32_t kHydrologyGraphVersion = 15; // the ocean out of the page index
+inline constexpr std::uint32_t kHydrologyGraphVersion = 17; // fewer, smoother rivers: relaxed chains, continuous meander
 
 // The spacing a natural basin ends up sampled at: flooded first over the
 // Slopes lattice, then again over the ground as the reaches carve it, this
@@ -28,6 +28,9 @@ inline constexpr RiverId kInvalidRiverId = 0;
 inline constexpr RiverNodeId kInvalidRiverNodeId = 0;
 inline constexpr WaterBodyId kInvalidWaterBodyId = 0;
 inline constexpr WaterBodyId kOceanWaterBodyId = 1;
+// The shallow pools of the bogs (HeightField::bogPoolDepth): made when a page is
+// baked, no body of the graph; anything asking is told it is a lake.
+inline constexpr WaterBodyId kBogPoolWaterBodyId = 0xFFF0;
 
 enum class RiverNodeKind : std::uint8_t {
     Source,

@@ -10,7 +10,7 @@
 //
 //   {
 //     "format": "campfire.world-authoring", "version": 1,
-//     "world": { "width_m": 2097152, "height_m": 2097152, "sample_m": 256,
+//     "world": { "width_m": 2097152, "height_m": 2097152, "sample_m": 64 | 128 | 256,
 //                "chunk_m": 32768 },
 //     "origin_m": [0, 0],          // a partial package: where it lies in the world
 //     "size_m": [..., ...],        // and how much of it it covers (default: the world)

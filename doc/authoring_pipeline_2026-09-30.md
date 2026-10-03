@@ -71,6 +71,21 @@
 пишет в уровень по радиусу (самый грубый шаг ≤ радиус / 6), земля — сумма
 уровней.
 
+## Вкладка Import: импорт или генерация, по слоям (D158, D159, D182)
+
+Источник мира (`worlds/<имя>/source`) наполняется в выбранные регионы (без
+выделения — на весь мир), в любой момент, а не только при создании мира:
+
+| Фаза | Кнопка | Что делает | Стадия региона |
+|---|---|---|---|
+| 1 | Import heights / **Generate heights** | высоты: картинка или генератор до стадии Primary (`generateSourceHeights`) | → Primary |
+| 2 | Import the control map / **Generate control maps** | moisture, forest, mountain, erosion; генерация — из высот в источнике (`generateSourceControls`) | без изменений |
+| 3 | Drainage & climate | дренаж пекётся рядом с источником, долины и климат | → Relief |
+| 4 | Rivers & lakes | реки и озёра | → Water |
+
+Генерация пишет через `importGrids` — те же маска, мягкий край и чанки, что у
+импорта. Проба: `world_load_probe --generate WxH [--drain|--water]`.
+
 ## Вода: выделение с зависимостями
 
 `upstreamOfSegment` / `upstreamOfWaterBody` / `pickWater` / `selectWater`.

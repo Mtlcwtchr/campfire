@@ -1,6 +1,7 @@
 // The ground: six materials mixed by weight, lit by the vertex normal.
 #include "ground.hlsli"
 #include "noise.hlsli"
+#include "world_frame.hlsli"
 #include "ring_reveal.hlsli"
 #include "foliage_field.hlsli"
 #include "wind_field.hlsli"
@@ -10,6 +11,7 @@
 #include "inspection.hlsli"
 #include "weather.hlsli"
 #include "climate_field.hlsli"
+#include "environment_detail.hlsli"
 // Terrain categories (engine/biomes): the page variant binds the category
 // plane and the biome table after its shadow (t13, t14). The mesh variant
 // binds neither and draws every id as the engine's own ground.
@@ -39,6 +41,7 @@ Texture2DArray groundPropertiesTex : register(t2, space2);
 SamplerState groundPropertiesSampler : register(s2, space2);
 #endif
 #include "terrain_material.hlsli"
+#include "terrain_decal_textures.hlsli"
 #ifdef TERRAIN_PAGE_MATERIALS
 #define SHADOW_TEXTURE_SLOT t12
 #define SHADOW_SAMPLER_SLOT s12
@@ -87,6 +90,11 @@ struct TerrainOut {
     float3 triangleBary : TEXCOORD14;
     float4 stageDiagnostic : TEXCOORD15;
     float forest : TEXCOORD16;   // canopy share, picks forest-floor ground
+    // Metres from the eye's frame origin (world_frame.hlsli). worldXY far from
+    // the world's origin holds the ground in 1.6 cm steps; this holds it to a
+    // fraction of a millimetre near the eye. Texture coordinates and every
+    // screen derivative of the position are taken from it.
+    float2 frameXY : TEXCOORD17;
 };
 
 TerrainOut TerrainVS(TerrainIn input)
@@ -96,6 +104,9 @@ TerrainOut TerrainVS(TerrainIn input)
     output.stageDiagnostic = 0.0;
     const float3 where = morphed(input.position, input.morphHeight);
     output.position = project(where);
+    // Exact: a frame origin is a multiple of a power of two, a vertex stands
+    // on its lattice, and their difference fits a float.
+    output.frameXY = where.xy - frameAnchorOf(camera.xy);
     output.normal = morphedNormal(input.normal, input.morphNormal, input.position.xy);
     output.weights0 = input.weights0;
     output.weights1 = input.weights1;
@@ -158,10 +169,13 @@ struct Ground {
 //
 // Returns the coverage mask and the height of the dome, so a stone can shade
 // as a stone rather than as a stain: x lights the albedo, y bends the normal.
-float2 stoneScatter(float2 worldXY, float metres, float density, float salt, float pixel)
+//
+// Cells are read from the frame (world_frame.hlsli): stones of a few
+// centimetres drawn from the world coordinate came out in 1.6 cm stairs.
+float2 stoneScatter(float2 frameAnchor, float2 frameLocal, float metres, float density, float salt, float pixel)
 {
-    const float2 cell = worldXY / metres;
-    const float2 id = floor(cell);
+    float2 id, inCell;
+    frameCells(frameAnchor, frameLocal, metres, id, inCell);
     // hashAt, not noiseAt. Smooth noise is correlated between neighbouring
     // cells by construction - that is what makes it smooth - so picking cells
     // with it seats the stones in drifts and rows, and the first attempt drew
@@ -179,7 +193,7 @@ float2 stoneScatter(float2 worldXY, float metres, float density, float salt, flo
     // circles is a texture of circles, whatever it is coloured like.
     const float grade = frac(shape * 5.17);
     const float radius = 0.05 + grade * grade * 0.26;
-    const float2 off = frac(cell) - centre;
+    const float2 off = inCell - centre;
     // And not round. A stone seen from above is a blob: squashed along some
     // axis of its own and dented on one side. Two cheap distortions - an
     // anisotropic stretch and a lobe - cost four multiplies and remove the
@@ -316,9 +330,10 @@ GroundVariants groundVariants(int cls, GroundContext c, float2 xy)
         strongestOf3(LAYER_SAND_DUNE_ORANGE, dune, LAYER_SAND_COAST, coast,
                      LAYER_SAND_GRAVELLY, stony, v.second, v.s2);
     } else if (cls == 3) {
-        // Faces take a cliff surface; which one follows the climate.
-        v.first = LAYER_CLIFF_MOSSY;
-        v.s1 = steep * smoothstep(0.50, 0.80, c.moisture + patch * 0.4) * (1.0 - c.desert);
+        // Exposed stone first. Moss is a separate habitat-gated island mask,
+        // rather than a second mossy coating across every damp cliff.
+        v.first = LAYER_CLIFF_DOLOMITE;
+        v.s1 = steep * 0.90;
         const float arid = c.desert + patch * 0.3;
         v.second = arid > 0.4 ? LAYER_CLIFF_DESERT : LAYER_CLIFF_DOLOMITE;
         v.s2 = steep * saturate(abs(arid - 0.4) * 8.0);
@@ -331,7 +346,7 @@ GroundVariants groundVariants(int cls, GroundContext c, float2 xy)
 
 #include "terrain_biomes_code.hlsli"
 
-MaterialSample sampleGroundVariants(GroundVariants v, int cls, float3 p, float3 normal,
+MaterialSample sampleGroundVariants(GroundVariants v, int cls, GroundFrame p, float3 normal,
                                     float3 dx, float3 dy)
 {
     const float w1 = v.s1, w2 = v.s2 * (1.0 - v.s1);
@@ -373,9 +388,10 @@ GroundVariants engineVariants(int cls, GroundContext c, float2 xy)
 
 // A class as one category draws it: its soils and slopes over the engine's
 // variants, then its tints and strata.
-MaterialSample sampleCategoryClass(int category, int cls, GroundContext c, float3 p, float3 normal,
+MaterialSample sampleCategoryClass(int category, int cls, GroundContext c, GroundFrame at, float3 normal,
                                    float3 dx, float3 dy)
 {
+    const float3 p = groundFrameWorld(at);
     GroundVariants v = engineVariants(cls, c, p.xy);
     const float footprint = max(length(dx.xy), length(dy.xy));
     const bool changed = biomeClassVariants(category, cls, c, p.xy, footprint, v);
@@ -391,12 +407,12 @@ MaterialSample sampleCategoryClass(int category, int cls, GroundContext c, float
         }
     }
 #endif
-    MaterialSample s = sampleGroundVariants(v, cls, p, normal, dx, dy);
+    MaterialSample s = sampleGroundVariants(v, cls, at, normal, dx, dy);
     if (changed) biomeClassFinish(category, cls, c, p, s.colour);
     return s;
 }
 
-MaterialSample sampleGroundClass(int cls, GroundContext c, float3 p, float3 normal,
+MaterialSample sampleGroundClass(int cls, GroundContext c, GroundFrame p, float3 normal,
                                  float3 dx, float3 dy)
 {
 #ifdef BIOME_ANY_GROUND
@@ -417,10 +433,10 @@ MaterialSample sampleGroundClass(int cls, GroundContext c, float3 p, float3 norm
         return r;
     }
 #endif
-    return sampleGroundVariants(engineVariants(cls, c, p.xy), cls, p, normal, dx, dy);
+    return sampleGroundVariants(engineVariants(cls, c, groundFrameWorld(p).xy), cls, p, normal, dx, dy);
 }
 
-Ground groundHereIn(float4 weights0, float2 weights1, float3 worldPos, float3 normal,
+Ground groundHereIn(float4 weights0, float2 weights1, GroundFrame at, float3 normal,
                     GroundContext context)
 {
     const float total = dot(max(weights0, 0.0), float4(1, 1, 1, 1)) +
@@ -428,16 +444,19 @@ Ground groundHereIn(float4 weights0, float2 weights1, float3 worldPos, float3 no
     weights0 = max(weights0, 0.0) / max(total, 1e-5);
     weights1 = max(weights1, 0.0) / max(total, 1e-5);
     if (total < 1e-5) weights0.x = 1.0;
-    const float2 worldXY = worldPos.xy;
+    const float2 worldXY = groundFrameWorld(at).xy;
     // Filter the mask in its own coordinates, not the warped texture domain.
-    const float footprint = max(length(ddx(worldXY)), length(ddy(worldXY)));
+    // Derivatives of the frame's offset: of the world coordinate they are
+    // nought across a 1.6 cm step and a spike at its edge.
+    const float footprint = max(length(ddx(at.local.xy)), length(ddy(at.local.xy)));
     const float weightFootprint = gWeightGradients
         ? footprint * (dot(abs(gWeightDX0) + abs(gWeightDY0), float4(1,1,1,1)) +
                        dot(abs(gWeightDX1) + abs(gWeightDY1), float2(1,1))) / max(total, 1e-5)
         : dot(fwidth(weights0), float4(1,1,1,1)) + dot(fwidth(weights1), float2(1,1));
     // Warp measured in metres, not texture turns. Never scale it with zoom.
-    const float3 p = worldPos + float3(domainWarp(worldXY / 47.0) * 0.35, 0.0);
-    const float3 dx = ddx(p), dy = ddy(p);
+    GroundFrame p = at;
+    p.local.xy += domainWarp(worldXY / 47.0) * 0.35;
+    const float3 dx = ddx(p.local), dy = ddy(p.local);
     float w[6] = {weights0.x, weights0.y, weights0.z, weights0.w, weights1.x, weights1.y};
     Ground here;
     here.top = 0;
@@ -458,7 +477,6 @@ Ground groundHereIn(float4 weights0, float2 weights1, float3 worldPos, float3 no
     // A small minimum keeps narrow rock/sand borders visibly soft as well.
     const float3 style = groundEdgeStyle(here.top, here.under);
     float width = min(0.90, max(0.20, 0.5 * (profileA.y + profileB.y)) * style.x);
-    const MaterialSample top = sampleGroundClass(here.top, context, p, normal, dx, dy);
 
     const float gap = best - next;
     const float border = (1.0 - smoothstep(width, width * 2.0, gap)) *
@@ -515,6 +533,12 @@ Ground groundHereIn(float4 weights0, float2 weights1, float3 worldPos, float3 no
                           smoothstep(0.0, 0.10, next);
     const float swingMetres = min(max(amount / gapSlope, bandMetres * 0.9), reach);
     const float intrusionMetres = mask * swingMetres * nearTie * orientation;
+    // The materials are sampled only now, after every screen derivative this
+    // blend takes: their reads sit behind per-pixel branches (the distance
+    // octaves, the variants), and a derivative taken after a branch a quad
+    // did not take together is not one Metal promises - the tie line moved
+    // by a few hundredths where it was.
+    const MaterialSample top = sampleGroundClass(here.top, context, p, normal, dx, dy);
     [branch] if (next <= 0.0) {
         here.mix = 1.0;
         here.colour = top.colour;
@@ -566,9 +590,9 @@ Ground groundHereIn(float4 weights0, float2 weights1, float3 worldPos, float3 no
     // earth. Each side's scanned height biases its share, so a border is
     // crisp and organic close up instead of a soft double exposure. Far away
     // the heights are mip-averaged to their mean and this is the plain mix.
-    const float contrast = 0.65;
-    const float ha = top.properties.b * contrast + here.mix;
-    const float hb = under.properties.b * contrast + (1.0 - here.mix);
+    const float contrast = 0.25 * (4.0 * here.mix * (1.0 - here.mix));
+    const float ha = top.borderHeight * contrast + here.mix;
+    const float hb = under.borderHeight * contrast + (1.0 - here.mix);
     const float ridge = max(ha, hb) - 0.18;
     const float wa = max(ha - ridge, 0.0), wb = max(hb - ridge, 0.0);
     const float drawn = wa / max(wa + wb, 1e-5);
@@ -580,7 +604,7 @@ Ground groundHereIn(float4 weights0, float2 weights1, float3 worldPos, float3 no
 
 Ground groundHere(float4 weights0, float2 weights1, float3 worldPos, float3 normal)
 {
-    return groundHereIn(weights0, weights1, worldPos, normal, noGroundContext());
+    return groundHereIn(weights0, weights1, groundFrameOfWorld(worldPos), normal, noGroundContext());
 }
 
 // Ground that is standing in for a level not yet cut. Same in every way but the
@@ -611,6 +635,9 @@ float4 terrainSurface(TerrainOut input)
     }
 #endif
     const float3 worldPos = float3(input.worldXY, input.worldHeight);
+    // The same point to a fraction of a millimetre (world_frame.hlsli): every
+    // texture coordinate, small mark and screen derivative below reads this.
+    const GroundFrame frame = groundFrame(input.worldXY, input.frameXY, input.worldHeight);
 
     // The shore, as a band of ground rather than a line where the water stops.
     //
@@ -629,8 +656,9 @@ float4 terrainSurface(TerrainOut input)
     const float aboveWater = -input.waterDepth;
     // How much ground one pixel covers. Wanted this early because everything
     // below that tears a boundary with noise has to be told what it may still
-    // resolve; a tear finer than this is not a tear, it is a shimmer.
-    const float pixel = max(length(ddx(input.worldXY)), length(ddy(input.worldXY)));
+    // resolve; a tear finer than this is not a tear, it is a shimmer. From
+    // the frame's offset: derivatives of the world coordinate are noise.
+    const float pixel = max(length(ddx(frame.local.xy)), length(ddy(frame.local.xy)));
     const float shoreBreak = fbmAt(input.worldXY / 19.0 +
                                    domainWarp(input.worldXY / 19.0) * 0.35) * 0.62 +
                              filteredNoiseAt(input.worldXY / 5.7 + 31.4, pixel / 5.7) * 0.38;
@@ -681,6 +709,19 @@ float4 terrainSurface(TerrainOut input)
     shoreWeights0.y = saturate(shoreWeights0.y * (1.0 + hollow * 0.30));  // soil collects
     shoreWeights0.w = saturate(shoreWeights0.w * (1.0 - hollow * 0.35) +
                                nose * steepness * 0.35);                  // rock comes through
+    // A coherent face on steep terrain. Broad noise only perturbs its edge;
+    // concave feet retain soil, convex upper shoulders retain some turf.
+    const float faceEdge = (organicNoise(input.worldXY / 32.0) - 0.5) * 0.035;
+    const float face = smoothstep(0.14, 0.36, steepness + faceEdge);
+    const float turfCap = nose * (1.0 - smoothstep(0.20, 0.36, steepness));
+    const float exposedFace = face * (1.0 - hollow * 0.50) * (1.0 - turfCap * 0.45) *
+                              (1.0 - saturate(shoreWeights1.y));
+    shoreWeights0.xyz *= 1.0 - exposedFace * 0.92;
+    shoreWeights1.x *= 1.0 - exposedFace * 0.92;
+    shoreWeights0.w += exposedFace * 1.4;
+    const float footSoil = hollow * smoothstep(0.04, 0.12, steepness) *
+                          (1.0 - smoothstep(0.18, 0.34, steepness));
+    shoreWeights0.y += footSoil * 0.35 * (1.0 - shoreBand);
     const float3 slopeNormal = normalize(input.normal);
     GroundContext context;
     // environment.w is the climate field's constant one; a zeroed probe
@@ -697,7 +738,7 @@ float4 terrainSurface(TerrainOut input)
     context.categoryB = biome.groundB;
     context.categoryShare = biome.groundShare;
     context.forestBiome = biome.forest;
-    Ground ground = groundHereIn(shoreWeights0, shoreWeights1, worldPos, slopeNormal, context);
+    Ground ground = groundHereIn(shoreWeights0, shoreWeights1, frame, slopeNormal, context);
     float3 colour = ground.colour;
 #ifdef BIOMES_ENABLED
     // The category's look: a tint and how far it is pulled to grey, blended
@@ -726,8 +767,11 @@ float4 terrainSurface(TerrainOut input)
         // fifths of the way to the climate's colour (the scan keeps its grain).
         const float lush = saturate((context.moisture - 0.04) * 1.8) * (1.0 - context.desert);
         const float3 season = lerp(float3(0.98, 0.86, 0.50), float3(0.58, 1.00, 0.36), lush);
-        const float blade = dot(colour, float3(0.30, 0.59, 0.11));
-        const float3 tinted = lerp(colour, blade * season * 1.22, 0.80);
+        // A shift of the scan's own colours, not a repaint: replacing the
+        // chroma with one season colour (four fifths of it) turned brown
+        // leaves and green blades into one olive mush and lost the scan.
+        const float3 hue = season / max(dot(season, float3(0.30, 0.59, 0.11)), 1e-3);
+        const float3 tinted = colour * lerp(float3(1, 1, 1), hue, 0.55);
         colour = lerp(colour, tinted, grassCover);
     }
     const float rockCover = materialCoverage(3, ground.top, ground.under, ground.mix);
@@ -815,13 +859,15 @@ float4 terrainSurface(TerrainOut input)
         materialCoverage(4, ground.top, ground.under, ground.mix));
     const float patch = smoothstep(0.45, 0.72, noiseAt(input.worldXY / 13.0 + 37.1));
     const float washed = shoreBand * shoreFlat * smoothstep(0.0, 0.8, input.waterDepth);
-    const float2 scree = stoneScatter(input.worldXY, 0.85,
+    const float2 scree = stoneScatter(frame.anchor, frame.local.xy, 0.85,
         exposed * patch * (cliffFoot * 0.18 + cliffLip * 0.06), 3.1, pixel);
-    const float2 gravel = stoneScatter(input.worldXY, 1.7,
+    const float2 gravel = stoneScatter(frame.anchor, frame.local.xy, 1.7,
         exposed * patch * washed * 0.12, 21.7, pixel);
     // No extra rock-colour overlay or fake multi-metre boulders. The substrate
-    // already contains stones; just let occasional fragments catch the light.
-    shadingNormal = reliefNormal(shadingNormal, worldPos, scree.y + gravel.y, 0.35);
+    // already contains stones. (These used to tilt the normal by the screen
+    // derivatives of their sub-metre height - per pixel-quad noise that
+    // speckled every meadow black; the stones stay as instanced pebbles.)
+    (void)scree; (void)gravel;
 
     // Ground clutter - requirement 11, "remove the feeling of a clean texture".
     //
@@ -840,40 +886,48 @@ float4 terrainSurface(TerrainOut input)
         // and dropping. Where the meadow is, patchy rather than even, and it
         // takes the ground's own colour down rather than adding a new one -
         // leaf litter is the same palette as what shed it.
-        const float2 litter = stoneScatter(input.worldXY, 0.55,
+        const float2 litter = stoneScatter(frame.anchor, frame.local.xy, 0.55,
                 grassy * 0.20 * saturate(input.foliage.z + input.foliage.w + 0.3), 91.3, pixel);
         groundColour *= 1.0 - litter.x * 0.06;
         // Tussocks: grass grows in clumps on damp ground, not as a lawn. A
         // lighter, drier crown on a small dome, which is what a tussock is from
         // above.
-        const float2 tussock = stoneScatter(input.worldXY, 0.9,
+        const float2 tussock = stoneScatter(frame.anchor, frame.local.xy, 0.9,
                 grassy * (0.10 + 0.15 * hollow), 57.7, pixel);
         groundColour *= 1.0 + tussock.x * 0.04;
         // Mud: standing water leaves it, so it goes where the ground is damp and
         // flat - the floor of a hollow, the back of a bank - and nowhere on a
         // slope, because mud does not stay on one.
-        const float2 mud = stoneScatter(input.worldXY, 2.2,
+        const float2 mud = stoneScatter(frame.anchor, frame.local.xy, 2.2,
                 hollow * (1.0 - smoothstep(0.06, 0.22, steepness)) * 0.20, 33.1, pixel);
         groundColour *= 1.0 - mud.x * 0.06;
         // The strand line: shells and driftwood, only on a shore, and only just
         // above the water where the last tide left them.
         const float strand = shoreBand * (1.0 - smoothstep(0.0, 0.9, input.waterDepth)) *
                              saturate(shoreWeights0.z * 1.5);
-        const float2 flotsam = stoneScatter(input.worldXY, 1.4, strand * 0.12, 77.5, pixel);
+        const float2 flotsam = stoneScatter(frame.anchor, frame.local.xy, 1.4, strand * 0.12, 77.5, pixel);
         groundColour *= 1.0 + flotsam.x * 0.04;
         // All of it sits on the ground rather than in it.
         clutterHeight = (litter.y * 0.4 + tussock.y + flotsam.y * 0.6) * detail;
     }
-    shadingNormal = reliefNormal(shadingNormal, worldPos, clutterHeight, 0.20);
+    // No relief from the clutter: its height is a scatter of 0.5-1 m cells,
+    // and a normal from the screen derivatives of that is a different facet
+    // every pixel quad - a black-and-gold crawl over the whole meadow that
+    // buried the scan. The scan's own normals carry the ground's grain.
+    (void)clutterHeight;
 
     // Decals of the category and the decor layer (engine/biomes): stored
     // nowhere, each cell of each set hashing itself on the ground.
     float decalGlow = 0.0, decalMetal = 0.0;
     float decalRough = -1.0;
+    float decalCoverage = 0.0;
+    float decalAo = 1.0;
 #if defined(BIOMES_ENABLED) && defined(BIOME_ANY_DECALS)
     [branch] if (biome.any) {
         BiomeDecalIn decalIn;
         decalIn.xy = input.worldXY;
+        decalIn.anchor = frame.anchor;
+        decalIn.local = frame.local.xy;
         decalIn.pixel = pixel;
         decalIn.steepness = steepness;
         decalIn.aboveWater = aboveWater;
@@ -886,7 +940,10 @@ float4 terrainSurface(TerrainOut input)
             groundColour = lerp(groundColour, decals.colour, decals.cover);
             decalGlow = decals.emissive;
             decalMetal = decals.metal * decals.cover;
-            decalRough = lerp(-1.0, decals.rough, decals.cover);
+            decalRough = decals.rough;
+            decalCoverage = decals.cover;
+            decalAo = decals.ao;
+            shadingNormal = normalize(shadingNormal + decals.normalDelta);
         }
     }
 #endif
@@ -896,10 +953,37 @@ float4 terrainSurface(TerrainOut input)
     const float weatherWet=input.weather.y*input.weather.w;
     const float snow=wxSnowMask(input.weather.x,normal.z,input.waterDepth,
                                noiseAt(input.worldXY/11.0))*input.weather.w;
-    const float3 worldDx = ddx(worldPos), worldDy = ddy(worldPos);
+    const float3 worldDx = ddx(frame.local), worldDy = ddy(frame.local);
     float4 surfaceProperties = ground.properties;
+    surfaceProperties.r *= decalAo;
+    // Moss remains a material, with the scan's normal/roughness/AO. Ledges,
+    // damp hollows and shaded faces admit it; the patch mask stays in world
+    // space at every terrain LOD and is suppressed under snow and water.
+    const float mossHabitat=environmentMossHabitat(context.moisture,context.forest,0.0,snow)*
+                           (1.0-context.desert)*smoothstep(-0.1,0.4,aboveWater);
+    // Creeping islands along sheltered stone: tens of metres across, with
+    // smaller lobes at their borders, rather than sub-metre green speckle.
+    const float2 creep = float2(dot(input.worldXY, float2(0.8, 0.6)), input.worldHeight * 1.6);
+    const float2 warpedCreep = creep + domainWarp(input.worldXY / 48.0) * 9.0;
+    const float mossPatch = filteredNoiseAt(warpedCreep / 18.0, pixel / 18.0) * 0.80 +
+                            filteredNoiseAt(warpedCreep / 7.0 + 11.3, pixel / 7.0) * 0.20;
+    const float mossCover=environmentMossSurface(mossHabitat,normal.z,
+        environmentMossShelter(normal.x,normal.y,normal.z),smoothstep(0.40,0.68,mossPatch))*rockCover*
+        smoothstep(0.55,0.82,context.moisture);
+    [branch] if (mossCover>0.01) {
+#ifdef TERRAIN_LAYER_MS_TILEABLE_MOSS
+        const MaterialSample moss=sampleGroundLayer(TERRAIN_LAYER_MS_TILEABLE_MOSS,3,frame,normal,worldDx,worldDy);
+        const float maskedCover=mossCover*moss.properties.a;
+#else
+        const MaterialSample moss=sampleGroundLayer(LAYER_CLIFF_MOSSY,3,frame,normal,worldDx,worldDy);
+        const float maskedCover=mossCover;
+#endif
+        groundColour=lerp(groundColour,moss.colour,maskedCover*0.7);
+        shadingNormal=normalize(lerp(shadingNormal,moss.normal,maskedCover));
+        surfaceProperties=lerp(surfaceProperties,moss.properties,maskedCover);
+    }
     [branch] if (snow > 0.001) {
-        const MaterialSample snowSurface = sampleGroundMaterial(5, worldPos, normal, worldDx, worldDy);
+        const MaterialSample snowSurface = sampleGroundMaterial(5, frame, normal, worldDx, worldDy);
         groundColour = lerp(groundColour, snowSurface.colour, snow);
         surfaceProperties = lerp(surfaceProperties, snowSurface.properties, snow);
     }
@@ -919,7 +1003,7 @@ float4 terrainSurface(TerrainOut input)
     const float roughNoise = filteredMaterialNoise(input.worldXY / 0.7, pixel / 0.7);
     float materialRoughness = clamp(surfaceProperties.g + (roughNoise - 0.5) * 0.06 -
                                     wetness * 0.18, 0.38, 0.98);
-    if (decalRough >= 0.0) materialRoughness = lerp(materialRoughness, decalRough, saturate(decalRough + 1.0));
+    if (decalRough >= 0.0) materialRoughness = lerp(materialRoughness, decalRough, decalCoverage);
     // AO removes ambient light only. Do not multiply photographed albedo by
     // another black cavity layer or fade AO away with camera distance.
     const float skyVisibility = lerp(1.0, surfaceProperties.r, 0.38);

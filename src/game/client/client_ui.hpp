@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "engine/ui/ui.hpp"
+#include "game/client/terrain_panel.hpp"
 #include "game/generation/world_map_gen.hpp"
 #include "game/generation/world_layout.hpp"
 #include "game/world/terrain_brush.hpp"
@@ -39,9 +40,10 @@ enum class WorldMode { Explore, Edit };
 // where plates meet; the climate and the water; then the ground by hand at any
 // scale, and what stands on it. Each shows what the ones before made.
 // Import is the other way to the same shape: height and control maps made
-// elsewhere, put into the regions a person selects (D158).
-enum class EditTab { Size, Land, Coast, Mountains, Water, Terrain, Objects, Import };
-inline constexpr int kEditTabs = 8;
+// elsewhere, put into the regions a person selects (D158) - or made by the
+// generator there and then, a layer at a time (D182).
+enum class EditTab { Size, Land, Coast, Mountains, Water, Terrain, Objects, Import, Ground };
+inline constexpr int kEditTabs = 9;
 // The tabs that paint the world's shape (its layers), rather than the ground
 // itself or what stands on it.
 inline bool shapeTab(EditTab tab) { return tab <= EditTab::Water || tab == EditTab::Import; }
@@ -89,6 +91,18 @@ struct ImportForm {
     float featherKm = 4;                              // the selection's edge blended over this
 };
 
+// The Import tab's other way in: the same maps made by the generator instead
+// of read from pictures (generation/world_procedural.hpp), a layer at a time -
+// heights, then control maps - into the selection or the whole world.
+struct GenerateForm {
+    int preset = -1;                                  // into presets; -1 until first shown
+    std::string seed = "1";                           // a number, or any text (hashed)
+    bool ownSeeds = true;                             // each region its seed derived from it
+    float seaPercent = 71, erosionPasses = 3, rainPercent = 100;
+    float variation = 100;                            // per cent: how far the control maps wander
+    float featherKm = 4;                              // the import form's, when asked
+};
+
 // What the stage tabs show, from the world editor.
 struct ShapeView {
     std::int32_t regionsX = 1, regionsY = 1;
@@ -116,6 +130,9 @@ struct ShapeActions {
     std::optional<std::pair<double, double>> latitude;    // north degrees, km per degree
     // The Import tab.
     std::optional<ImportForm> import;                     // import this into the selection
+    // Generate instead of importing: heights (phase 1) or control maps over
+    // the heights there are (phase 2), into the selection or everywhere.
+    std::optional<GenerateForm> generateHeights, generateControls;
     std::optional<std::string> exportTo;                  // export the selection (or all) here
     bool clearImport = false;
     // The selected imported regions (or all of them) taken to a stage:
@@ -183,6 +200,10 @@ public:
     MountainTool mountains;
     ClimateTool climate;
     ImportForm importForm;
+    GenerateForm generateForm;
+    // The Ground tab: the control maps' categories, soils, materials and the
+    // texture laying, edited live, with presets (terrain_panel.hpp).
+    TerrainPanel ground;
 
     // Shows a line for a few seconds under the top bar ("Saved", an error).
     void toast(std::string text, double now, bool bad = false);

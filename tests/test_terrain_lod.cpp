@@ -1,3 +1,8 @@
+#include <vector>
+#include <stdexcept>
+#include <optional>
+#include <algorithm>
+#include "engine/render/geometry/range_pool.hpp"
 #include "framework.hpp"
 
 #include <cmath>
@@ -413,4 +418,88 @@ TEST(terrain_detail_residency_hold_protects_without_counting_as_a_use) {
     CHECK(after.has_value());
     CHECK_EQ(after->replacedKey.value_or(0), std::int64_t(30));
     CHECK(pages.find(20).has_value());          // the pin still holds it
+}
+
+TEST(range_pool_hands_out_aligned_ranges_and_coalesces_on_release) {
+    engine::RangePool pool(4096, 256);
+    std::optional<std::uint32_t> page;
+    const auto a = pool.allocate(100, page);
+    CHECK(page.has_value());                       // first range: a page was added
+    CHECK_EQ(a.offset, std::uint64_t(0));
+    CHECK_EQ(a.bytes, std::uint64_t(256));         // rounded to the alignment
+    const auto b = pool.allocate(1000, page);
+    CHECK(!page.has_value());                      // same page
+    CHECK_EQ(b.offset, std::uint64_t(256));
+    const auto c = pool.allocate(256, page);
+    CHECK_EQ(c.offset, std::uint64_t(256 + 1024));
+    CHECK_EQ(pool.used(), std::uint64_t(256 + 1024 + 256));
+    pool.release(b);
+    pool.release(a);                               // merges with b's hole
+    const auto d = pool.allocate(1280, page);      // exactly a + b
+    CHECK(!page.has_value());
+    CHECK_EQ(d.offset, std::uint64_t(0));
+    pool.release(d);
+    pool.release(c);
+    CHECK_EQ(pool.used(), std::uint64_t(0));
+    CHECK_EQ(pool.freeRanges(), std::size_t(1));   // one hole: the whole page
+}
+
+TEST(range_pool_rejects_double_release_and_gives_big_requests_their_own_page) {
+    engine::RangePool pool(4096, 256);
+    std::optional<std::uint32_t> page;
+    const auto a = pool.allocate(512, page);
+    pool.release(a);
+    bool threw = false;
+    try { pool.release(a); } catch (const std::logic_error&) { threw = true; }
+    CHECK(threw);
+    const auto big = pool.allocate(10000, page);
+    CHECK(page.has_value());
+    CHECK_EQ(pool.pageSize(*page), std::uint64_t(10240));
+    CHECK_EQ(big.offset, std::uint64_t(0));
+    pool.release(big);
+    // Both pages empty: keep one, drop the other.
+    const auto dropped = pool.trim(1);
+    CHECK_EQ(dropped.size(), std::size_t(1));
+    CHECK_EQ(pool.livePages(), std::size_t(1));
+    // A dropped page's slot is reused rather than growing the page list.
+    const auto again = pool.allocate(9000, page);
+    CHECK(page.has_value());
+    CHECK_EQ(*page, dropped.front());
+    pool.release(again);
+}
+
+TEST(range_pool_churn_never_overlaps_and_settles) {
+    // Meshes of every size coming and going, as the terrain cache does: no
+    // two live ranges may overlap, and released space must be found again
+    // instead of the pool growing without end.
+    engine::RangePool pool(1 << 20, 256);
+    std::vector<engine::RangePool::Range> live;
+    std::uint32_t seed = 12345;
+    const auto next = [&] { seed = seed * 1664525u + 1013904223u; return seed >> 8; };
+    std::optional<std::uint32_t> page;
+    std::size_t pagesAfterWarmup = 0;
+    for (int step = 0; step < 20000; ++step) {
+        if (live.size() < 200 || next() % 2) {
+            live.push_back(pool.allocate(256 + next() % 40000, page));
+        } else {
+            const auto at = next() % live.size();
+            pool.release(live[at]);
+            live.erase(live.begin() + long(at));
+        }
+        if (step == 5000) pagesAfterWarmup = pool.livePages();
+    }
+    std::vector<engine::RangePool::Range> sorted = live;
+    std::sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) {
+        return a.page != b.page ? a.page < b.page : a.offset < b.offset;
+    });
+    for (std::size_t i = 1; i < sorted.size(); ++i)
+        if (sorted[i].page == sorted[i - 1].page)
+            CHECK(sorted[i - 1].offset + sorted[i - 1].bytes <= sorted[i].offset);
+    std::uint64_t sum = 0;
+    for (const auto& r : live) sum += r.bytes;
+    CHECK_EQ(pool.used(), sum);
+    CHECK(pool.livePages() <= pagesAfterWarmup + 2);   // settled, not growing
+    for (const auto& r : live) pool.release(r);
+    CHECK_EQ(pool.used(), std::uint64_t(0));
+    CHECK_EQ(pool.freeRanges(), pool.livePages());     // every page one hole again
 }

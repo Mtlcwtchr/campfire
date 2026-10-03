@@ -1,6 +1,7 @@
 #include "engine/render/device.hpp"
 
 #include <SDL3/SDL_gpu.h>
+#include <SDL3/SDL_timer.h>
 #include <SDL3_image/SDL_image.h>
 #include <SDL3_shadercross/SDL_shadercross.h>
 
@@ -57,8 +58,26 @@ bool putImage(SDL_GPUDevice* device, SDL_GPUTexture* texture, Uint32 layer, Uint
     return true;
 }
 
-// How big the first file is, which is how big the texture has to be.
+// PNG arrays contain hundreds of layers. Reading dimensions must not decode
+// every image before putImage decodes it again for the actual upload.
 bool sizeOf(const std::filesystem::path& path, int& width, int& height) {
+    unsigned char header[24]{};
+    std::ifstream file(path, std::ios::binary);
+    if (file.read(reinterpret_cast<char*>(header), sizeof(header)) &&
+        std::memcmp(header, "\x89PNG\r\n\x1a\n", 8) == 0 &&
+        header[8] == 0 && header[9] == 0 && header[10] == 0 && header[11] == 13 &&
+        std::memcmp(header + 12, "IHDR", 4) == 0) {
+        const auto read32 = [](const unsigned char* p) {
+            return std::uint32_t(p[0]) << 24 | std::uint32_t(p[1]) << 16 |
+                   std::uint32_t(p[2]) << 8 | std::uint32_t(p[3]);
+        };
+        const auto w = read32(header + 16), h = read32(header + 20);
+        if (w > 0 && h > 0 && w <= std::uint32_t(std::numeric_limits<int>::max()) &&
+            h <= std::uint32_t(std::numeric_limits<int>::max())) {
+            width = int(w); height = int(h);
+            return true;
+        }
+    }
     SDL_Surface* surface = IMG_Load(path.string().c_str());
     if (!surface) return false;
     width = surface->w;
@@ -79,9 +98,17 @@ bool Device::openHeadless(std::uint32_t width, std::uint32_t height, const std::
 }
 
 void Device::waitInFlight(std::size_t frames) {
+    const bool metal = std::strcmp(SDL_GetGPUDeviceDriver(device_), "metal") == 0;
     while (submissions_.size() > frames) {
         SDL_GPUFence* fence = submissions_.front().fence;
-        SDL_WaitForGPUFences(device_, true, &fence, 1);
+        // SDL's Metal fence wait spins on an atomic. A short sleeping poll
+        // leaves the CPU available to terrain/scatter workers while retaining
+        // the same limit on in-flight frames. Other backends keep their wait.
+        if (metal) {
+            while (!SDL_QueryGPUFence(device_, fence)) SDL_DelayNS(100000);
+        } else {
+            SDL_WaitForGPUFences(device_, true, &fence, 1);
+        }
         completedSubmission();
     }
 }

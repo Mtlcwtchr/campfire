@@ -354,7 +354,7 @@ TEST(scene_placement_camera_motion_retains_completed_regions_and_immutable_lease
     CHECK(placement.read()->complete);
     placement.updateRegions({},true);
     CHECK(placement.read()->regions.empty());
-    CHECK(placement.read()->scatter.objects.empty());
+    CHECK(placement.read()->mergedObjects().empty());
     CHECK(placement.read()->complete);
 }
 
@@ -374,7 +374,7 @@ TEST(scene_placement_region_members_equal_a_monolithic_scatter_without_duplicate
     std::sort(expected.begin(),expected.end(),[](const auto& a,const auto& b) { return a.id<b.id; });
     CHECK(!expected.empty());
     CHECK_EQ(placement.read()->regions.size(),std::size_t(4));
-    CHECK_EQ(placement.read()->scatter.objects,expected);
+    CHECK_EQ(placement.read()->mergedObjects(),expected);
 }
 
 TEST(scene_placement_parallel_jobs_match_a_monolithic_scatter_while_priority_changes) {
@@ -404,7 +404,7 @@ TEST(scene_placement_parallel_jobs_match_a_monolithic_scatter_while_priority_cha
     auto expected=system.read()->scatter({0,0,12*128,12*128}).objects;
     std::sort(expected.begin(),expected.end(),[](const auto& a,const auto& b) { return a.id<b.id; });
     CHECK(!expected.empty());
-    CHECK_EQ(snapshot->scatter.objects,expected);
+    CHECK_EQ(snapshot->mergedObjects(),expected);
     std::size_t population=0;
     for (const auto count:snapshot->scatter.populations) population+=count;
     CHECK_EQ(population,expected.size());
@@ -424,15 +424,17 @@ TEST(scene_placement_ecology_edit_invalidates_one_region_and_skips_removed_ids) 
     };
     CHECK(await(complete));
     const auto before=placement.read();
-    CHECK(!before->scatter.objects.empty());
-    const auto removed=before->scatter.objects.front();
+    const auto beforeObjects=before->mergedObjects();
+    CHECK(!beforeObjects.empty());
+    const auto removed=beforeObjects.front();
     world->ecology().remove(removed.id,removed.x,removed.y);
     CHECK(await(complete));
     const auto after=placement.read();
     CHECK(after!=before);
     CHECK(after->objectsVersion>before->objectsVersion);
-    CHECK_EQ(after->scatter.objects.size()+1,before->scatter.objects.size());
-    CHECK(std::none_of(after->scatter.objects.begin(),after->scatter.objects.end(),
+    const auto afterObjects=after->mergedObjects();
+    CHECK_EQ(afterObjects.size()+1,beforeObjects.size());
+    CHECK(std::none_of(afterObjects.begin(),afterObjects.end(),
         [&](const auto& object){return object.id==removed.id;}));
     for (const auto& region:regions) {
         const bool edited=removed.x>=region.minX && removed.x<region.maxX;

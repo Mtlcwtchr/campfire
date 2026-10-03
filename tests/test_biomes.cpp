@@ -76,7 +76,9 @@ TEST(biomes_content_registry_is_valid) {
     // The ids the hand maps were painted with (ground_legend.json).
     CHECK(registry->category("wastes") && registry->category("wastes")->id == 6);
     CHECK(registry->category("crater") && registry->category("crater")->id == 20);
-    CHECK_EQ(registry->textureLayers().size(), std::size_t(22));
+    // 22 ground scans and the environment pack's moss atlas, masked moss,
+    // forest moss patch and fallen-twig decal.
+    CHECK_EQ(registry->textureLayers().size(), std::size_t(26));
 }
 
 TEST(biomes_categories_inherit_from_their_parent) {

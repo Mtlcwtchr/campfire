@@ -16,6 +16,7 @@ float4 SlopeProbePS(float4 pixel : SV_Position) : SV_Target0
     TerrainOut input=(TerrainOut)0;
     input.position=pixel;
     input.worldXY=cameraPS.xy+xy;
+    input.frameXY=input.worldXY;   // frame origin nought: the world as it is
     input.worldHeight=cameraPS.z+xy.x*slope;
     input.normal=normalize(float3(-slope,0,1));
     input.weights0=float4(0,0,0,1);

@@ -378,11 +378,12 @@ TEST(ground_edits_trees_are_placed_again_on_the_ground_dug_under_them) {
     CHECK(await([&] { return complete() && placement.read() != before; }));
     const auto after = placement.read();
     std::size_t raised = 0, untouched = 0;
-    for (const auto& was : before->scatter.objects) {
-        const auto now = std::find_if(after->scatter.objects.begin(), after->scatter.objects.end(),
+    const auto beforeObjects = before->mergedObjects(), afterObjects = after->mergedObjects();
+    for (const auto& was : beforeObjects) {
+        const auto now = std::find_if(afterObjects.begin(), afterObjects.end(),
                                       [&](const auto& o) { return o.id == was.id; });
-        CHECK(now != after->scatter.objects.end());
-        if (now == after->scatter.objects.end()) continue;
+        CHECK(now != afterObjects.end());
+        if (now == afterObjects.end()) continue;
         if (inRegion(was, regions[0])) { CHECK(std::abs(now->z - was.z - 5) < 0.5); ++raised; }
         if (inRegion(was, regions[1])) { CHECK_EQ(now->z, was.z); ++untouched; }
     }

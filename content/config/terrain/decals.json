@@ -163,6 +163,38 @@
    ]
   },
   {
+   "name": "animal_trails",
+   "kind": "trail",
+   "cell_m": 84,
+   "density": 0.32,
+   "size_m": [
+    0.4,
+    0.85
+   ],
+   "cluster": {
+    "cell_m": 180,
+    "share": 0.62
+   },
+   "angle": 32,
+   "colour": [
+    0.2,
+    0.15,
+    0.1
+   ],
+   "opacity": 0.65,
+   "rough": 0.9,
+   "slope": [
+    0.0,
+    0.35
+   ],
+   "under_foliage": 0.45,
+   "edge_noise": 0.75,
+   "fade_m": [
+    0,
+    450
+   ]
+  },
+  {
    "name": "dry_tufts",
    "kind": "speckle",
    "cell_m": 1.6,
@@ -180,6 +212,167 @@
    "fade_m": [
     0,
     400
+   ]
+  },
+  {
+   "name": "fallen_twigs",
+   "kind": "texture",
+   "texture": "ms_fallen_branches",
+   "cell_m": 6,
+   "density": 0.28,
+   "size_m": [
+    1.6,
+    2.4
+   ],
+   "cluster": {
+    "cell_m": 64,
+    "share": 0.55
+   },
+   "colour": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "opacity": 0.9,
+   "slope": [
+    0.0,
+    0.55
+   ],
+   "under_foliage": 0.55,
+   "fade_m": [
+    0,
+    250
+   ]
+  },
+  {
+   "name": "forest_moss_patch",
+   "kind": "texture",
+   "texture": "ms_moss_patch",
+   "cell_m": 2,
+   "density": 0.24,
+   "size_m": [
+    0.4,
+    0.65
+   ],
+   "cluster": {
+    "cell_m": 16,
+    "share": 0.6
+   },
+   "colour": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "opacity": 0.9,
+   "slope": [
+    0.0,
+    0.3
+   ],
+   "under_foliage": 0.65,
+   "fade_m": [
+    0,
+    120
+   ]
+  },
+  {
+   "name": "fine_moss",
+   "kind": "texture",
+   "texture": "ms_moss_atlas",
+   "cell_m": 1.2,
+   "density": 0.18,
+   "size_m": [
+    0.22,
+    0.34
+   ],
+   "cluster": {
+    "cell_m": 12,
+    "share": 0.5
+   },
+   "colour": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "opacity": 0.9,
+   "slope": [
+    0.0,
+    0.2
+   ],
+   "under_foliage": 0.65,
+   "fade_m": [
+    0,
+    60
+   ]
+  },
+  {
+   "name": "bog_pools",
+   "kind": "stain",
+   "cell_m": 70,
+   "density": 0.55,
+   "size_m": [
+    12,
+    45
+   ],
+   "colour": [
+    0.05,
+    0.08,
+    0.07
+   ],
+   "opacity": 0.92,
+   "edge_noise": 0.7,
+   "rough": 0.04,
+   "fade_m": [
+    0,
+    2500
+   ]
+  },
+  {
+   "name": "moss_hummock",
+   "kind": "stain",
+   "cell_m": 28,
+   "density": 0.7,
+   "size_m": [
+    6,
+    20
+   ],
+   "colour": [
+    0.17,
+    0.3,
+    0.12
+   ],
+   "opacity": 0.7,
+   "edge_noise": 0.6,
+   "fade_m": [
+    0,
+    1500
+   ]
+  },
+  {
+   "name": "river_pebbles",
+   "kind": "speckle",
+   "cell_m": 0.9,
+   "density": 0.5,
+   "size_m": [
+    0.05,
+    0.25
+   ],
+   "cluster": {
+    "cell_m": 18,
+    "share": 0.7
+   },
+   "colour": [
+    0.45,
+    0.43,
+    0.4
+   ],
+   "rough": 0.7,
+   "slope": [
+    0.0,
+    0.6
+   ],
+   "fade_m": [
+    0,
+    250
    ]
   }
  ]

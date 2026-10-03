@@ -11,6 +11,8 @@
 // id it came from. It does not carry a mesh, a material or a renderer: see
 // engine/render/components.hpp for why that is the whole point.
 #include <cstdint>
+#include <memory>
+#include <span>
 
 #include "engine/ecs/registry.hpp"
 #include "engine/render/components.hpp"
@@ -28,7 +30,9 @@ struct ScatterRef {
     std::uint64_t id = 0;
 };
 
-// Replaces every scatter entity in `registry` with the objects of `scatter`.
+// Makes the scatter entities in `registry` the objects of `scatter`: an object
+// whose id is already there keeps its entity (updated in place), the rest are
+// created, and entities of objects no longer present are destroyed.
 //
 // Only entities carrying a ScatterRef are touched: a registry shared with the
 // rest of the game keeps whatever else lives in it. Objects naming a model
@@ -38,9 +42,19 @@ struct ScatterRef {
 struct Published {
     std::size_t created = 0;
     std::size_t destroyed = 0;
+    std::size_t kept = 0;       // same id as before: its entity updated in place
     std::size_t unknownModel = 0;
 };
 Published publishScatter(engine::ecs::Registry& registry, const Scatter& scatter,
                          std::uint32_t models);
+
+// The same, region by region, for a placement that publishes parts
+// (ScenePlacementSnapshot::parts): a region whose part is the same pointer as
+// last time keeps its entities untouched, a changed one has its entities
+// replaced, a region gone has them destroyed. A publication costs what
+// changed, not what is in view. Entities made here are kept apart from
+// publishScatter's (the two are not mixed in one registry).
+Published publishParts(engine::ecs::Registry& registry, std::span<const ScatterBounds> regions,
+                       std::span<const std::shared_ptr<const Scatter>> parts, std::uint32_t models);
 
 } // namespace world::decor

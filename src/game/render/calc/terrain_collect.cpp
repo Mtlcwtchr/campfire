@@ -104,6 +104,7 @@ engine::Scene sceneFor(const client::Camera& camera,
     scene.wind[1] = static_cast<float>(std::sin(angle));
     scene.wind[2] = 1.0f;       // how hard, one being a fresh breeze
     scene.wind[3] = 1.0f;       // how gusty: the size of the swing between lulls
+    std::copy(std::begin(scene.wind), std::end(scene.wind), scene.swellWind);
 
     // What each material of the ground keeps, for the blend between them.
     //
@@ -123,21 +124,36 @@ engine::Scene sceneFor(const client::Camera& camera,
 }
 
 engine::MeshUpload TerrainCollectPass::buildSea(double centreX, double centreY, double span) {
-    // 256 across, placed on a sinh curve: x = S sinh(a u) / sinh(a) for u in
-    // [-1, 1]. About 0.6 m between vertices at the centre, a few metres fifty
-    // metres out, and the last ring hundreds of kilometres away. morphUv.x
-    // carries each vertex's own spacing, which is what decides the shortest
-    // wave it may carry.
+    // Keep the beach around the view target at one-metre spacing. The former
+    // sinh grid already had six-metre cells only fifty metres from the target,
+    // so a breaking wave was reduced to a handful of triangle-wide strips.
+    // Spend the same 256 cells on a dense core and a smooth exponential tail;
+    // indices and vertex count stay unchanged, including the far horizon.
     constexpr int kSide = 256;
-    constexpr double kCurve = 15.0;   // about half a metre at the centre at this span
+    constexpr int kCoreCells = 96; // on each side: a 192 m wide dense core
+    constexpr double kCoreStep = 1.0;
+    constexpr int kTailCells = kSide / 2 - kCoreCells;
     const double half = span * 0.5;
+    const double core = std::min(kCoreCells * kCoreStep, half * kCoreCells / (kSide / 2));
+    const double step = core / kCoreCells;
+    double low = 0.0, high = 1.0;
+    for (int iteration = 0; iteration < 48; ++iteration) {
+        const double curve = (low + high) * 0.5;
+        const double tail = step * std::expm1(curve * kTailCells) / curve;
+        if (tail < half - core) low = curve;
+        else high = curve;
+    }
+    const double curve = (low + high) * 0.5;
     const auto place = [&](int i) {
-        const double u = double(i) / kSide * 2.0 - 1.0;
-        return half * std::sinh(kCurve * u) / std::sinh(kCurve);
+        const int cell = i - kSide / 2;
+        const int distance = std::abs(cell);
+        const double x = distance <= kCoreCells ? distance * step :
+                         core + step * std::expm1(curve * (distance - kCoreCells)) / curve;
+        return cell < 0 ? -x : x;
     };
     const auto spacingAt = [&](int i) {
-        const double u = double(i) / kSide * 2.0 - 1.0;
-        return half * kCurve * std::cosh(kCurve * u) / std::sinh(kCurve) * (2.0 / kSide);
+        const double x = place(i);
+        return std::max(x - place(std::max(i - 1, 0)), place(std::min(i + 1, kSide)) - x);
     };
     // The shelf the world falls to past its last cell, so the shader reads
     // this as deep ocean rather than as a beach.

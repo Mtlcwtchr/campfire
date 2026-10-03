@@ -54,6 +54,8 @@ inline WeatherAir wxAir(float thermal, float moisture, float height, float x, fl
     if (preset==2) { a.cloud=0.92f; a.precipitation=0.75f; }
     if (preset==3) { a.cloud=1.0f; a.precipitation=1.0f; a.wind=2.0f; }
     if (preset==4) { a.cloud=0.02f; a.precipitation=0.0f; a.temperature+=6.0f; }
+    // Fog: a still, damp, bright-grey day. The renderer closes the view in (world_renderer.cpp).
+    if (preset==5) { a.cloud=0.6f; a.precipitation=0.0f; a.wind*=0.25f; }
     return a;
 }
 inline WeatherSurface wxAdvance(WeatherSurface s, WeatherAir a, float drainage) {

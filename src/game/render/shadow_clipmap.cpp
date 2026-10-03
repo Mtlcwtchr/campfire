@@ -70,8 +70,16 @@ ShadowClipmap::Result ShadowClipmap::compile(world::WorldBuilder::Snapshot world
             auto [cell,fresh]=ecology.try_emplace(world::ecology::key(wx,wy));
             if (fresh) cell->second=world->ecologyAt(wx,wy,query,*delta);
             const auto& c=cell->second;
+            // A blanket for the canopy the coarse levels cannot place tree by
+            // tree. Its lobes overlap almost twice over (radius 0.9 of the
+            // grid step, not half of it): touching spheres made the crown's
+            // depth a row of humps, and whenever this level stood in for a
+            // finer one being recompiled - every few frames, with the camera
+            // moving - the ground under it was shaded in even stripes. The
+            // density is spread over the overlap so the shade is the same.
+            const double step=2*result.radius/n;
             if (c.canopy>0.1f) tile.ellipsoid(v+Vec{0,0,12},
-                {result.radius/n,result.radius/n,8},c.canopy*0.12f);
+                {step*0.9,step*0.9,8},c.canopy*0.12f*0.42f);
         }
     }
     for (int y=0;y<n;++y) for (int x=0;x<n;++x) {
@@ -93,22 +101,25 @@ ShadowClipmap::Result ShadowClipmap::compile(world::WorldBuilder::Snapshot world
                 const auto& profile=profiles[object.model];
                 const double h=profile.height*object.scale,w=profile.width*object.scale;
                 const Vec root{object.x,object.y,object.z};
-                if (object.model<2) {
+                if (world::decor::treeModel(object.model)) {
                     // Trunk/crown volumes are authored semantic proxies. Detailed
                     // imported branch skeletons can replace this source without
                     // changing the cache, projection or receiver shaders.
                     tile.ellipsoid(root+Vec{0,0,h*0.4},{w*0.035,w*0.035,h*0.4},-1);
-                    const int lobes=object.model==1?3:4;
+                    const bool conifer=world::decor::coniferModel(object.model);
+                    const int lobes=conifer?3:4;
                     for (int i=0;i<lobes;++i) {
                         const double angle=object.yaw+i*6.28318530718/lobes;
-                        const double radial=object.model==1?0:w*0.19;
-                        const double z=object.model==1?h*(0.38+i*0.19):h*(0.62+0.05*(i%2));
-                        const double r=object.model==1?w*(0.46-i*0.1):w*0.32;
+                        const double radial=conifer?0:w*0.19;
+                        const double z=conifer?h*(0.38+i*0.19):h*(0.62+0.05*(i%2));
+                        const double r=conifer?w*(0.46-i*0.1):w*0.32;
                         tile.ellipsoid(root+Vec{std::cos(angle)*radial,std::sin(angle)*radial,z},
-                            {r,r,h*(object.model==1?0.22:0.30)},profile.density);
+                            {r,r,h*(conifer?0.22:0.30)},profile.density);
                     }
-                } else if (object.model==2 || object.model==3) {
-                    tile.ellipsoid(root+Vec{0,0,h*0.5},{w*0.5,w*0.5,h*0.5},object.model==3?-1:profile.density);
+                } else if (object.model==2 || object.model==3 || (object.model>=22 && object.model<=24) ||
+                           (object.model>=world::decor::kFirstRock2 && object.model<=world::decor::kLastRock2)) {
+                    const bool solid=object.model==3 || (object.model>=world::decor::kFirstRock2 && object.model<=world::decor::kLastRock2);
+                    tile.ellipsoid(root+Vec{0,0,h*0.5},{w*0.5,w*0.5,h*0.5},solid?-1:profile.density);
                 }
             }
         }

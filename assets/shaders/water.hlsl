@@ -11,6 +11,7 @@
 #include "ground.hlsli"
 #include "climate_field.hlsli"
 #include "noise.hlsli"
+#include "world_frame.hlsli"
 #include "ring_reveal.hlsli"
 #include "shore_motion.hlsli"
 #include "water_motion.hlsli"
@@ -73,6 +74,10 @@ struct WaterOut {
     float ice : TEXCOORD6;
     float4 motion : TEXCOORD7;
     nointerpolation uint explicitSurface : TEXCOORD8;
+    // Metres from the eye's frame origin (world_frame.hlsli): every screen
+    // derivative of the position is taken from this, not from worldXY, whose
+    // 1.6 cm steps far from the origin made the water's slope noise.
+    float2 frameXY : TEXCOORD9;
 };
 
 // The long swell, and the slope it has here.
@@ -222,6 +227,7 @@ WaterOut WaterVS(WaterIn input)
     output.position = project(float3(bed.xy, level));
     output.worldHeight = level;
     output.worldXY = bed.xy;
+    output.frameXY = bed.xy - frameAnchorOf(camera.xy);
     // Keep the sign: negative is the run-up area on dry land. The GPU vertex's
     // old clamped waterDepth would collapse that whole strip onto the shoreline.
     output.depth = depth;
@@ -235,7 +241,7 @@ float4 WaterPS(WaterOut input) : SV_Target0
     const float ocean=wbOcean(river,lake);
     const float2 downstream=input.motion.xy/max(length(input.motion.xy),0.0001);
     // Derive the WATER slope before discards, without animated wave heights.
-    const float2 headDx=ddx(input.worldXY), headDy=ddy(input.worldXY);
+    const float2 headDx=ddx(input.frameXY), headDy=ddy(input.frameXY);
     const float headDet=headDx.x*headDy.y-headDx.y*headDy.x;
     const float inverseHeadDet=abs(headDet)>1e-7 ? 1.0/headDet : 0.0;
     const float2 waterGradient=float2(ddx(input.baseLevel)*headDy.y-ddy(input.baseLevel)*headDx.y,
@@ -280,7 +286,7 @@ float4 WaterPS(WaterOut input) : SV_Target0
     // metres to the sample has no vertex inside it, and depth there is a
     // statement about the vertex, not about the brook. So the geometric test
     // is faded in as the sampling gets fine enough to mean something.
-    const float sampled = max(length(ddx(input.worldXY)), length(ddy(input.worldXY)));
+    const float sampled = max(length(ddx(input.frameXY)), length(ddy(input.frameXY)));
     const float trusted = 1.0 - smoothstep(1.5, 6.0, sampled);
     const float waterline = input.depth + ragged * 0.22;
     // Where the sampling is fine enough for depth to mean something, the shape
@@ -389,6 +395,9 @@ float4 WaterPS(WaterOut input) : SV_Target0
     lying += fineN.xy / max(fineN.z, 0.25) * 0.26 * blowing;
     lying += spun(chopN.xy / max(chopN.z, 0.25), -2.1) * 0.15 * blowing*ocean;
     lying += spun(broadN.xy / max(broadN.z, 0.25), -0.8) * 0.14*(1.0-river);
+    const float rain=parametersPS[0].x*parametersPS[2].y*
+                     wxSmooth(-1.0,2.0,parametersPS[2].x);
+    lying+=rainSurfaceSlope(p,clock,rain*(1.0-ice),metresPerPixel);
     lying *= (1.0-ice)*wbNormalScale(river,lake);
     const float3 surface = normalize(float3(lying, 1.0));
 
@@ -420,7 +429,7 @@ float4 WaterPS(WaterOut input) : SV_Target0
     // mask. Reuse the authored foam texture only on actual rapid river reaches.
     float4 inlandResult=0;
     const float3 clearWaterColour=colour;
-    const float icePixelMetres=max(length(ddx(p)),length(ddy(p)));
+    const float icePixelMetres=max(length(ddx(input.frameXY)),length(ddy(input.frameXY)));
     [branch] if (ocean<1.0) {
         const float2 flowUv=(p-downstream*clock*0.85)/max(14.0,48.0*metresPerPixel);
         const float authoredFoam=waterTex.Sample(waterSampler,float3(flowUv,2)).w;
@@ -457,7 +466,7 @@ float4 WaterPS(WaterOut input) : SV_Target0
     // Bend the actual swash front, not just its texture. Large lobes and smaller
     // tongues share one world-fixed shape for water, the lip and its residue.
     // Leave open water and the physical apron limits alone.
-    const float pixelMetres = max(length(ddx(p)), length(ddy(p)));
+    const float pixelMetres = max(length(ddx(input.frameXY)), length(ddy(input.frameXY)));
     const float broadShore = (noiseAt(p / 96.0) * 2.0 - 1.0) *
                             (1.0 - smoothstep(48.0, 192.0, pixelMetres));
     const float shoreTongues = (noiseAt(p / 32.0 + 19.7) * 2.0 - 1.0) *
@@ -480,7 +489,7 @@ float4 WaterPS(WaterOut input) : SV_Target0
 
     // Recover the direction towards the bank from the signed-depth gradient.
     // UVs follow the advancing water, stop during the hold, then flow back.
-    const float2 px = ddx(p), py = ddy(p);
+    const float2 px = ddx(input.frameXY), py = ddy(input.frameXY);
     const float determinant = px.x * py.y - px.y * py.x;
     const float safeDet = abs(determinant) > 1e-6 ? determinant : 1e-6;
     float2 gradient = float2(ddx(input.depth) * py.y - ddy(input.depth) * px.y,

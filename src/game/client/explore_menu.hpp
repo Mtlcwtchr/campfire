@@ -82,6 +82,20 @@ public:
         return false;
     }
     world::MapView mapView() const { return mapView_; }
+    void setMapView(int map) {
+        const auto next = static_cast<world::MapView>(std::clamp(map, 0, int(world::MapView::Count) - 1));
+        if (next == mapView_) return;
+        mapView_ = next;
+        if (mapView_ == world::MapView::Flood) floodRequested_ = true;
+        dirty_ = true;
+    }
+    void setTerrainStage(int stage) {
+        if (!stagesAvailable_) return;
+        const auto next = generation::TerrainStage(std::clamp(stage, 0, 7));
+        if (next == terrainStage_) return;
+        terrainStage_ = next;
+        dirty_ = true;
+    }
     generation::TerrainStage terrainStage() const { return terrainStage_; }
     void viewReadout(const std::string& name) {
         if (viewName_ == name) return;
@@ -132,6 +146,23 @@ public:
     world::weather::Snapshot weatherSnapshot() const {
         return world::weather::snapshot(params_.seed, weatherDay_, calendar_.daysPerSeason,
                                         seasons_, weatherPreset_);
+    }
+    // The weather window of the graphics panel: off (a still clear day, no
+    // rain, no cloud forcing) or a chosen kind in place of the weather of the day.
+    bool weatherEnabled() const { return weatherEnabled_; }
+    void setWeatherEnabled(bool on) {
+        if (weatherEnabled_ == on) return;
+        weatherEnabled_ = on;
+        dirty_ = true;
+    }
+    int weatherPreset() const { return weatherPreset_; }
+    void setWeatherPreset(int preset) {
+        const int next = std::clamp(preset, 0, int(world::weather::kPresets.size()) - 1);
+        if (next == weatherPreset_) return;
+        weatherPreset_ = next;
+        conditions_.rainfall = next == 3 ? core::Fixed::ratio(3, 2)
+                               : next == 4 ? core::Fixed::ratio(1, 4) : core::Fixed::ratio(3, 4);
+        dirty_ = true;
     }
     double weatherDay() const { return weatherDay_; }
     const world::EnvironmentalConditions& conditions() const { return conditions_; }
@@ -244,6 +275,7 @@ private:
     std::array<float, 4> seasons_{18.0f, 32.0f, 21.0f, 9.0f};
     double weatherDay_ = 0;
     int weatherPreset_ = 0;
+    bool weatherEnabled_ = true;
     bool weatherPaused_ = false;
     double weatherSpeed_ = 1.0;
     world::weather::Sample localWeather_{};

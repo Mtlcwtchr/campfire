@@ -189,6 +189,23 @@ struct GroundSample {
 
 class HeightField {
 public:
+    // Bounded memoization for a worker's batch of nearby queries. Values keep
+    // their exact lattice coordinates/stride and are invalidated by ground
+    // edits or a terrain stage change. The field remains thread-local.
+    class QueryCache {
+    public:
+        explicit QueryCache(HeightField& field);
+        ~QueryCache();
+        QueryCache(const QueryCache&) = delete;
+        QueryCache& operator=(const QueryCache&) = delete;
+    private:
+        friend class HeightField;
+        struct State;
+        HeightField& field_;
+        QueryCache* previous_;
+        std::unique_ptr<State> state_;
+        static thread_local QueryCache* active_;
+    };
     // The coarse world may be null, in which case the field invents a country of
     // its own from the seed. The tests use that; the game always has a world.
     //
@@ -242,6 +259,14 @@ public:
     // needs the four-metre page. Anything shorter belongs to the shader.
     struct Residual { core::Fixed large, medium; };
     [[nodiscard]] Residual residualAt(core::WorldPos p) const;
+    // Shallow pools of the bogs (moor marsh, peat plain, river fen): how many
+    // metres the ground is lowered at this point, 0 where there is no pool. Pools
+    // are a pattern of noise a few tens of metres across, fading in over the
+    // marsh categories' borders; the baker makes the water that stands in them.
+    // Only a world with a category map has any.
+    [[nodiscard]] bool hasBogPools() const;
+    [[nodiscard]] core::Fixed bogPoolDepth(core::Fixed x, core::Fixed y) const;
+
     Pieces piecesAt(core::Fixed x, core::Fixed y,
                     std::int64_t strideMetres = kSampleMetres) const;
     MaterialWeights sampleMaterials(std::int64_t sx, std::int64_t sy) const;
@@ -378,6 +403,7 @@ public:
     [[nodiscard]] const EditLayer* edits() const { return edits_; }
 
 private:
+    QueryCache::State* cachedQueries() const;
     struct CoarseLookup {
         std::int64_t cx, cy;
         core::Fixed tx, ty;

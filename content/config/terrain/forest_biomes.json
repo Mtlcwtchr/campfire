@@ -7,19 +7,31 @@
    "trees": [
     [
      "beech",
-     0.4
+     0.3
     ],
     [
      "oak",
-     0.25
-    ],
-    [
-     "hornbeam",
      0.2
     ],
     [
-     "spruce",
+     "hornbeam",
      0.15
+    ],
+    [
+     "hornbeam_b",
+     0.1
+    ],
+    [
+     "maple",
+     0.08
+    ],
+    [
+     "spruce",
+     0.12
+    ],
+    [
+     "birch",
+     0.05
     ]
    ],
    "shrubs": [
@@ -54,6 +66,18 @@
     [
      "mushrooms",
      30
+    ],
+    [
+     "fallen_trunk",
+     4
+    ],
+    [
+     "old_stump",
+     5
+    ],
+    [
+     "red_mushrooms",
+     18
     ]
    ],
    "fertility": 0.95,
@@ -89,15 +113,23 @@
    "trees": [
     [
      "birch",
-     0.4
+     0.35
     ],
     [
      "beech",
-     0.3
+     0.2
     ],
     [
      "spruce",
-     0.3
+     0.2
+    ],
+    [
+     "maple",
+     0.1
+    ],
+    [
+     "oak",
+     0.15
     ]
    ],
    "shrubs": [
@@ -120,6 +152,14 @@
     [
      "branches",
      40
+    ],
+    [
+     "old_stump",
+     3
+    ],
+    [
+     "red_mushrooms",
+     6
     ]
    ],
    "fertility": 0.45,
@@ -151,11 +191,15 @@
    "trees": [
     [
      "swamp_pine_thin",
-     0.6
+     0.5
     ],
     [
      "dead_birch",
-     0.4
+     0.3
+    ],
+    [
+     "fir",
+     0.2
     ]
    ],
    "shrubs": [
@@ -177,6 +221,10 @@
     [
      "half_sunk_log",
      12
+    ],
+    [
+     "fallen_trunk",
+     8
     ]
    ],
    "fertility": 0.7,
@@ -204,11 +252,23 @@
    "trees": [
     [
      "oak",
-     0.5
+     0.35
     ],
     [
      "hornbeam",
-     0.5
+     0.25
+    ],
+    [
+     "hornbeam_b",
+     0.15
+    ],
+    [
+     "birch",
+     0.15
+    ],
+    [
+     "maple",
+     0.1
     ]
    ],
    "shrubs": [
@@ -231,6 +291,14 @@
     [
      "stump",
      3
+    ],
+    [
+     "old_stump",
+     3
+    ],
+    [
+     "red_mushrooms",
+     6
     ]
    ],
    "fertility": 0.3,
@@ -283,15 +351,23 @@
    "trees": [
     [
      "beech",
-     0.55
+     0.45
     ],
     [
      "hornbeam",
-     0.2
+     0.15
+    ],
+    [
+     "hornbeam_b",
+     0.1
     ],
     [
      "oak",
-     0.15
+     0.12
+    ],
+    [
+     "maple",
+     0.08
     ],
     [
      "birch",
@@ -330,6 +406,18 @@
     [
      "mushrooms",
      25
+    ],
+    [
+     "fallen_trunk",
+     4
+    ],
+    [
+     "old_stump",
+     5
+    ],
+    [
+     "red_mushrooms",
+     18
     ]
    ],
    "fertility": 0.8,
@@ -365,11 +453,15 @@
    "trees": [
     [
      "spruce",
-     0.65
+     0.55
     ],
     [
      "fir",
-     0.35
+     0.3
+    ],
+    [
+     "birch",
+     0.15
     ]
    ],
    "shrubs": [
@@ -399,6 +491,18 @@
     [
      "mushrooms",
      40
+    ],
+    [
+     "fallen_trunk",
+     4
+    ],
+    [
+     "old_stump",
+     5
+    ],
+    [
+     "red_mushrooms",
+     18
     ]
    ],
    "fertility": 0.9,
@@ -426,11 +530,15 @@
    "trees": [
     [
      "old_dark_oak",
-     0.85
+     0.6
     ],
     [
      "oak",
-     0.15
+     0.3
+    ],
+    [
+     "hornbeam_b",
+     0.1
     ]
    ],
    "shrubs": [
@@ -461,6 +569,18 @@
     [
      "mushrooms",
      20
+    ],
+    [
+     "fallen_trunk",
+     4
+    ],
+    [
+     "old_stump",
+     5
+    ],
+    [
+     "red_mushrooms",
+     18
     ]
    ],
    "fertility": 0.6,
@@ -518,6 +638,14 @@
     [
      "branches",
      60
+    ],
+    [
+     "fallen_trunk",
+     8
+    ],
+    [
+     "rubble",
+     14
     ]
    ],
    "fertility": 0.55
@@ -557,7 +685,11 @@
    "trees": [
     [
      "tropical_broadleaf",
-     1.0
+     0.55
+    ],
+    [
+     "tropical_low",
+     0.45
     ]
    ],
    "shrubs": [
@@ -705,6 +837,604 @@
    "id": 14,
    "undergrowth": "none",
    "fertility": 0.0
+  },
+  {
+   "name": "glade_wood",
+   "id": 15,
+   "trees": [
+    [
+     "glade_maple",
+     0.35
+    ],
+    [
+     "glade_hornbeam",
+     0.35
+    ],
+    [
+     "glade_birch",
+     0.3
+    ]
+   ],
+   "shrubs": [
+    [
+     "hazel",
+     0.6
+    ],
+    [
+     "elder",
+     0.4
+    ]
+   ],
+   "shrub_density": 0.25,
+   "undergrowth": "flower_meadow",
+   "props": [
+    [
+     "mossy_stone",
+     3
+    ],
+    [
+     "red_mushrooms",
+     8
+    ],
+    [
+     "stump",
+     2
+    ]
+   ],
+   "fertility": 0.28,
+   "density": {
+    "by": "forest_bias",
+    "curve": [
+     [
+      0,
+      0
+     ],
+     [
+      0.5,
+      0.4
+     ],
+     [
+      1,
+      0.75
+     ]
+    ]
+   },
+   "clearings": {
+    "noise": "cellular_120m",
+    "share": 0.55
+   },
+   "edge": {
+    "shrubs": 1.5,
+    "metres": 30
+   }
+  },
+  {
+   "name": "amber_wood",
+   "id": 16,
+   "trees": [
+    [
+     "amber_oak",
+     0.3
+    ],
+    [
+     "amber_oak_b",
+     0.2
+    ],
+    [
+     "amber_hornbeam",
+     0.3
+    ],
+    [
+     "amber_birch",
+     0.2
+    ]
+   ],
+   "shrubs": [
+    [
+     "hazel",
+     0.5
+    ],
+    [
+     "scrub",
+     0.5
+    ]
+   ],
+   "shrub_density": 0.25,
+   "undergrowth": "amber_fern",
+   "props": [
+    [
+     "fallen_trunk",
+     4
+    ],
+    [
+     "old_stump",
+     5
+    ],
+    [
+     "branches",
+     80
+    ],
+    [
+     "mushrooms",
+     20
+    ]
+   ],
+   "fertility": 1.0,
+   "density": {
+    "by": "forest_bias",
+    "curve": [
+     [
+      0,
+      0
+     ],
+     [
+      0.5,
+      0.65
+     ],
+     [
+      1,
+      0.95
+     ]
+    ]
+   },
+   "clearings": {
+    "noise": "cellular_120m",
+    "share": 0.12
+   },
+   "edge": {
+    "shrubs": 1.6,
+    "metres": 25
+   }
+  },
+  {
+   "name": "blossom_wood",
+   "id": 17,
+   "trees": [
+    [
+     "blossom_jacaranda",
+     0.34
+    ],
+    [
+     "blossom_maple",
+     0.22
+    ],
+    [
+     "blossom_birch",
+     0.22
+    ],
+    [
+     "blossom_oak",
+     0.22
+    ]
+   ],
+   "shrubs": [
+    [
+     "hazel",
+     0.5
+    ],
+    [
+     "elder",
+     0.5
+    ]
+   ],
+   "shrub_density": 0.35,
+   "undergrowth": "flower_meadow",
+   "props": [
+    [
+     "old_stump",
+     3
+    ],
+    [
+     "branches",
+     30
+    ],
+    [
+     "red_mushrooms",
+     6
+    ]
+   ],
+   "fertility": 0.85,
+   "density": {
+    "by": "forest_bias",
+    "curve": [
+     [
+      0,
+      0
+     ],
+     [
+      0.5,
+      0.55
+     ],
+     [
+      1,
+      0.9
+     ]
+    ]
+   },
+   "clearings": {
+    "noise": "cellular_120m",
+    "share": 0.2
+   },
+   "edge": {
+    "shrubs": 1.8,
+    "metres": 25
+   }
+  },
+  {
+   "name": "silver_birch_wood",
+   "id": 18,
+   "trees": [
+    [
+     "silver_birch",
+     0.8
+    ],
+    [
+     "glade_birch",
+     0.2
+    ]
+   ],
+   "shrubs": [
+    [
+     "scrub",
+     0.5
+    ],
+    [
+     "hazel",
+     0.5
+    ]
+   ],
+   "shrub_density": 0.5,
+   "undergrowth": "wild_meadow",
+   "props": [
+    [
+     "stones",
+     8
+    ],
+    [
+     "mossy_stone",
+     3
+    ]
+   ],
+   "fertility": 0.22,
+   "density": {
+    "by": "forest_bias",
+    "curve": [
+     [
+      0,
+      0
+     ],
+     [
+      0.5,
+      0.3
+     ],
+     [
+      1,
+      0.55
+     ]
+    ]
+   },
+   "clearings": {
+    "noise": "cellular_120m",
+    "share": 0.4
+   }
+  },
+  {
+   "name": "moor_scrub",
+   "id": 19,
+   "trees": [
+    [
+     "fen_alder",
+     0.4
+    ],
+    [
+     "silver_birch",
+     0.2
+    ],
+    [
+     "fen_willow",
+     0.4
+    ]
+   ],
+   "shrubs": [
+    [
+     "moor_willow",
+     0.4
+    ],
+    [
+     "heather",
+     0.4
+    ],
+    [
+     "moor_scrub",
+     0.2
+    ]
+   ],
+   "shrub_density": 1.2,
+   "undergrowth": "moor_sedge",
+   "props": [
+    [
+     "mossy_stone",
+     8
+    ],
+    [
+     "stones",
+     8
+    ],
+    [
+     "grey_boulder",
+     1.5
+    ]
+   ],
+   "fertility": 0.3,
+   "density": {
+    "by": "forest_bias",
+    "curve": [
+     [
+      0,
+      0
+     ],
+     [
+      0.5,
+      0.2
+     ],
+     [
+      1,
+      0.4
+     ]
+    ]
+   },
+   "clearings": {
+    "noise": "cellular_120m",
+    "share": 0.5
+   }
+  },
+  {
+   "name": "fen_wood",
+   "id": 20,
+   "trees": [
+    [
+     "fen_alder",
+     0.5
+    ],
+    [
+     "fen_willow",
+     0.5
+    ]
+   ],
+   "shrubs": [
+    [
+     "moor_willow",
+     0.7
+    ],
+    [
+     "swamp_willow",
+     0.3
+    ]
+   ],
+   "shrub_density": 0.6,
+   "undergrowth": "sedge",
+   "props": [
+    [
+     "half_sunk_log",
+     6
+    ],
+    [
+     "fallen_trunk",
+     3
+    ]
+   ],
+   "fertility": 0.6,
+   "density": {
+    "by": "forest_bias",
+    "curve": [
+     [
+      0,
+      0
+     ],
+     [
+      0.5,
+      0.5
+     ],
+     [
+      1,
+      0.8
+     ]
+    ]
+   },
+   "clearings": {
+    "noise": "cellular_120m",
+    "share": 0.25
+   }
+  },
+  {
+   "name": "dark_wood",
+   "id": 21,
+   "trees": [
+    [
+     "dark_oak",
+     0.3
+    ],
+    [
+     "dark_beech",
+     0.3
+    ],
+    [
+     "dark_hornbeam",
+     0.25
+    ],
+    [
+     "dark_spruce",
+     0.15
+    ]
+   ],
+   "shrubs": [
+    [
+     "hazel",
+     0.5
+    ],
+    [
+     "elder",
+     0.5
+    ]
+   ],
+   "shrub_density": 0.3,
+   "undergrowth": "moss_fern",
+   "props": [
+    [
+     "fallen_trunk",
+     12
+    ],
+    [
+     "old_stump",
+     10
+    ],
+    [
+     "red_mushrooms",
+     50
+    ],
+    [
+     "mushrooms",
+     40
+    ],
+    [
+     "mossy_stone",
+     8
+    ],
+    [
+     "branches",
+     90
+    ]
+   ],
+   "fertility": 1.1,
+   "density": {
+    "by": "forest_bias",
+    "curve": [
+     [
+      0,
+      0
+     ],
+     [
+      0.5,
+      0.8
+     ],
+     [
+      1,
+      1.0
+     ]
+    ]
+   },
+   "clearings": {
+    "noise": "cellular_120m",
+    "share": 0.06
+   }
+  },
+  {
+   "name": "isle_grove",
+   "id": 22,
+   "trees": [
+    [
+     "isle_tree",
+     0.5
+    ],
+    [
+     "isle_tree_b",
+     0.5
+    ]
+   ],
+   "shrubs": [
+    [
+     "tropical_shrub",
+     0.6
+    ],
+    [
+     "hazel",
+     0.4
+    ]
+   ],
+   "shrub_density": 0.5,
+   "undergrowth": "flower_meadow",
+   "props": [
+    [
+     "branches",
+     20
+    ],
+    [
+     "stones",
+     4
+    ]
+   ],
+   "fertility": 0.6,
+   "density": {
+    "by": "forest_bias",
+    "curve": [
+     [
+      0,
+      0
+     ],
+     [
+      0.5,
+      0.45
+     ],
+     [
+      1,
+      0.8
+     ]
+    ]
+   },
+   "clearings": {
+    "noise": "cellular_120m",
+    "share": 0.3
+   }
+  },
+  {
+   "name": "desert_scrub",
+   "id": 23,
+   "trees": [
+    [
+     "savanna_acacia",
+     1.0
+    ]
+   ],
+   "shrubs": [
+    [
+     "dry_bush",
+     0.7
+    ],
+    [
+     "scrub",
+     0.3
+    ]
+   ],
+   "shrub_density": 0.08,
+   "undergrowth": "none",
+   "props": [
+    [
+     "dry_branches",
+     6
+    ],
+    [
+     "stones",
+     8
+    ]
+   ],
+   "fertility": 0.05,
+   "density": {
+    "by": "forest_bias",
+    "curve": [
+     [
+      0,
+      0
+     ],
+     [
+      0.5,
+      0.04
+     ],
+     [
+      1,
+      0.15
+     ]
+    ]
+   }
   }
  ]
 }

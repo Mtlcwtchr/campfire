@@ -5,6 +5,7 @@
 #include "landscape_look.hlsli"
 #include "impostor_depth.hlsli"
 #include "hemisphere_impostor.hlsli"
+#include "environment_detail.hlsli"
 #define SHADOW_TEXTURE_SLOT t2
 #define SHADOW_SAMPLER_SLOT s2
 #include "shadow_field.hlsli"
@@ -173,12 +174,39 @@ float4 shadeModel(ModelOut i,bool front,bool depthAware,out float resultDepth) {
             n=normalize(normalize(t)*sign(det)*encoded.x+normalize(b)*sign(det)*encoded.y+n*encoded.z);
         if (!front) n=-n;
     }
-    const float3 crown=lerp(float3(1,1,1),landscapeCrownTint(i.extra.y*0.15915494,texel.rgb),saturate(i.flags.w));
-    const float3 pigment=landscapePigment(texel.rgb*i.colour.rgb*i.extra.z*crown,i.flags.w);
+    // The negative material-response range is stable rock habitat; vegetation
+    // remains 0..1. Depth impostors use their reconstructed world point/normal
+    // here too, so moss does not jump when a rock changes representation.
+    const float habitat=saturate(-i.flags.w);
+    [branch] if (habitat>0.01) {
+        const float shade=environmentMossShelter(n.x,n.y,n.z);
+        const float patch=environmentNoise((i.world.xy+i.world.z*float2(0.37,0.19))/1.1)*0.65+
+                          environmentNoise(i.world.xy/0.23)*0.35;
+        const float cover=environmentMossSurface(habitat,n.z,shade,patch);
+        const float2 mossUV=(i.world.xy+i.world.z*float2(0.37,0.23))/2.0;
+        const float2 ux=ddx(mossUV),uy=ddy(mossUV);
+        const float3 dx=ddx(i.world),dy=ddy(i.world);
+        [branch] if (cover>0.01) {
+            uint w,h,layers,levels;
+            colourTex.GetDimensions(0,w,h,layers,levels);
+            const float4 moss=colourTex.SampleGrad(colourSampler,float3(mossUV,layers-1),ux,uy);
+            const float maskedCover=cover*moss.a;
+            texel.rgb=lerp(texel.rgb,moss.rgb,maskedCover*0.80);
+            const float3 mossNormal=normalTex.SampleGrad(normalSampler,float3(mossUV,layers-1),ux,uy).xyz*2-1;
+            const float det=ux.x*uy.y-ux.y*uy.x;
+            const float3 t=dx*uy.y-dy*ux.y,b=dy*ux.x-dx*uy.x;
+            if (abs(det)>0.0000001 && dot(t,t)>0.0000001 && dot(b,b)>0.0000001)
+                n=normalize(lerp(n,normalize(t)*sign(det)*mossNormal.x+
+                    normalize(b)*sign(det)*mossNormal.y+n*mossNormal.z,maskedCover*0.35));
+        }
+    }
+    const float vegetation=saturate(i.flags.w);
+    const float3 crown=lerp(float3(1,1,1),landscapeCrownTint(i.extra.y*0.15915494,texel.rgb),vegetation);
+    const float3 pigment=landscapePigment(texel.rgb*i.colour.rgb*i.extra.z*crown,vegetation);
     const float shadow=proceduralShadow(i.world,n);
     float3 lit=pigment*landscapeDaylight(n,lookRootOcclusion(i.extra.x),shadow);
     const float transmission=pow(saturate(dot(-landscapeSun(),landscapeEye(i.world))),3.0);
-    lit+=pigment*float3(1.0,0.95,0.65)*transmission*i.flags.w*i.extra.x*0.18*shadow;
+    lit+=pigment*float3(1.0,0.95,0.65)*transmission*vegetation*i.extra.x*0.18*shadow;
     return float4(landscapeFinish(lit,i.world),sceneDepthAlpha(i.world));
 }
 float4 ModelPS(ModelOut i,bool front : SV_IsFrontFace) : SV_Target0 {

@@ -172,6 +172,7 @@ decor::Scatter WorldSnapshot::scatter(decor::ScatterBounds bounds, const ecology
 decor::Scatter WorldSnapshot::scatter(decor::ScatterBounds bounds, const ecology::Delta& delta, HeightField& query) const {
     // Before anything is read: every edit at or below this is under the objects.
     const std::uint64_t ground = heights_ ? heights_->revision() : 0;
+    HeightField::QueryCache queries(query);
     std::map<ecology::Key, ecology::Cell> cells;
     // The terrain categories (engine/biomes): the registry held for the whole
     // scatter, the ids from the import's 256 m field or the climate's derived
@@ -220,7 +221,7 @@ decor::Scatter WorldSnapshot::scatter(decor::ScatterBounds bounds, const ecology
         [&](double wx, double wy) {
             return query.underWater({core::Fixed::fromDoubleForContent(wx),
                                      core::Fixed::fromDoubleForContent(wy)});
-        });
+        },true);
     result.revision = delta.region(double(bounds.minX), double(bounds.minY));
     result.ground = ground;
     std::erase_if(result.objects, [&](const auto& object) {
@@ -251,7 +252,7 @@ decor::Scatter WorldSnapshot::scatter(decor::ScatterBounds bounds, const ecology
             for (const unsigned char c : pin.id) id = (id ^ c) * 0x100000001b3ull;
             id |= 1ull << 63;
             const core::WorldPos p{core::Fixed::fromDoubleForContent(pin.x), core::Fixed::fromDoubleForContent(pin.y)};
-            result.objects.push_back({id, pin.x, pin.y, query.heightAt(p).toDouble() - (model == 3 ? 0.25 : 0.08),
+            result.objects.push_back({id, pin.x, pin.y, query.heightAt(p).toDouble() - decor::groundSink(model, scale),
                                       float(scale), float(pin.yaw), float(double(id & 0xffff) / 65535.0 * 6.2831853),
                                       1.0f, model});
             ++result.populations[model];
@@ -273,7 +274,7 @@ decor::Scatter WorldSnapshot::scatter(decor::ScatterBounds bounds, const ecology
                     a.y < double(bounds.minY) || a.y >= double(bounds.maxY) || a.model >= decor::kModels.size())
                     continue;
                 const core::WorldPos p{core::Fixed::fromDoubleForContent(a.x), core::Fixed::fromDoubleForContent(a.y)};
-                const double sink = a.model == 3 ? 0.25 : 0.08;   // as the scatter sets rocks and the rest
+                const double sink = decor::groundSink(a.model, a.scale);
                 const auto phase = float(double(core::splitmix64(id) >> 11) * 0x1p-53 * 2 * std::acos(-1.0));
                 result.objects.push_back({id, a.x, a.y, query.heightAt(p).toDouble() - sink,
                                           a.scale, a.yaw, phase, a.tint, a.model});

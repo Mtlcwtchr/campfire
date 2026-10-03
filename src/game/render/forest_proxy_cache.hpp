@@ -5,6 +5,8 @@
 #include "game/world/scene_placement.hpp"
 #include <functional>
 #include <map>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace game {
 class ForestProxyCache {
@@ -48,7 +50,11 @@ private:
     std::map<engine::render::ImpostorKey,double> fade_;
     engine::MaterialInstance material_;
     std::vector<std::shared_ptr<const engine::render::ImpostorAtlas>> sources_;
-    std::map<engine::render::ImpostorKey,Group> groups_;
+    // Hashed: rebuilt over every placed object on each publication, and an
+    // ordered map's lookups were most of that. Nothing reads it in order.
+    std::unordered_map<engine::render::ImpostorKey,Group,engine::render::ImpostorKeyHash> groups_;
+    // The revision each placement region was last grouped at.
+    world::ScenePlacementSnapshot::Revisions regionRevisions_;
     std::vector<Draw> drawn_;
     std::uint64_t objectsVersion_=~std::uint64_t(0);
     std::uint64_t drawnTotal_=0;

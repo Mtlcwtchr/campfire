@@ -46,6 +46,10 @@ def validate(stage):
             raise ValueError("SCM2 index out of range")
         sidecar = mesh.with_suffix(".clusters")
         data = sidecar.read_bytes() if sidecar.is_file() else b""
+        # Chain-only props (content/config/scene_model_lod.json) have no
+        # sidecar by design: tools/rebuild_prop_lods.py retires it.
+        if not data and row.get("lod") == "chain":
+            continue
         if len(data) < 64 or data[:4] != b"SCC6":
             raise ValueError("Run scene_model_clusters before installation: " + str(sidecar))
         header = struct.unpack_from("<4s13I2f", data)

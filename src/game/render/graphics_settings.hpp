@@ -57,6 +57,8 @@ struct GraphicsSettings {
     // bloom, vignette and grain. Strength blends it with the ungraded frame.
     bool grade = true;
     float gradeStrength = 1.0f;
+    // The picture's own brightness, contrast and saturation after the grade.
+    float brightness = 1.10f, contrast = 1.20f, saturation = 1.15f;
     // Sky and clouds
     bool skybox = true;
     float skyRotation = 0.0f;        // degrees

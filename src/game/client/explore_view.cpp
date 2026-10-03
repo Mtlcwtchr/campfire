@@ -5,12 +5,14 @@
 #include "game/generation/world_compose.hpp"
 #include "game/generation/world_import.hpp"
 #include "game/client/explore_bench.hpp"
+#include "game/client/character_controller.hpp"
 
 #include <algorithm>
 #include <array>
 #include <cstdlib>
 #include <chrono>
 #include <cmath>
+#include <numbers>
 #include <cstdio>
 #include <fstream>
 #include <iostream>
@@ -157,7 +159,7 @@ bool ExploreView::draw(const Camera& camera) {
     auto weather = menu_->weatherSnapshot();
     // Every shader's switch for it (weather.hlsli). The explorer's own editor
     // turns it off as the client's Edit mode does.
-    if (!weather_ || menu_->editor().active()) weather.data[0][0] = 0.0f;
+    if (!weather_ || menu_->editor().active() || !menu_->weatherEnabled()) weather.data[0][0] = 0.0f;
     const auto snapshot = source_->read();
     const auto climate=snapshot->climate().at(focus).environment;
     const auto scalar=[](core::Fixed f) { return static_cast<float>(f.toDouble()); };
@@ -165,6 +167,29 @@ bool ExploreView::draw(const Camera& camera) {
         static_cast<float>(camera.centreX),static_cast<float>(camera.centreY),scalar(climate[5]));
     menu_->weatherReadout(local);
     menu_->stagesAvailable(bool(snapshot->worldMap().terrainFoundation));
+    // The Views tab of the graphics window: a click is applied, then the
+    // panel is told what is actually on (a key may have changed it).
+    {
+        auto& panel = menu_->panel();
+        if (panel.viewsChanged) {
+            panel.viewsChanged = false;
+            menu_->setMapView(panel.views.map);
+            menu_->setTerrainStage(panel.views.stage);
+            renderer_.setTerrainGrid(panel.views.grid);
+            menu_->setWeatherEnabled(panel.views.weatherOn);
+            menu_->setWeatherPreset(panel.views.weather);
+            if (panel.views.objectWire != renderer_.objectWireframe()) renderer_.toggleObjectWireframe();
+        }
+        const GraphicsPanel::Views now{int(menu_->mapView()), int(menu_->terrainStage()), renderer_.terrainGrid(),
+                                       renderer_.objectWireframe(), bool(snapshot->worldMap().terrainFoundation),
+                                       menu_->weatherEnabled(), menu_->weatherPreset()};
+        if (now.map != panel.views.map || now.stage != panel.views.stage || now.grid != panel.views.grid ||
+            now.objectWire != panel.views.objectWire || now.stages != panel.views.stages ||
+            now.weatherOn != panel.views.weatherOn || now.weather != panel.views.weather) {
+            panel.views = now;
+            menu_->panelChanged();
+        }
+    }
     settings_.weather = weather;
     settings_.map = menu_->mapView();
     settings_.stage = menu_->terrainStage();
@@ -432,7 +457,8 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
     }
     for (int i = 0; i < std::clamp(options.gridMode, 0, 2); ++i) renderer.cycleTerrainGrid();
     if (options.objectMesh != renderer.objectWireframe()) renderer.toggleObjectWireframe();
-    std::cout << "V: map / 3rd orbit / 1st free flight; RMB: look; WASD: move; Q/E: altitude\n"
+    std::cout << "C: take / release the character (then V: 3rd / 1st person / map, WASD, Shift, Alt, Space, mouse)\n"
+                 "V: map / 3rd orbit / 1st free flight; RMB: look; WASD: move; Q/E: altitude\n"
                  "Shift: fly faster; wheel: orbit distance / flight speed; Shift+G: sample / mesh grid / off;\n"
                  "Shift+M: object mesh on / off\n";
     menu.open(params, &renderer.ground(), groundFile());
@@ -471,7 +497,8 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
     };
     if (!shotList.empty()) graphicsForShot(shotList.front());
     view.fog(options.fog);
-    menu.configureWeather(calendar,seasons,weatherDay,weatherPreset);
+    menu.configureWeather(calendar,seasons,weatherDay,std::max(0,weatherPreset));
+    if (weatherPreset<0) menu.setWeatherEnabled(false);
     GroundWatch groundWatch(groundFile());
     Uint64 groundLookedAt = SDL_GetTicks();
     if (showMenu) menu.toggle();
@@ -496,6 +523,50 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
     controls.edgePan = false;
     ui::Input pointer;
     bool relativeMouse = false;
+    // The player's character. C takes it (and gives it back); while it is
+    // held V cycles third person, first person and the map, WASD moves it
+    // relative to the camera (Shift sprints, Alt walks, Space jumps), the
+    // mouse turns the camera and the wheel sets the third-person distance.
+    // Clicking to walk on the map is planned, not here (needs a nav mesh).
+    CharacterController hero;
+    bool possessed = false, heroJump = false;
+    double heroDistance = 4.2, heroMapZoom = 8.0;
+    const auto groundAt = [&](double x, double y) {
+        return field.heightAt({core::Fixed::fromDoubleForContent(std::clamp(x, 0.0, worldMetres - 1.0)),
+                               core::Fixed::fromDoubleForContent(std::clamp(y, 0.0, worldHighMetres - 1.0))})
+                .toDouble();
+    };
+    const auto possess = [&](bool on) {
+        possessed = on;
+        controls.dragging = controls.orbiting = false;
+        controls.velocityX = controls.velocityY = 0;
+        if (!on) {
+            camera.heightOffset = 0;
+            std::cout << "Character released\n";
+            return;
+        }
+        // Where the camera is looking, on the ground, facing away from it.
+        double x = camera.centreX, y = camera.centreY;
+        if (camera.mode == Camera::Mode::Free) {
+            x -= std::cos(camera.yaw) * 4.0;
+            y -= std::sin(camera.yaw) * 4.0;
+        }
+        hero.place(x, y, groundAt(x, y), camera.yaw + std::numbers::pi + options.characterTurn);
+        camera.setMode(Camera::Mode::Orbit);
+        camera.pitch = 0.32;
+        std::cout << "Character: WASD move, Shift sprint, Alt walk, Space jump, mouse look, wheel distance, "
+                     "V third/first person/map, C release\n";
+    };
+    if (options.character) {
+        possess(true);
+        if (options.characterDistance > 0) heroDistance = options.characterDistance;
+        if (options.characterView == 1) camera.setMode(Camera::Mode::Free);
+        if (options.characterView == 2) {
+            camera.setMode(Camera::Mode::Map);
+            camera.pitch = kDefaultCameraPitch;
+            camera.pixelsPerTile = heroMapZoom;
+        }
+    }
     bool running = true;
     Uint64 last = SDL_GetTicks();
     int frame = 0;
@@ -571,6 +642,29 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
                             work.unknownIndirectDraws ? ">=" : "",
                             work.triangles, work.draws, work.indirectDraws);
                 std::fflush(stdout);
+            }
+            else if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat &&
+                     event.key.key == SDLK_C && !menu.visible() && !menu.editor().active()) {
+                possess(!possessed);
+            }
+            else if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat &&
+                     event.key.key == SDLK_SPACE && possessed) {
+                heroJump = true;
+            }
+            else if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat &&
+                     event.key.key == SDLK_V && !menu.visible() && possessed) {
+                // Third person -> first person -> the map -> third person.
+                if (camera.mode == Camera::Mode::Orbit) camera.setMode(Camera::Mode::Free);
+                else if (camera.mode == Camera::Mode::Free) {
+                    camera.setMode(Camera::Mode::Map);
+                    camera.pitch = kDefaultCameraPitch;
+                    camera.pixelsPerTile = heroMapZoom;
+                } else {
+                    heroMapZoom = camera.pixelsPerTile;
+                    camera.setMode(Camera::Mode::Orbit);
+                    camera.pitch = 0.32;
+                }
+                std::cout << "Camera: " << camera.modeName() << '\n';
             }
             else if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat &&
                      event.key.key == SDLK_V && !menu.visible()) {
@@ -710,16 +804,19 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
         // picture of the place that was asked for.
         // While the menu is up the arrows belong to it, not to the camera.
         const bool active = window && (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) != 0;
-        const bool capture = active && camera.mode == Camera::Mode::Free && pointer.rightDown &&
+        const bool heroLook = possessed && camera.mode != Camera::Mode::Map;
+        const bool capture = active && (heroLook || (camera.mode == Camera::Mode::Free && pointer.rightDown)) &&
                              !menu.visible() && shotPath.empty() && !measuring && !tracing && !scripted;
         if (capture != relativeMouse) {
             if (SDL_SetWindowRelativeMouseMode(window, capture)) relativeMouse = capture;
             controls.orbiting = false;
             SDL_GetRelativeMouseState(nullptr, nullptr);
         }
+        float heroDx = 0, heroDy = 0;
         if (relativeMouse) {
             float dx = 0, dy = 0;
             SDL_GetRelativeMouseState(&dx, &dy);
+            heroDx = dx; heroDy = dy;
             pointer.mouseX = controls.orbiting ? controls.dragFromX + dx : 0;
             pointer.mouseY = controls.orbiting ? controls.dragFromY + dy : 0;
         }
@@ -730,7 +827,33 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
             const bool overPanel = slider || overGraphics || overEditor || (!relativeMouse && mx >= 16 && my >= 16 &&
                                   mx < 16 + ExploreMenu::kWide && my < 16 + ExploreMenu::kStatusHigh);
             static const bool none[SDL_SCANCODE_COUNT]{};
-            controls.update(camera, pointer, profiler.hasKeyboard() ? none : SDL_GetKeyboardState(nullptr), step, overPanel);
+            const bool* keys = profiler.hasKeyboard() ? none : SDL_GetKeyboardState(nullptr);
+            if (possessed) {
+                // The character takes the keys; the mouse turns the camera
+                // (captured, no button held), the wheel sets the distance.
+                if (heroLook && relativeMouse) {
+                    camera.orbit(heroDx * 0.0035, heroDy * 0.0035);
+                    if (camera.mode == Camera::Mode::Orbit)
+                        camera.pitch = std::clamp(camera.pitch, -0.35, 1.35);
+                }
+                if (camera.mode == Camera::Mode::Orbit && pointer.wheel != 0)
+                    heroDistance = std::clamp(heroDistance * std::pow(0.88, pointer.wheel), 1.8, 14.0);
+                if (camera.mode == Camera::Mode::Map && pointer.wheel != 0)
+                    camera.zoomAt(std::pow(1.15, pointer.wheel), camera.viewportWidth / 2, camera.viewportHeight / 2);
+                pointer.wheel = 0;
+                CharacterController::Input in;
+                in.forward = double(keys[SDL_SCANCODE_W] || keys[SDL_SCANCODE_UP]) -
+                             double(keys[SDL_SCANCODE_S] || keys[SDL_SCANCODE_DOWN]);
+                in.right = double(keys[SDL_SCANCODE_D] || keys[SDL_SCANCODE_RIGHT]) -
+                           double(keys[SDL_SCANCODE_A] || keys[SDL_SCANCODE_LEFT]);
+                in.sprint = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT];
+                in.walk = keys[SDL_SCANCODE_LALT] || keys[SDL_SCANCODE_RALT];
+                in.jump = heroJump;
+                in.cameraYaw = camera.yaw;
+                hero.update(in, step, groundAt);
+                heroJump = false;
+            } else
+                controls.update(camera, pointer, keys, step, overPanel);
             // Edit mode: the brush follows the pointer over the ground, and the
             // left button paints regions into the selection (Alt: out of it).
             // A stroke has to START on the ground: a drag that began on the
@@ -841,6 +964,63 @@ int runExploreMode(SDL_Window* window, std::uint64_t seed, std::int32_t worldCel
         // The camera only needs a height, not normals/materials/soil/path costs.
         if (camera.mode != Camera::Mode::Free)
             camera.focusHeight = field.heightAt(focus).toDouble() + camera.heightOffset;
+        if (possessed) {
+            // Scripted shots walk it themselves (--character-run): nobody is
+            // at the keys.
+            if (options.characterRun != 0 && (!shotPath.empty() || scripted || !active)) {
+                CharacterController::Input in;
+                in.forward = 1;
+                in.sprint = options.characterRun > 1.5;
+                in.walk = options.characterRun < 0.75;
+                in.cameraYaw = camera.yaw;
+                hero.update(in, step, groundAt);
+            }
+            if (camera.mode == Camera::Mode::Orbit) {
+                camera.pixelsPerTile = camera.viewportHeight / (std::tan(camera.verticalFov * 0.5) * heroDistance);
+                // Over the right shoulder, as the genre does: the character a
+                // little left of the middle, the way ahead clear of him.
+                const double shoulder = std::min(0.55, heroDistance * 0.12);
+                camera.centreX = hero.x() + std::sin(camera.yaw) * shoulder;
+                camera.centreY = hero.y() - std::cos(camera.yaw) * shoulder;
+                camera.focusHeight = hero.z() + CharacterController::kShoulderHeight;
+                // The eye stays out of the ground: a slope behind the character
+                // pushes it up rather than under.
+                const auto eye = camera.eyePosition();
+                const double floor = groundAt(eye[0], eye[1]) + 0.35;
+                if (eye[2] < floor) camera.pitch = std::min(1.35, camera.pitch + (floor - eye[2]) / heroDistance);
+            } else if (camera.mode == Camera::Mode::Free) {
+                // At the eyes, a little in front of the face so the inside of
+                // the hood is never in view (the head itself is not drawn).
+                const auto* pass = renderer.characterPass();
+                const auto* model = pass ? pass->model() : nullptr;
+                const double eye = model ? model->eyeHeight() : CharacterController::kEyeHeight;
+                const double ahead = model ? model->eyeForward() : 0.12;
+                camera.centreX = hero.x() + std::cos(hero.facing()) * ahead;
+                camera.centreY = hero.y() + std::sin(hero.facing()) * ahead;
+                camera.focusHeight = hero.z() + eye;
+            } else {
+                camera.centreX = hero.x();
+                camera.centreY = hero.y();
+                camera.focusHeight = hero.z();
+            }
+        }
+        {
+            game::CharacterPass::State state;
+            // First person: the body is not drawn (the eye is inside it).
+            // First person draws the body without its head: look down and
+            // the legs are there.
+            state.visible = possessed;
+            state.firstPerson = camera.mode == Camera::Mode::Free;
+            state.x = hero.x(); state.y = hero.y(); state.z = hero.z();
+            state.yaw = hero.facing();
+            state.gait = hero.gait();
+            state.lookX = -std::cos(camera.yaw) * std::cos(camera.pitch);
+            state.lookY = -std::sin(camera.yaw) * std::cos(camera.pitch);
+            state.lookZ = -std::sin(camera.pitch);
+            state.ground = groundAt;
+            state.seconds = step;
+            renderer.character(state);
+        }
         if (bench) {
             bench->aim(camera, [&](double x, double y) {
                 return field.heightAt({core::Fixed::fromDoubleForContent(x),

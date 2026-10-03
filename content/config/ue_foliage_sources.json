@@ -44,8 +44,11 @@
      "meshes": ["/Game/Nanite_Plants_Sample_Collection/Geometries/SM_Abelia_x_grandiflora_Nanite_Free_Sample"]},
     {"asset_id": "np_ryegrass",      "role": "grass",          "biomes": ["meadow", "settlement"], "tris": 6000,
      "meshes": ["/Game/Nanite_Plants_Sample_Collection/Geometries/SM_Free_Lolium_perenne_3DGardenPlants"]},
+    {"asset_id": "gv_free_shrubs", "role": "shrub", "tris": 24000,
+     "biomes": ["temperate_forest", "forest_edge"],
+     "source_url": "https://www.fab.com/listings/7ca465ab-fb9c-4d6b-bddb-82c20f604657",
+     "folder": "/Game/GV_FreeShrubsPack/Meshes/Shrubs/Wind", "include": ["_full_"]},
     {"asset_id": "np_mondo_grass",   "role": "grass",          "biomes": ["forest_edge", "settlement"],
      "meshes": ["/Game/Nanite_Plants_Sample_Collection/Geometries/SM_Free_Ophiopogon_japonicus_3DGardenPlants"]}
   ]
 }
-

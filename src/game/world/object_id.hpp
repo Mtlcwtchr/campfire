@@ -31,6 +31,8 @@ namespace world {
 
 enum class PlacementStage : std::uint16_t {
     Decor = 1,           // trees, bushes, rocks, deadwood (scene_scatter)
+    Cliff = 2,           // terrain-supported outcrop lattice (16 m cells)
+    Undergrowth = 3,     // small clumps (4 m cells), separate from trees/removals
     Planted = 0x8001,    // placed by a person: added objects of the delta
 };
 
@@ -50,5 +52,4 @@ constexpr std::uint64_t objectId(std::uint64_t worldSeed, PlacementStage stage, 
 }
 
 } // namespace world
-
 

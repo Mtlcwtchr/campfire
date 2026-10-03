@@ -24,6 +24,9 @@ struct MeshView {
     SDL_GPUBuffer* indices = nullptr;
     SDL_GPUIndexElementSize indexSize = SDL_GPU_INDEXELEMENTSIZE_32BIT;
     IndexRange range;
+    // Where this mesh's vertices start in `vertices`, in bytes: a mesh that
+    // lives in a pooled page rather than in a buffer of its own.
+    std::uint32_t vertexOffset = 0;
     static MeshView of(const Mesh& mesh) {
         return {mesh.vertices.get(), mesh.indices.get(), mesh.indexSize, {0, mesh.indexCount}};
     }

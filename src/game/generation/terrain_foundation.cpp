@@ -328,7 +328,12 @@ std::shared_ptr<const TerrainFoundation> buildTerrainFoundation(
     // The smallest difference between neighbours that moves anything: the
     // orthogonal threshold below (the diagonal one is larger).
     const int flatEnough=int(step*6.745+0.5);
-    for (int pass=0;pass<passes;++pass) {
+    // Thermal diffusion only rounds convexities (measured: it leaves the share
+    // of over-repose ground unchanged) and leaves terracing and region-border
+    // shear. The talus CUT below (layBack) is what makes mountains out of raw
+    // peaks, and it keeps `passes` as its reach; the diffusion is off.
+    constexpr bool kThermalDiffusion=false;
+    for (int pass=0;pass<(kThermalDiffusion?passes:0);++pass) {
         quiet.measure(thermal);
         for (int ty=0;ty<quiet.tilesY;++ty) for (int tx=0;tx<quiet.tilesX;++tx)
             quiet.still[std::size_t(ty)*quiet.tilesX+tx]=quiet.highAround(tx,ty)-quiet.lowAround(tx,ty)<=flatEnough;
@@ -554,7 +559,12 @@ std::shared_ptr<const TerrainFoundation> buildTerrainFoundation(
     // Re-route after each incision, rather than stamping independent fractals.
     // Dissolved/suspended material reaches the actual sink, making aprons in
     // closed depressions. Ocean sinks export it beyond this height field.
-    const int erosionPasses=std::min(passes,8);
+    // Stream-power incision cut channel lines and sediment aprons into the
+    // slope stage - the "microchip" seams. Rivers are the hydrology graph's
+    // job now (graph_carve), not an erosion pass; the pit fill above stays as
+    // drainage conditioning.
+    constexpr bool kChannelIncision=false;
+    const int erosionPasses=kChannelIncision?std::min(passes,8):0;
     for (int pass=0;pass<erosionPasses;++pass) {
         route(); next=slopes;
         std::vector<std::int64_t> sediment(count,0);

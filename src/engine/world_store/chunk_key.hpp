@@ -13,8 +13,8 @@
 //   RuntimePatch     64 m       a local edit: a plot flattened, a grove cut
 //   GenerationTile   512 m      one compiler job; one terrain page
 //   AuthoringChunk   8 192 m    one file: the unit of disk I/O and of editing
-//   SourceChunk      32 768 m   one WorldSource file: 128 x 128 authored samples
-//                               at 256 m (doc/world_authoring_import_export_spec)
+//   SourceChunk      32 768 m   one WorldSource file; its sample grid is
+//                               128, 256 or 512 a side at 256, 128 or 64 m
 //   Region           131 072 m  index and ownership; one WorldLayout region
 //
 // Each side is a power of two and an exact multiple of the one below, so a
@@ -114,5 +114,4 @@ ChunkKey chunkAt(ChunkLevel level, double xMetres, double yMetres);
 std::vector<ChunkKey> chunksOverlapping(ChunkLevel level, const MetreRect& area);
 
 } // namespace engine::world_store
-
 

@@ -28,14 +28,14 @@ CategoryField::Ids CategoryField::sample(std::int64_t sx, std::int64_t sy) const
 
 CategoryField::Ids CategoryField::at(double x, double y) const {
     if (chunks_.empty() || !std::isfinite(x) || !std::isfinite(y)) return {};
-    return sample(std::int64_t(std::floor(x / double(kSampleMetres))), std::int64_t(std::floor(y / double(kSampleMetres))));
+    return sample(std::int64_t(std::floor(x / double(sampleMetres_))), std::int64_t(std::floor(y / double(sampleMetres_))));
 }
 
 CategoryField::Pair CategoryField::groundPair(double x, double y) const {
     Pair p;
     if (chunks_.empty() || !std::isfinite(x) || !std::isfinite(y)) return p;
     // Sample centres are half a sample in.
-    const double u = x / double(kSampleMetres) - 0.5, v = y / double(kSampleMetres) - 0.5;
+    const double u = x / double(sampleMetres_) - 0.5, v = y / double(sampleMetres_) - 0.5;
     const auto i0 = std::int64_t(std::floor(u)), j0 = std::int64_t(std::floor(v));
     const double fx = u - double(i0), fy = v - double(j0);
     const double w[4] = {(1 - fx) * (1 - fy), fx * (1 - fy), (1 - fx) * fy, fx * fy};
@@ -67,6 +67,7 @@ std::uint64_t CategoryField::key() const {
     std::sort(keys.begin(), keys.end());
     std::uint64_t h = 0xcbf29ce484222325ull;
     const auto mix = [&](std::uint64_t v) { h = (h ^ v) * 0x100000001b3ull; };
+    mix(std::uint64_t(sampleMetres_));
     for (const auto k : keys) {
         mix(k);
         for (const auto& ids : chunks_.at(k))

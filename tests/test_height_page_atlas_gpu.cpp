@@ -937,8 +937,16 @@ TEST(terrain_material_all_pairs_lerp_multiscale_noise_without_slope_or_height_st
             const auto slope = draw(a, b, 3.0f, footprint, angle, 0.0f);
             int error = 0, slopeChange = 0, low = 255, high = 0, blended = 0;
             for (std::size_t p = 0; p < flat.size(); p += 4) {
-                error = std::max(error, std::abs(int(flat[p]) - int(flat[p + 1])));
-                error = std::max(error, std::abs(int(slope[p]) - int(slope[p + 1])));
+                // Columns 0-1 are one pixel quad across which the probe's own
+                // weight is clamped (saturate at x = 0): production reads the
+                // gap's slope from screen derivatives and sees it halved
+                // there, the reference uses the analytic slope. Not a seam
+                // on the ground - the quad straddles the end of the fixture.
+                const bool clampedQuad = (p / 4) % 64 < 2;
+                if (!clampedQuad) {
+                    error = std::max(error, std::abs(int(flat[p]) - int(flat[p + 1])));
+                    error = std::max(error, std::abs(int(slope[p]) - int(slope[p + 1])));
+                }
                 slopeChange = std::max(slopeChange, std::abs(int(flat[p]) - int(slope[p])));
                 low = std::min(low, int(flat[p])); high = std::max(high, int(flat[p]));
                 blended += flat[p] > 16 && flat[p] < 239;
@@ -1108,7 +1116,11 @@ TEST(terrain_materials_preserve_identity_channels_and_normals_across_zoom) {
         gpu.device.handle(), SDL_CreateGPUTransferBuffer(gpu.device.handle(), &transferInfo));
     CHECK(bool(target) && bool(pipeline) && bool(transfer) && bool(sampler));
     if (!target || !pipeline || !transfer || !sampler) return;
-    for (int mode = 0; mode <= 17; ++mode) {
+    // Run 18 is mode 5 again with the distance octaves on (the look's
+    // default); run 5 itself turns them off to check the fixed-scale contract.
+    for (int run = 0; run <= 18; ++run) {
+        const int mode = run == 18 ? 5 : run;
+        const bool octaves = run == 18;
         if (mode == 9 || mode == 10) continue; // real material arrays are tested below
         std::array<int, 4> reference{};
         bool first = true;
@@ -1122,6 +1134,11 @@ TEST(terrain_materials_preserve_identity_channels_and_normals_across_zoom) {
                 CHECK(commands != nullptr);
                 if (!commands) return;
                 engine::Scene scene{};
+                if (mode == 5 && !octaves) {
+                    // Tile x1, no distance octaves, default start and macro.
+                    scene.terrainLook[0] = 1.0f; scene.terrainLook[1] = 0.0f;
+                    scene.terrainLook[2] = 8.0f; scene.terrainLook[3] = 1.0f;
+                }
                 scene.camera[0] = 47.3f; scene.camera[1] = -28.7f;
                 scene.camera[2] = 100; scene.camera[3] = 2.83f / footprint;
                 scene.viewport[0] = scene.viewport[1] = 64;
@@ -1190,10 +1207,25 @@ TEST(terrain_materials_preserve_identity_channels_and_normals_across_zoom) {
                     // What is DRAWN is height-biased by each side's texture height
                     // (groundHereIn), and this fixture inverts the heights along the
                     // mip chain, so the drawn colour legitimately shifts with zoom.
-                    // It may only shift one way - from the close-up towards the far
-                    // colour, never back (no subpixel pattern surviving or aliasing
-                    // on zoom-out) - and never depend on rotation.
                     if (rotation == 0.0f) thisZoom = actual;
+                    if (octaves) {
+                        // With the distance octaves the scan doubles in size as
+                        // it shrinks on the screen, so the mip it is read at -
+                        // and the height bias with it - cycles with zoom rather
+                        // than running to the far end. It must stay between the
+                        // close-up and the far colour and not turn with the view.
+                        const int far[3]{48, 112, 36};
+                        for (int i = 0; i < 3; ++i) {
+                            CHECK(std::abs(actual[i] - thisZoom[i]) <= 2);
+                            CHECK(actual[i] >= std::min(reference[i], far[i]) - 1);
+                            CHECK(actual[i] <= std::max(reference[i], far[i]) + 1);
+                        }
+                        continue;
+                    }
+                    // At one fixed scale it may only shift one way - from the
+                    // close-up towards the far colour, never back (no subpixel
+                    // pattern surviving or aliasing on zoom-out) - and never
+                    // depend on rotation.
                     for (int i = 0; i < 3; ++i) {
                         CHECK(std::abs(actual[i] - thisZoom[i]) <= 1);
                         if (havePreviousZoom) {

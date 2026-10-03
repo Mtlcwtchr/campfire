@@ -1,5 +1,6 @@
 #include "game/world/terrain_plan.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <map>
 #include <stdexcept>
@@ -139,9 +140,11 @@ void TerrainPlan::stitchEdges(const std::vector<Block>& previous) {
                         return a.skirt == b.skirt && a.edgeBed == b.edgeBed && a.edgeHead == b.edgeHead && a.priorEdge == b.priorEdge;
                     })) {
                 block.mesh = prior;
+                ++copies.stitchReused;
                 continue;
             }
         }
+        ++copies.stitchCopies;
         block.mesh = std::move(changed);
     }
 }
@@ -165,7 +168,19 @@ void TerrainPlan::interpolateFrom(const std::vector<Block>& previous) {
         const auto same = sources.find({block.metres(), block.tile.x, block.tile.y});
         if (same != sources.end() && same->second.block->mesh == block.mesh &&
             same->second.block->parentMorph == block.parentMorph) continue;
+        const auto baseOf = [](const std::shared_ptr<const AdaptiveMesh>& m) {
+            return m && m->unstitched ? m->unstitched.get() : m.get();
+        };
+        enum class Why { MorphOnly, Restitched, NewBase } why = Why::NewBase;
+        if (same != sources.end() && same->second.block->mesh == block.mesh) why = Why::MorphOnly;
+        else if (same != sources.end() && baseOf(same->second.block->mesh) == baseOf(block.mesh)) why = Why::Restitched;
+        double largest = 0;
         auto mesh = std::make_shared<AdaptiveMesh>(*block.mesh);
+        // A per-plan copy names the mesh it was taken from, as a seam copy
+        // already does: the renderer draws it with that mesh's index list and
+        // knows it as a copy - one plan's, never drawn again once the plan is
+        // gone - rather than as a mesh worth keeping in its cache.
+        if (!mesh->unstitched) mesh->unstitched = block.mesh;
         bool changed = false;
         for (auto& v : mesh->vertices) {
             const double x = double(block.tile.x * block.metres()) + v.x * mesh->step;
@@ -205,8 +220,21 @@ void TerrainPlan::interpolateFrom(const std::vector<Block>& previous) {
             v.displayFrom = {h[0], h[1], source->surface->samplePrior(ox, oy)};
             v.skirt |= 8;
             changed = true;
+            {
+                const auto& m = *block.mesh;
+                const auto i = std::size_t(v.y) * (m.cells + 1) + v.x;
+                const double now = (v.skirt & 2) ? double(v.edgeBed)
+                    : std::lerp(double(m.bed[i]), double(v.parentBed), double(block.parentMorph));
+                largest = std::max(largest, std::abs(now - double(h[0])));
+            }
         }
-        if (changed) { block.mesh = std::move(mesh); interpolated = true; }
+        if (changed) {
+            (why == Why::MorphOnly ? copies.displayMorphOnly : why == Why::Restitched ? copies.displayRestitched
+                                                                                      : copies.displayNewBase) += 1;
+            copies.displayNoChange += largest < 1e-4;
+            block.mesh = std::move(mesh);
+            interpolated = true;
+        }
     }
 }
 } // namespace world::terrain

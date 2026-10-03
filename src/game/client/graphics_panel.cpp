@@ -6,6 +6,10 @@
 #include <functional>
 #include <vector>
 
+#include "game/generation/terrain_foundation.hpp"
+#include "game/world/environment.hpp"
+#include "game/world/weather.hpp"
+
 namespace client {
 namespace {
 constexpr float kRow = 26, kLabelW = 150;
@@ -59,9 +63,9 @@ bool GraphicsPanel::draw(ui::Ui& ui, game::GraphicsSettings& s) {
     ui.panel({0, 0, float(kWide), high});
     ui.text(12, 10, "GRAPHICS", theme.accent, 1.2f);
     ui.textRight(kWide - 12, 12, "O close", theme.labelSoft, 0.8f);
-    const char* tabs[] = {"Quality", "Lighting", "Sky & fog", "Scene"};
-    for (int i = 0; i < 4; ++i)
-        if (ui.tab(ui::widgetId("graphics.tab", i), {10.0f + i * 90.0f, 34, 86, 24}, tabs[i], tab_ == i)) tab_ = i;
+    const char* tabs[] = {"Quality", "Light", "Sky", "Scene", "Views"};
+    for (int i = 0; i < 5; ++i)
+        if (ui.tab(ui::widgetId("graphics.tab", i), {10.0f + i * 72.0f, 34, 70, 24}, tabs[i], tab_ == i)) tab_ = i;
     // Everything under the tabs scrolls when the window is shorter than it.
     const ui::Rect frame{0, 64, float(kWide), high - 64 - 44};
     const ui::Rect content = ui.beginScroll(ui::widgetId("graphics.scroll", tab_), frame);
@@ -114,6 +118,9 @@ bool GraphicsPanel::draw(ui::Ui& ui, game::GraphicsSettings& s) {
         slider(ui, ui::widgetId("graphics.exp"), x, y, "Exposure", s.exposure, 0.25f, 3, "%.2f", true);
         toggle(ui, ui::widgetId("graphics.grade"), x, y, "Warm grade (bloom, grain)", s.grade);
         slider(ui, ui::widgetId("graphics.gradeamt"), x, y, "Grade strength", s.gradeStrength, 0, 1, "%.2f");
+        slider(ui, ui::widgetId("graphics.brightness"), x, y, "Brightness", s.brightness, 0.6f, 1.6f, "%.2f");
+        slider(ui, ui::widgetId("graphics.contrast"), x, y, "Contrast", s.contrast, 0.6f, 1.8f, "%.2f");
+        slider(ui, ui::widgetId("graphics.saturation"), x, y, "Saturation", s.saturation, 0.3f, 1.8f, "%.2f");
         break;
     case 2:
         toggle(ui, ui::widgetId("graphics.fog"), x, y, "Distance fog", s.fog);
@@ -140,6 +147,51 @@ bool GraphicsPanel::draw(ui::Ui& ui, game::GraphicsSettings& s) {
             "Fly: RMB look, WASD, Q/E, Shift faster.",
             "F again returns to the frozen camera."};
         for (const char* line : lines) { ui.text(x, y + 4, line, theme.labelSoft, 0.8f); y += 15; }
+        break;
+    }
+    case 4: {
+        // Buttons, not keys: one lit button per group. Three to a row.
+        const auto group = [&](const char* title, const std::vector<std::string>& names, int& value,
+                               const char* id, int columns, bool enabled = true) {
+            ui.text(x, y + 2, title, theme.accent, 0.9f);
+            y += 20;
+            const float w = (kWide - x - 14 - 4.0f * (columns - 1)) / columns;
+            for (std::size_t i = 0; i < names.size(); ++i) {
+                const float bx = x + float(i % columns) * (w + 4), by = y + float(i / columns) * 26;
+                if (ui.toggle(ui::widgetId(id, int(i)), {bx, by, w, 22}, names[i], value == int(i), enabled) && enabled) {
+                    value = int(i);
+                    viewsChanged = true;
+                }
+            }
+            y += float((names.size() + columns - 1) / columns) * 26 + 8;
+        };
+        std::vector<std::string> maps;
+        for (std::size_t i = 0; i < world::kMapNames.size(); ++i) maps.push_back(i == 0 ? "natural" : world::kMapNames[i]);
+        group("Map on the ground", maps, views.map, "views.map", 3);
+        group("Ground mesh", {"off", "source step", "triangles"}, views.grid, "views.grid", 3);
+        ui.text(x, y, "step = height-sample lattice, triangles = real edges", theme.labelSoft, 0.8f);
+        y += 18;
+        if (ui.toggle(ui::widgetId("views.wire"), {x, y, kWide - x - 14, 22}, "Objects as wireframe", views.objectWire)) {
+            views.objectWire = !views.objectWire;
+            viewsChanged = true;
+        }
+        y += 26;
+        y += 4;
+        if (ui.toggle(ui::widgetId("views.weather.on"), {x, y, kWide - x - 14, 22},
+                      views.weatherOn ? "Weather: on" : "Weather: off", views.weatherOn)) {
+            views.weatherOn = !views.weatherOn;
+            viewsChanged = true;
+        }
+        y += 26;
+        {
+            std::vector<std::string> kinds;
+            for (const char* name : world::weather::kPresets) kinds.emplace_back(name);
+            group("Weather kind", kinds, views.weather, "views.weather", 3, views.weatherOn);
+        }
+        std::vector<std::string> stages;
+        for (const char* name : generation::kTerrainStageNames) stages.emplace_back(name);
+        group(views.stages ? "Generation stage" : "Generation stage (no saved stages)", stages, views.stage,
+              "views.stage", 2, views.stages);
         break;
     }
     }

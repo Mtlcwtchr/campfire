@@ -1,5 +1,7 @@
 #pragma once
 // The active GPU terrain path: pages + a quadtree cut + one immutable grid.
+#include "engine/render/geometry/range_pool.hpp"
+#include <cstdlib>
 #include <deque>
 #include <memory>
 #include <unordered_map>
@@ -51,6 +53,9 @@ public:
     struct Drawn {
         SDL_GPUBuffer* vertices = nullptr;
         SDL_GPUBuffer* indices = nullptr;
+        // Pooled: where this square's vertices start in `vertices` (bytes) and
+        // its first index in `indices`.
+        std::uint32_t vertexOffset = 0, firstIndex = 0;
         std::uint32_t waterIndices = 0;     // the surface alone, with no skirt
         // The real height range, unlike the plan's conservative bounds: the
         // highest bed in the square, and whether any water in it stands above
@@ -173,14 +178,45 @@ private:
     engine::Texture table_;
     engine::Sampler tableSampler_;
     engine::Buffer vertices_, indices_;
+    // Mesh vertices and indices live in pooled pages (engine::RangePool), not
+    // in two buffers of their own: a mesh coming or going - and every
+    // per-plan copy of one (seams, display transition) - is a range taken or
+    // given back, not a buffer created and released. A copy has the same
+    // index list as the mesh it was copied from (terrain_seams.cpp copies the
+    // whole mesh and changes vertices only), so it draws with that mesh's
+    // indices and uploads its vertices alone.
     struct MeshBuffers {
         std::shared_ptr<const world::terrain::AdaptiveMesh> source;
-        engine::Buffer vertices, indices;
+        engine::RangePool::Range vertices;
+        const world::terrain::AdaptiveMesh* indexOwner = nullptr;   // key into indexRanges_
         float highBed = 0;       // the highest ground in the square
         bool inland = false;     // any water standing above sea level
         std::uint64_t lastSerial = 0;
     };
     std::unordered_map<const world::terrain::AdaptiveMesh*, MeshBuffers> meshes_;
+    struct IndexBuffers {
+        std::shared_ptr<const world::terrain::AdaptiveMesh> source;  // the mesh the list was taken from
+        engine::RangePool::Range range;
+        std::size_t users = 0;
+    };
+    std::unordered_map<const world::terrain::AdaptiveMesh*, IndexBuffers> indexRanges_;
+    // ASR_TERRAIN_POOL_PAGE=0 (diagnostic): every mesh a page of its own -
+    // one buffer per mesh, as before the pool - for A/B pictures.
+    static std::uint64_t poolPage(std::uint64_t ordinary) {
+        const char* value = std::getenv("ASR_TERRAIN_POOL_PAGE");
+        return value && std::atoll(value) == 0 ? 256 : ordinary;
+    }
+    engine::RangePool vertexPool_{poolPage(16u << 20), 256}, indexPool_{poolPage(8u << 20), 256};
+    // ASR_TERRAIN_KEEP_COPIES=1 (diagnostic): spent per-plan copies stay in
+    // the cache as they did before, for A/B pictures.
+    bool keepCopies_ = std::getenv("ASR_TERRAIN_KEEP_COPIES") != nullptr;
+    std::vector<engine::Buffer> vertexPages_, indexPages_;
+    // Drops a mesh's ranges (and its index list once no copy uses it).
+    void forget(const world::terrain::AdaptiveMesh* key);
+    // Places one mesh in the pools; false leaves nothing behind.
+    bool place(engine::Device& device, engine::Device::Uploader& upload,
+               const std::shared_ptr<const world::terrain::AdaptiveMesh>& mesh, MeshBuffers& into);
+    std::size_t pooledUploads_ = 0, sharedIndexLists_ = 0, spentCopies_ = 0;
     std::uint32_t indexCount_ = 0, tableWidth_ = 0, tableHeight_ = 0;
     std::uint32_t surfaceIndexCount_ = 0;
     bool skirts_ = true;

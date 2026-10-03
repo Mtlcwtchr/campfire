@@ -20,6 +20,7 @@ namespace shore_shader {
 using std::asin;
 using std::cos;
 using std::sin;
+using std::sqrt;
 float frac(float value) { return value - std::floor(value); }
 float smoothstep(float low, float high, float value) {
     const float t = std::clamp((value - low) / (high - low), 0.0f, 1.0f);
@@ -27,6 +28,7 @@ float smoothstep(float low, float high, float value) {
 }
 #include "../assets/shaders/shore_motion.hlsli"
 #include "../assets/shaders/water_motion.hlsli"
+#include "../assets/shaders/water_swash.hlsli"
 }
 
 namespace {
@@ -1400,3 +1402,84 @@ TEST(shore_exposed_deposit_never_brightens_again_as_contact_recedes) {
     CHECK(checked > 1000);
 }
 
+TEST(sea_swash_front_slows_smoothly_at_arrival_turn_and_departure) {
+    using namespace shore_shader;
+    CHECK_EQ(wsSwashEnvelope(-0.01f), 0.0f);
+    CHECK_EQ(wsSwashEnvelope(1.01f), 0.0f);
+    CHECK_EQ(wsSwashEnvelope(kWsSwashPeak), 1.0f);
+    float previous = 0;
+    for (int i = 0; i <= 10000; ++i) {
+        const float q = float(i) / 10000;
+        const float height = wsSwashEnvelope(q);
+        CHECK(std::isfinite(height) && height >= 0 && height <= 1);
+        if (q <= kWsSwashPeak) CHECK(height >= previous);
+        else if (q - 0.0001f >= kWsSwashPeak) CHECK(height <= previous);
+        CHECK(std::abs(height - previous) < 0.001f);
+        previous = height;
+    }
+    // No velocity jump when the wave starts, reverses, or wraps to the next.
+    const float dt = 0.0001f;
+    for (const float q : {0.0f, kWsSwashPeak, 1.0f}) {
+        const float left = (wsSwashEnvelope(q) - wsSwashEnvelope(q - dt)) / dt;
+        const float right = (wsSwashEnvelope(q + dt) - wsSwashEnvelope(q)) / dt;
+        CHECK(std::abs(left) < 0.01f && std::abs(right) < 0.01f);
+    }
+}
+
+TEST(sea_swash_breaker_profile_closes_without_seams_or_a_sea_level_bias) {
+    using namespace shore_shader;
+    for (const float rise : {0.08f, 0.24f, 0.45f}) {
+        for (const float back : {1.6f, 2.0f, 2.7f, 3.2f}) {
+            CHECK_EQ(wsProfile(0, rise, back), 0.0f);
+            CHECK_EQ(wsProfile(1, rise, back), 0.0f);
+            CHECK_EQ(wsProfile(rise, rise, back), 1.0f);
+            double integral = 0;
+            float previous = 0;
+            for (int i = 1; i <= 10000; ++i) {
+                const float u = float(i) / 10000;
+                const float height = wsProfile(u, rise, back);
+                CHECK(std::isfinite(height) && height >= -0.000001f && height <= 1.000001f);
+                CHECK(std::abs(height - previous) < 0.002f);
+                if (u < rise) CHECK(height >= previous - 0.000001f);
+                else if (u - 0.0001f >= rise) CHECK(height <= previous + 0.000001f);
+                integral += (height + previous) * 0.00005;
+                previous = height;
+            }
+            CHECK(std::abs(integral - wsProfileMean(rise, back)) < 0.00001);
+            CHECK(wsProfile(0.00001f, rise, back) < 0.000001f);
+            CHECK(wsProfile(0.99999f, rise, back) < 0.000001f);
+        }
+    }
+}
+
+TEST(sea_swash_foam_exposure_times_follow_the_actual_front) {
+    using namespace shore_shader;
+    for (int i = 0; i <= 10000; ++i) {
+        const float height = float(i) / 10000;
+        const float came = wsSwashCame(height), went = wsSwashWent(height);
+        CHECK(came >= 0 && came <= kWsSwashPeak);
+        CHECK(went >= kWsSwashPeak && went <= 1);
+        CHECK(std::abs(wsSwashEnvelope(came) - height) < 0.000002f);
+        CHECK(std::abs(wsSwashEnvelope(went) - height) < 0.000002f);
+    }
+}
+
+TEST(sea_swash_foam_history_is_continuous_when_wave_ids_change) {
+    using namespace shore_shader;
+    for (const float period : {7.0f, 8.25f, 9.5f}) {
+        for (const float rise : {0.08f, 0.24f, 0.45f}) {
+            const auto ageAt = [&](float u) {
+                const float now = std::max(u - rise, 0.0f) * period;
+                const float before = (u + 1 - rise) * period;
+                const float blend = wsFoamRenewal(u, rise);
+                return before + (now - before) * blend;
+            };
+            CHECK(std::abs(ageAt(0.99999f) - ageAt(0.00001f)) < 0.0003f);
+        }
+        // The older of the two remembered swashes is gone before it drops
+        // out of history, even at the slowest permitted retreat (0.88T).
+        CHECK_EQ(wsResidueLifetime((2.0f - 0.88f) * period, period), 0.0f);
+        CHECK(wsResidueLifetime(0.9f * period, period) > 0);
+        CHECK(wsResidueLifetime(0.99999f * period, period) < 0.00001f);
+    }
+}

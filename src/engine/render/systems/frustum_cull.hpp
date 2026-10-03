@@ -38,6 +38,23 @@ struct CulledInstances {
     [[nodiscard]] std::size_t removed() const { return behind + outside + hidden; }
 };
 
+// Built once for an immutable gather, not once per frame. A group encloses
+// every member's bounding sphere; uncertain groups use the individual tests.
+struct InstanceCullIndex {
+    struct Group {
+        double centre[3]{};
+        double radius = 0;
+        std::uint32_t first = 0, count = 0;
+    };
+    const GatheredInstance* source = nullptr;
+    std::size_t count = 0;
+    std::vector<Group> groups;
+    std::vector<std::uint32_t> members;
+};
+
+[[nodiscard]] InstanceCullIndex buildInstanceCullIndex(
+        const GatheredInstances& gathered, std::span<const MeshDescription> assets);
+
 // `assets` is indexed by mesh id - the same catalogue the level selection
 // reads, so the two systems cannot disagree about a model's shape. A mesh with
 // no entry is treated as a point, which keeps an undescribed asset visible
@@ -48,6 +65,7 @@ struct CulledInstances {
 [[nodiscard]] CulledInstances cullToFrustum(const GatheredInstances& gathered,
                                             std::span<const MeshDescription> assets,
                                             const ScreenScale& screen,
-                                            const Horizon* horizon = nullptr);
+                                            const Horizon* horizon = nullptr,
+                                            const InstanceCullIndex* index = nullptr);
 
 } // namespace engine::render

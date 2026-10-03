@@ -63,7 +63,12 @@ std::string layersCode(const Registry& r) {
          "#define TERRAIN_LAYERS_GENERATED 1\n";
     const auto& layers = r.textureLayers();
     o << "#define GROUND_LAYERS " << layers.size() << "\n";
-    for (std::size_t i = 0; i < layers.size(); ++i) o << "//   " << i << " " << layers[i].name << "\n";
+    for (std::size_t i = 0; i < layers.size(); ++i) {
+        std::string name = layers[i].name;
+        for (auto& c : name) c = (c >= 'a' && c <= 'z') ? char(c - 'a' + 'A') :
+            ((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) ? c : '_';
+        o << "#define TERRAIN_LAYER_" << name << " " << i << "\n";
+    }
     o << "static const float kLayerMetres[GROUND_LAYERS] = {";
     for (std::size_t i = 0; i < layers.size(); ++i) o << (i ? "," : "") << (i % 8 == 0 ? "\n    " : " ") << lit(layers[i].metres);
     o << "};\n#endif\n";
@@ -353,7 +358,8 @@ std::vector<float> shaderTable(const Registry& r) {
         put(t, row, 2, d.clusterMetres, d.clusterShare, d.metal, d.rough);
         put(t, row, 3, d.slope[0], d.slope[1], d.underFoliage, d.edgeNoise);
         put(t, row, 4, d.fadeMetres[0], d.fadeMetres[1], d.emissive, d.nearWaterMetres);
-        put(t, row, 5, d.angle * kPi / 180.0, d.alongWind ? 1.0 : 0.0, 0, 0);
+        put(t, row, 5, d.angle * kPi / 180.0, d.alongWind ? 1.0 : 0.0,
+            d.texture.empty() ? 0.0 : double(layerOf(r,d.texture) + 1), 0);
     }
     for (const auto& f : r.forestBiomes()) {
         if (f.id > 255) continue;

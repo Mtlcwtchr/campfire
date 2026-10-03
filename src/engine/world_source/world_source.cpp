@@ -53,7 +53,7 @@ bool insidePolygon(const Feature& f, double x, double y) {
 // ---- raster blocks ----
 std::vector<std::uint8_t> encodeTile(const Tile& tile, std::uint8_t bytesPerChannel) {
     std::vector<std::uint8_t> out{1, std::uint8_t(tile.isUniform() ? 1 : 0), tile.channels, bytesPerChannel,
-                                  std::uint8_t(kChunkSamples & 255), std::uint8_t(kChunkSamples >> 8)};
+                                  std::uint8_t(tile.side & 255), std::uint8_t(tile.side >> 8)};
     const auto& values = tile.isUniform() ? tile.uniform : tile.values;
     out.reserve(out.size() + values.size() * bytesPerChannel);
     for (const auto v : values) {
@@ -62,14 +62,15 @@ std::vector<std::uint8_t> encodeTile(const Tile& tile, std::uint8_t bytesPerChan
     }
     return out;
 }
-std::optional<Tile> decodeTile(const std::vector<std::uint8_t>& raw, std::uint8_t channels, std::uint8_t bytes) {
+std::optional<Tile> decodeTile(const std::vector<std::uint8_t>& raw, std::uint8_t channels, std::uint8_t bytes, std::int64_t side) {
     if (raw.size() < 6 || raw[0] != 1 || raw[2] != channels || raw[3] != bytes ||
-        std::int64_t(raw[4] | (raw[5] << 8)) != kChunkSamples)
+        std::int64_t(raw[4] | (raw[5] << 8)) != side)
         return std::nullopt;
     Tile t;
     t.channels = channels;
+    t.side = std::uint16_t(side);
     const bool uniform = raw[1] != 0;
-    const std::size_t count = uniform ? channels : std::size_t(kChunkSamples * kChunkSamples) * channels;
+    const std::size_t count = uniform ? channels : std::size_t(side * side) * channels;
     if (raw.size() != 6 + count * bytes) return std::nullopt;
     auto& values = uniform ? t.uniform : t.values;
     values.resize(count);
@@ -260,7 +261,7 @@ std::optional<Feature> mergeFragments(const std::vector<Fragment>& fragments, st
 
 void Tile::expand() {
     if (!isUniform()) return;
-    values.resize(std::size_t(kChunkSamples * kChunkSamples) * channels);
+    values.resize(std::size_t(side * side) * channels);
     for (std::size_t i = 0; i < values.size(); ++i) values[i] = uniform[i % channels];
     uniform.clear();
 }
@@ -273,9 +274,10 @@ void Tile::settle() {
     values.clear();
 }
 
-Tile defaultTile(const RasterDesc& layer) {
+Tile defaultTile(const RasterDesc& layer, std::int64_t side) {
     Tile t;
     t.channels = channelsOf(layer.type);
+    t.side = std::uint16_t(side);
     for (std::size_t c = 0; c < t.channels; ++c) t.uniform.push_back(layer.defaultStored(c));
     return t;
 }
@@ -405,7 +407,7 @@ std::optional<Chunk> WorldSource::read(const ChunkKey& key, std::string* why) co
         if (layer == blockTypes_.end()) continue;   // a layer this build does not know
         const auto* desc = schema_.raster(layer->first);
         if (!desc) continue;
-        auto tile = decodeTile(b.bytes, channelsOf(desc->type), bytesPerChannel(desc->type));
+        auto tile = decodeTile(b.bytes, channelsOf(desc->type), bytesPerChannel(desc->type), chunkSamples());
         if (!tile) { fail(why, "chunk " + stemOf(key) + ": layer " + layer->first + " damaged"); return std::nullopt; }
         chunk.rasters.emplace(layer->first, std::move(*tile));
     }
@@ -415,7 +417,7 @@ std::optional<Chunk> WorldSource::read(const ChunkKey& key, std::string* why) co
 Tile WorldSource::tile(const Chunk& chunk, const std::string& layer) const {
     if (const auto it = chunk.rasters.find(layer); it != chunk.rasters.end()) return it->second;
     const auto* desc = schema_.raster(layer);
-    return desc ? defaultTile(*desc) : Tile{};
+    return desc ? defaultTile(*desc, chunkSamples()) : Tile{};
 }
 
 bool WorldSource::write(const ChunkKey& key, const Chunk& chunk, std::string* why) {
@@ -424,9 +426,12 @@ bool WorldSource::write(const ChunkKey& key, const Chunk& chunk, std::string* wh
     for (const auto& [name, t] : chunk.rasters) {
         const auto* desc = schema_.raster(name);
         if (!desc) return fail(why, "chunk names a raster the source does not have: " + name);
+        if (t.side != chunkSamples() || (!t.isUniform() && t.values.size() != std::size_t(chunkSamples() * chunkSamples()) * t.channels))
+            return fail(why, "chunk raster has the wrong sample grid: " + name);
         Tile settled = t;
         settled.settle();
-        if (settled.isUniform() && settled.uniform == defaultTile(*desc).uniform) continue;   // its default: nothing
+        settled.side = std::uint16_t(chunkSamples());
+        if (settled.isUniform() && settled.uniform == defaultTile(*desc, chunkSamples()).uniform) continue;   // its default: nothing
         blocks.push_back({blockTypeOf(name), std::uint16_t(desc->version), encodeTile(settled, bytesPerChannel(desc->type))});
     }
     std::vector<const Fragment*> vectors, poi;
@@ -472,9 +477,10 @@ void WorldSource::reindex(const ChunkKey& key, const Chunk& chunk) {
         if (desc.kind != RasterKind::Categorical) continue;
         const Tile t = tile(chunk, desc.name);
         std::map<std::uint32_t, std::array<std::int64_t, 4>> boxes;
-        const std::int64_t ox = key.x * kChunkSamples, oy = key.y * kChunkSamples;
-        for (std::int64_t y = 0; y < kChunkSamples; ++y)
-            for (std::int64_t x = 0; x < kChunkSamples; ++x) {
+        const std::int64_t side = chunkSamples();
+        const std::int64_t ox = key.x * side, oy = key.y * side;
+        for (std::int64_t y = 0; y < side; ++y)
+            for (std::int64_t x = 0; x < side; ++x) {
                 const std::uint32_t id = t.at(x, y, 0);
                 if (id == desc.defaultStored(0)) continue;
                 auto [it, fresh] = boxes.try_emplace(id, std::array<std::int64_t, 4>{ox + x, oy + y, ox + x + 1, oy + y + 1});

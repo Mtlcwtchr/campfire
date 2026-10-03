@@ -30,6 +30,7 @@ enum class Pass : engine::PassId {
     Hold,          // the replaced world's last picture, until the new one has its ground
     Sketch,        // the world editor's coast sketch, extruded out of the sea
     Highlight,     // what the editor has picked out of the world, as lines over it
+    Character,     // the player's character, skinned on the CPU (CharacterPass)
 };
 
 // One render pass on the card apiece. The world is drawn into a cleared target

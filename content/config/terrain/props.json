@@ -75,18 +75,18 @@
   },
   {
    "name": "mossy_stone",
-   "model": "Rock_Medium_1",
+   "model": "Forest_Rock_Small",
    "scale": [
-    0.4,
-    0.9
+    0.8,
+    1.6
    ]
   },
   {
    "name": "grey_boulder",
-   "model": "Rock_Medium_1",
+   "model": "Boulder_Round",
    "scale": [
     0.8,
-    1.6
+    2.2
    ]
   },
   {
@@ -99,10 +99,90 @@
   },
   {
    "name": "stones",
-   "model": "Rock_Medium_1",
+   "model": "Rock_Angular",
    "scale": [
-    0.3,
-    0.6
+    1.5,
+    3.5
+   ]
+  },
+  {
+   "name": "cliff_face_grey",
+   "model": "Cliff_Face_Grey",
+   "scale": [
+    0.55,
+    1.48
+   ]
+  },
+  {
+   "name": "cliff_face_warm",
+   "model": "Cliff_Face_Warm",
+   "scale": [
+    0.55,
+    1.65
+   ]
+  },
+  {
+   "name": "rubble",
+   "model": "Rock_Angular",
+   "scale": [
+    1.0,
+    2.2
+   ]
+  },
+  {
+   "name": "fallen_trunk",
+   "model": "Dead_Trunk",
+   "scale": [
+    0.9,
+    1.8
+   ]
+  },
+  {
+   "name": "old_stump",
+   "model": "Stump_Old",
+   "scale": [
+    0.9,
+    1.4
+   ]
+  },
+  {
+   "name": "red_mushrooms",
+   "model": "Red_Mushrooms",
+   "scale": [
+    1.2,
+    2.2
+   ]
+  },
+  {
+   "name": "river_boulder",
+   "model": "Boulder_Round",
+   "scale": [
+    2.6,
+    5.5
+   ]
+  },
+  {
+   "name": "river_cobble",
+   "model": "Forest_Rock_Small",
+   "scale": [
+    1.4,
+    3.2
+   ]
+  },
+  {
+   "name": "river_gravel",
+   "model": "Rock_Angular",
+   "scale": [
+    2.0,
+    5.0
+   ]
+  },
+  {
+   "name": "river_slab",
+   "model": "Boulder_Round",
+   "scale": [
+    1.2,
+    2.4
    ]
   }
  ]
