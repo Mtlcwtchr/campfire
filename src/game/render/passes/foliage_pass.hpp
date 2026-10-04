@@ -81,6 +81,11 @@ private:
     // one indirect argument serves both. Page terrain only.
     engine::Buffer pebble_, pebbleIndices_;
     engine::PipelineSlot pebblePipeline_ = 0;
+    // The grass near the eye as blades (BladeVS): one clump mesh drawn over the
+    // near candidates.
+    engine::Buffer blades_, bladeIndices_;
+    std::uint32_t bladeIndexCount_ = 0;
+    engine::PipelineSlot bladePipeline_ = 0;
     engine::BindingSet bindings_ = engine::kNoBindings;
 };
 

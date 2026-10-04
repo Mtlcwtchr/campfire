@@ -41,6 +41,16 @@ bool GrassCuller::setup(engine::Device& device, engine::RenderPipeline& into) {
     return true;
 }
 
+bool GrassCuller::secondDraw(engine::Device& device, engine::RenderPipeline& into, std::uint32_t indexCount) {
+    auto copy = device.makeCompute({"grass_blade_arguments.hlsl", "BladeArgumentsCS"});
+    second_ = device.makeBuffer(SDL_GPU_BUFFERUSAGE_INDIRECT | SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE,
+                                sizeof(engine::DrawArguments));
+    if (!copy || !second_) return false;
+    secondArguments_ = into.take(std::move(copy));
+    secondIndices_ = indexCount;
+    return true;
+}
+
 bool GrassCuller::dispatch(const engine::Frame& frame, engine::RenderPipeline& into,
                           std::uint32_t arenaOffset, std::size_t count) {
     if (!ready_ || !frame.device || !frame.instances || count > kCapacity ||
@@ -103,6 +113,14 @@ bool GrassCuller::dispatch(const engine::Frame& frame, engine::RenderPipeline& i
         gather.writes = {compacted_.get()};
         std::memcpy(gather.own, input, sizeof(input));
         into.dispatch(std::move(gather));
+    }
+    if (secondArguments_) {
+        engine::ComputeDispatch copy;
+        copy.pipeline = secondArguments_;
+        copy.reads = {culler_.arguments()};
+        copy.writes = {second_.get()};
+        std::memcpy(copy.own, &secondIndices_, sizeof(secondIndices_));
+        into.dispatch(std::move(copy));
     }
     return true;
 }

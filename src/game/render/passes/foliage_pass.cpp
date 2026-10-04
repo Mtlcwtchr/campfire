@@ -99,12 +99,17 @@ engine::PassPlace FoliagePass::setup(engine::Device& device, engine::RenderPipel
     wanted.depthWrite = true;
     engine::GraphicsPipeline graphics = device.makePipeline(wanted);
     if (!graphics) return {};
-    engine::GraphicsPipeline pebbles;
+    engine::GraphicsPipeline pebbles, blades;
     if (pages_) {
         wanted.vertexEntry = "PebbleVS";
         wanted.fragmentEntry = "PebblePS";
         pebbles = device.makePipeline(wanted);
         if (!pebbles) std::cerr << "Pebbles unavailable: their pipeline did not build\n";
+        // Blades are seen from both sides: no culling, as for the cards.
+        wanted.vertexEntry = "BladeVS";
+        wanted.fragmentEntry = "BladePS";
+        blades = device.makePipeline(wanted);
+        if (!blades) std::cerr << "Grass blades unavailable: their pipeline did not build\n";
     }
 
     // Clamped, not repeating: a card is a picture with edges, and a blade that
@@ -169,12 +174,43 @@ engine::PassPlace FoliagePass::setup(engine::Device& device, engine::RenderPipel
         pebble_ = uploader.add(SDL_GPU_BUFFERUSAGE_VERTEX, stone.data(), sizeof(stone));
         pebbleIndices_ = uploader.add(SDL_GPU_BUFFERUSAGE_INDEX, faces.data(), sizeof(faces));
     }
+    // The blade clump: kBlades strips of kBladeSegments segments and a tip,
+    // corner = (blade, height up it), uv.x = which edge (foliage_pages.hlsl BladeVS).
+    if (blades) {
+        constexpr int kBlades = 32, kSegments = 4;
+        std::vector<FoliageVertexGpu> strip;
+        std::vector<std::uint16_t> order;
+        for (int b = 0; b < kBlades; ++b) {
+            const auto first = std::uint16_t(strip.size());
+            for (int s = 0; s < kSegments; ++s) {
+                const float up = float(s) / float(kSegments);
+                strip.push_back({{float(b), up}, {-1, 0}});
+                strip.push_back({{float(b), up}, {1, 0}});
+            }
+            strip.push_back({{float(b), 1.0f}, {0, 0}});
+            for (int s = 0; s + 1 < kSegments; ++s) {
+                const auto a = std::uint16_t(first + 2 * s);
+                order.insert(order.end(), {a, std::uint16_t(a + 1), std::uint16_t(a + 3), a, std::uint16_t(a + 3),
+                                           std::uint16_t(a + 2)});
+            }
+            const auto last = std::uint16_t(first + 2 * (kSegments - 1));
+            order.insert(order.end(), {last, std::uint16_t(last + 1), std::uint16_t(first + 2 * kSegments)});
+        }
+        blades_ = uploader.add(SDL_GPU_BUFFERUSAGE_VERTEX, strip.data(), strip.size() * sizeof(FoliageVertexGpu));
+        bladeIndices_ = uploader.add(SDL_GPU_BUFFERUSAGE_INDEX, order.data(), order.size() * sizeof(std::uint16_t));
+        bladeIndexCount_ = std::uint32_t(order.size());
+    }
     uploader.finish();
     if (!quad_ || !quadIndices_) return {};
     if (gpuCulling_ && !culler_.setup(device,into)) return {};
+    if (gpuCulling_ && blades && !culler_.secondDraw(device, into, bladeIndexCount_)) {
+        std::cerr << "Grass blades unavailable: their indirect draw did not build\n";
+        blades = {};
+    }
 
     pipeline_ = into.take(std::move(graphics));
     if (pebbles && pebble_ && pebbleIndices_) pebblePipeline_ = into.take(std::move(pebbles));
+    if (blades && blades_ && bladeIndices_) bladePipeline_ = into.take(std::move(blades));
     bindings_ = into.take({{cards_.get(), sampler_.get()},shadow_});
     if (pages_) vertexBindings_=into.takeVertex(withBiomes(*pages_));
     return {engine::passOf(Pass::Foliage), engine::stageOf(Stage::World),
@@ -288,6 +324,14 @@ void FoliagePass::collect(const engine::Frame& frame, engine::DrawQueue& queue) 
         item.own[9]=nearWeight;
         item.own[10]=float(x_);item.own[11]=float(y_);
         queue.push(item);ASR_DIAGNOSTIC(++draws_);
+        if (bladePipeline_ && nearCandidates_) {
+            engine::DrawItem grass=item;
+            grass.pipeline=bladePipeline_;
+            grass.vertex[0]=blades_.get();grass.index=bladeIndices_.get();
+            grass.indexCount=bladeIndexCount_;
+            if (gpuCulling_) grass.indirect=culler_.secondArguments();
+            queue.push(grass);ASR_DIAGNOSTIC(++draws_);
+        }
         if (pebblePipeline_ && nearCandidates_) {
             engine::DrawItem stones=item;
             stones.pipeline=pebblePipeline_;

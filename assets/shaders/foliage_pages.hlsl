@@ -108,13 +108,13 @@ float pageFloraCard(float2 p, float4 foliage, float canopy, float moisture, floa
     if (rest < 0.32) return float(kCardSeedGrass);
     return baseVariant;
 }
-FoliageOut PageGrassVS(FoliageVertexIn vertex, PageGrassIn root)
+// What a root grows, worked out once for the cards and once for the blades
+// (BladeVS below): where it stands, how big, its colour and which plant. A
+// root with nothing on it has tint.a nought. `turf` is which of the root's
+// turf cards is asked for, 0 for the root itself.
+FoliageInstanceIn pageGrassRoot(PageGrassIn root, float turf)
 {
     FoliageInstanceIn instance = (FoliageInstanceIn)0;
-    // Which of the root's turf cards this corner belongs to (foliage_pass.cpp:
-    // the quad holds world::kTurfCards cards, four apart in corner.x).
-    const float turf = floor((vertex.corner.x + 2.0) * 0.25);
-    vertex.corner.x -= 4.0 * turf;
     const float2 p = root.position.xy;
     const GrassRun run = decodeGrassRun(root.run);
     const float blockMorph = run.morph;
@@ -123,7 +123,7 @@ FoliageOut PageGrassVS(FoliageVertexIn vertex, PageGrassIn root)
     const bool coarse = cellMetres>2.5;
     const float nearby = (1.0-smoothstep(144.0,192.0,length(p-morphReplacement.zw)))*morphReplacement.y;
     const float range = coarse?1.0-nearby:nearby;
-    if (range <= 0.0) return FoliageVS(vertex, instance);
+    if (range <= 0.0) return instance;
     const float4 address = pageAddress(p,level);
     float4 w0 = 0.0;
     float2 w1 = 0.0;
@@ -218,7 +218,37 @@ FoliageOut PageGrassVS(FoliageVertexIn vertex, PageGrassIn root)
     instance.tint = float4(grassTint,
         (present > 0.0 && address.z!=0.0 && head<=z+0.02?0.92:0.0)*range);
     instance.climate = float4(climate.environment.x,climate.environment.z,climate.geography.w,z);
-    return FoliageVS(vertex,instance);
+    return instance;
+}
+
+// Close to the eye the grass is blades (BladeVS), not cards: a grass card hands
+// over to them between these distances, and flowers, ferns and reeds stay cards.
+static const float kBladeNear = 38.0;
+static const float kBladeFar = 62.0;
+// How far a point is from the eye, for the blades' hand-over: the depth of
+// the view in perspective (camera.xy is the focus, metres ahead of the eye),
+// and out of reach in an orthographic map view, where no blade is worth drawing.
+float bladeReach(float3 p)
+{
+    const bool perspective = dot(abs(viewProjection[3].xyz), float3(1.0, 1.0, 1.0)) > 0.0;
+    return perspective ? mul(viewProjection, float4(p, 1.0)).w : 1.0e6;
+}
+bool bladeGrass(float variant)
+{
+    const int v = int(variant + 0.5);
+    return v < 6 || v == kCardShortGrass || v == kCardDryGrass || v == kCardSeedGrass;
+}
+
+FoliageOut PageGrassVS(FoliageVertexIn vertex, PageGrassIn root)
+{
+    // Which of the root's turf cards this corner belongs to (foliage_pass.cpp:
+    // the quad holds world::kTurfCards cards, four apart in corner.x).
+    const float turf = floor((vertex.corner.x + 2.0) * 0.25);
+    vertex.corner.x -= 4.0 * turf;
+    FoliageInstanceIn instance = pageGrassRoot(root, turf);
+    if (decodeGrassRun(root.run).cell < 2.5 && bladeGrass(instance.variant))
+        instance.tint.a *= smoothstep(kBladeNear, kBladeFar, bladeReach(root.position));
+    return FoliageVS(vertex, instance);
 }
 
 
@@ -326,5 +356,147 @@ float4 PebblePS(PebbleOut input) : SV_Target0
     const float shadow = proceduralShadow(input.worldPosition, normal);
     const float occlusion = 0.70 + 0.30 * saturate(normal.z * 0.5 + 0.5);
     const float3 lit = pigment * landscapeDaylight(normal, occlusion, shadow);
+    return float4(landscapeFinish(lit, input.worldPosition), sceneDepthAlpha(input.worldPosition));
+}
+
+
+// Blades: the grass near the eye as geometry, not pictures.
+//
+// A root within kBladeFar is a clump of real blades - each a curved strip,
+// tapering to a point, with a normal of its own and its own lean in the wind -
+// drawn from the same candidates and the same cull as the cards (one more
+// draw, like the pebbles). The clump mesh (foliage_pass.cpp) is kBlades blades
+// of kBladeSegments segments: corner.x is the blade, corner.y how far up it,
+// uv.x which edge (-1, +1; nought at the tip). Everything else - where each
+// blade stands in the clump, how tall, how curved, which way it faces - is a
+// hash of the root and the blade, so nothing moves as the camera does.
+//
+// Fewer blades further out, each wider so the clump keeps its cover, and by
+// kBladeFar none: the cards have taken over (PageGrassVS fades them in).
+static const int kBlades = 32;
+
+struct BladeOut {
+    float4 position : SV_Position;
+    float3 worldPosition : TEXCOORD0;
+    float3 normal : TEXCOORD1;
+    float4 colour : TEXCOORD2;    // rgb pigment, a: how far up the blade
+    float4 weather : TEXCOORD3;
+    float2 lean : TEXCOORD4;      // bend, gust
+};
+
+BladeOut BladeVS(FoliageVertexIn vertex, PageGrassIn root)
+{
+    BladeOut hidden = (BladeOut)0;
+    hidden.position = float4(0, 0, 0, 1);
+    const float2 base = root.position.xy;
+    const GrassRun run = decodeGrassRun(root.run);
+    if (run.cell > 2.5) return hidden;
+    const float reach = bladeReach(root.position);
+    if (reach > kBladeFar) return hidden;
+    // How many of the clump's blades this distance can carry.
+    const float blade = vertex.corner.x;
+    const float shown = lerp(float(kBlades), 7.0, smoothstep(8.0, kBladeFar, reach));
+    if (blade >= shown) return hidden;
+    const FoliageInstanceIn instance = pageGrassRoot(root, 0.0);
+    if (instance.tint.a <= 0.0 || !bladeGrass(instance.variant)) return hidden;
+
+    const uint2 cell = uint2(int2(floor(base / 2.0)));
+    const uint b = uint(blade + 0.5);
+    const float r0 = foliageHash(cell.x ^ (b * 0x9e37u), cell.y ^ 0x2b1du);
+    const float r1 = foliageHash(cell.x ^ 0x5d31u, cell.y ^ (b * 0x7f4bu));
+    const float r2 = foliageHash(cell.x ^ (b * 0x1f2bu), cell.y ^ (b * 0x3a5du));
+    const float r3 = foliageHash(cell.x ^ (b * 0x61c9u), cell.y ^ 0x77e1u);
+    // Where in the clump: four tufts over the root's cell, each a handful of
+    // blades from one crown - grass grows in tufts, and a tuft reads at a
+    // glance where blades scattered evenly read as stubble.
+    const uint tuft = b & 3u;
+    const float ta = foliageHash(cell.x ^ (tuft * 0x2c9bu), cell.y ^ 0x5151u) * 6.2831853;
+    const float tr = 0.95 * sqrt(foliageHash(cell.x ^ 0x0f0fu, cell.y ^ (tuft * 0x61d3u)));
+    const float angle = r0 * 6.2831853;
+    const float2 foot = base + float2(cos(ta), sin(ta)) * tr + float2(cos(angle), sin(angle)) * (0.16 * sqrt(r1));
+    // Which way the blade faces and leans at rest, how tall, how wide.
+    // Facing out of the tuft's crown, more or less: a tuft splays.
+    const float yaw = angle + (r2 - 0.5) * 1.6;
+    const float2 facing = float2(cos(yaw), sin(yaw));
+    const float2 side = float2(-facing.y, facing.x);
+    const bool dry = int(instance.variant + 0.5) == kCardDryGrass;
+    const float height = min(instance.scale, 1.3) * (0.55 + 0.55 * r3) * (dry ? 0.75 : 1.0) * 1.15;
+    const float widen = sqrt(float(kBlades) / shown);
+    const float width = (0.028 + 0.022 * r1) * widen * (0.8 + 0.4 * min(instance.scale, 1.3));
+    const float curl = 0.15 + 0.45 * frac(r0 * 5.13);   // how far the tip falls forward at rest
+
+    // The wind, as the cards have it, per blade: its own stiffness and beat.
+    const float t = viewport.z;
+    const float2 direction = wind.xy;
+    const float own = frac(instance.phase + r2 * 0.61);
+    const float stiffness = 0.70 + 0.80 * frac(own * 7.31);
+    const float beat = frac(own * 3.77) * 6.2831853;
+    const float sway = sin(own * 6.28 + t * 1.15) * 0.10 + sin(beat + t * 0.61) * 0.06;
+    const float gust = windGust(foot, direction, t, wind.w, 1.0);
+    const float front = windFront(foot, direction, t, 1.0);
+    const float bend = (windLean(gust, front) * wind.z + sway) / stiffness;
+    const float shiver = sin(t * 8.7 + beat * 2.3) * 0.06 * saturate(gust - 0.55);
+
+    // The blade's spine: up, curling forward, pushed downwind, the length kept
+    // (a leaning blade is a shorter blade, never a stretched one).
+    const float up = vertex.corner.y;
+    const float lean = saturate(curl * up * up + (bend + shiver * up) * 0.42 * up * up);
+    const float2 bow = facing * (curl * up * up) + direction * ((bend + shiver * up) * 0.42 * up * up);
+    float3 spine = float3(foot + bow * height, instance.position.z + up * height * sqrt(saturate(1.0 - lean * lean)));
+    // Tapering to a point; the edge this vertex is on.
+    const float edge = vertex.uv.x;
+    const float halfWidth = width * 0.5 * pow(saturate(1.0 - up), 0.65);
+    spine.xy += side * edge * halfWidth;
+
+    // The normal: the blade's face, turned by the bow, and rounded across it so
+    // a blade has a lit edge and a shaded one instead of one flat value.
+    const float3 tangent = normalize(float3(bow * height * 2.0 / max(up, 0.05), height));
+    float3 face = normalize(cross(tangent, float3(side, 0.0)));
+    if (face.z < 0.0) face = -face;
+    // And bent most of the way up: a sward is lit as a surface, not as a
+    // thousand vertical strips each turned edge-on to a low sun.
+    const float3 normal = normalize(lerp(normalize(face + float3(side, 0.0) * edge * 0.55), float3(0, 0, 1), 0.6));
+
+    BladeOut output;
+    output.position = project(spine);
+    output.worldPosition = spine;
+    output.normal = normal;
+    // Darker at the foot, lighter and warmer at the tip; each blade a little
+    // its own, dry blades straw-coloured towards their tips.
+    float3 pigment = instance.tint.rgb * lerp(float3(0.92, 0.97, 0.88), float3(1.06, 1.02, 0.94), frac(r3 * 3.7));
+    pigment *= lerp(0.75, 1.15, up);
+    if (dry || int(instance.variant + 0.5) == kCardSeedGrass)
+        pigment = lerp(pigment, pigment * float3(1.25, 1.08, 0.65), up * (dry ? 0.8 : 0.4));
+    output.colour = float4(pigment, up);
+    const WeatherVertex climate = weatherVertex(instance.position, instance.climate.x, instance.climate.y, instance.climate.z);
+    output.weather = climate.surface;
+    output.weather.w = climate.air.x;
+    output.lean = float2(bend, gust);
+    return output;
+}
+
+float4 BladePS(BladeOut input, bool front : SV_IsFrontFace) : SV_Target0
+{
+    // Both faces of a blade are its face: turn the normal to the eye.
+    float3 normal = normalize(input.normal);
+    const float3 eye = landscapeEye(input.worldPosition);
+    if (dot(normal, eye) < 0.0) normal = -normal;
+    const float up = input.colour.a;
+    float3 pigment = landscapePigment(input.colour.rgb, 1.0);
+    pigment = styleSurfaceColour(pigment, input.worldPosition, kStyleVegetation, 1.0, 0.0);
+    pigment = weatherVegetation(pigment, parametersPS[0].z, input.weather.y, input.weather.w);
+    pigment = lerp(pigment, float3(0.76, 0.80, 0.82), wxSmooth(0.01, 0.25, input.weather.x) * wxSmooth(0.45, 1.0, up) * 0.8);
+    // The pass's card array stays bound and read, so this stage keeps the
+    // grass pipeline's resource layout (one binding set for every draw).
+    pigment *= 0.97 + 0.03 * cardsTex.SampleLevel(cardsSampler, float3(0.5, 0.5, 0.0), 6.0).a;
+    const float shadow = proceduralShadow(input.worldPosition, normal);
+    // The sward shades its own feet.
+    const float occlusion = lookRootOcclusion(up);
+    float3 lit = pigment * landscapeDaylight(normal, occlusion, shadow);
+    // Light through the leaf, strongest at the thin tips against the sun.
+    const float backlight = pow(saturate(dot(-landscapeSun(), eye) * 0.5 + 0.5), 3.0);
+    lit += pigment * float3(1.06, 1.0, 0.70) * (backlight * up * 0.22) * shadow;
+    // A gust front passing reads as a band of light over the field.
+    lit *= 1.0 + (input.lean.x - 0.23) * 0.10 * up;
     return float4(landscapeFinish(lit, input.worldPosition), sceneDepthAlpha(input.worldPosition));
 }
