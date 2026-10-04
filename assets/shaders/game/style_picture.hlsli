@@ -75,9 +75,27 @@ void stylePicture(inout StylePicture p)
     // not turn to dye. Greens lean a touch to the warm side - the late sun on
     // grass - and the sky keeps its blue.
     luma = gradeLuma(c);
-    const float chroma = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
-    const float vibrance = 1.0 + 0.30 * (1.0 - saturate(chroma * 2.5));
-    c = lerp(float3(luma, luma, luma), c, vibrance * p.saturation * (1.0 + curve.y));
+    c = lerp(float3(luma, luma, luma), c, p.saturation * (1.0 + curve.y));
+    // --- colour, held where the painters held it -----------------------------
+    //
+    // The references (doc/references/artstyle, tools/style_reference.py) are
+    // saturated where it counts and quiet elsewhere: a fifth of their pixels
+    // carry strong colour, against nearly all of ours. Saturation is soft-
+    // clipped towards a ceiling, so a colour already strong keeps its hue and
+    // loses its neon, and a dull one is left alone. Greens are held hardest -
+    // a painted meadow is an olive-to-sap field, not a lit screen - and the
+    // sky's blue least, because a deep cobalt sky is half of the look.
+    {
+        const float top = max(c.r, max(c.g, c.b)), low = min(c.r, min(c.g, c.b));
+        const float sat = top > 1e-4 ? (top - low) / top : 0.0;
+        const float green = saturate((c.g - max(c.r, c.b)) * 5.0) * saturate(1.0 - (c.b - c.r) * 3.0);
+        const float blue = saturate((c.b - max(c.r, c.g)) * 4.0);
+        const float ceiling = lerp(lerp(0.80, 0.64, green), 0.92, blue);
+        const float held = ceiling * (1.0 - exp(-sat / ceiling));
+        const float k = sat > 1e-4 ? held / sat : 1.0;
+        const float l = gradeLuma(c);
+        c = l + (c - l) * k;
+    }
     // Greens kept green: a hair warmer in the light, never pushed to olive.
     const float green = saturate((c.g - max(c.r, c.b)) * 6.0);
     c += float3(0.010, 0.006, -0.008) * green;

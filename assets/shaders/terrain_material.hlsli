@@ -84,20 +84,81 @@ struct MaterialBand {
     float3 normal;
 };
 
+// Hex-tiling (Mikkelsen, "Practical Real-Time Hex-Tiling", JCGT 2022): the
+// plane cut into a triangle grid, every grid vertex its own copy of the scan
+// - shifted and turned at random - and each point the blend of the three
+// copies at the corners of its triangle, weighted towards the nearest and
+// towards the brighter detail so the hand-over runs along the scan's own
+// features instead of fading two pictures into a mush.
+//
+// It replaces the two fixed copies crossfaded by a 64 m Perlin field, which
+// showed close up as the noise's own pattern and from mid range as the same
+// two-metre photograph repeated: here no two neighbouring cells of the grid
+// show the same piece of the scan the same way round.
+static const float kHexCells = 1.6;        // grid vertices across one turn of the scan
+static const float kHexRotation = 1.0;     // how much each copy may turn (1 = any angle)
+static const float kHexSharpness = 7.0;
+static const float kHexContrast = 0.6;
+
+void hexTriangle(float2 st, out float3 w, out int2 v1, out int2 v2, out int2 v3)
+{
+    st *= 3.4641016 * kHexCells;   // 2 sqrt(3) a turn, times the cells
+    const float2 skewed = float2(st.x - 0.57735027 * st.y, 1.15470054 * st.y);
+    const int2 base = int2(floor(skewed));
+    float3 t = float3(frac(skewed), 0.0);
+    t.z = 1.0 - t.x - t.y;
+    const float s = step(0.0, -t.z);
+    const float s2 = 2.0 * s - 1.0;
+    w = float3(-t.z * s2, s - t.y * s2, s - t.x * s2);
+    v1 = base + int2(int(s), int(s));
+    v2 = base + int2(int(s), 1 - int(s));
+    v3 = base + int2(1 - int(s), int(s));
+}
+
+float2 hexHash(int2 v, int layer)
+{
+    uint h = uint(v.x) * 0x8da6b343u ^ uint(v.y) * 0xd8163841u ^ uint(layer) * 0xcb1ab31fu;
+    h ^= h >> 13; h *= 0x5bd1e995u; h ^= h >> 15;
+    return float2(float(h & 0xffffu), float(h >> 16)) / 65535.0;
+}
+
+// The turn of a copy, as the matrix that takes texture space to the copy.
+float2x2 hexTurn(float2 random)
+{
+    const float angle = (random.x - 0.5) * 6.2831853 * kHexRotation;
+    const float c = cos(angle), s = sin(angle);
+    return float2x2(c, -s, s, c);
+}
+
 MaterialBand sampleMaterialBand(int layer, float2 uv, float2 dx, float2 dy, float blend)
 {
+    float3 w;
+    int2 v[3];
+    hexTriangle(uv, w, v[0], v[1], v[2]);
+    float3 colour[3], normal[3];
+    float4 properties[3];
+    [unroll] for (int k = 0; k < 3; ++k) {
+        const float2 random = hexHash(v[k], layer);
+        const float2x2 turn = hexTurn(random);
+        const float2 at = mul(turn, uv) + random.yx * 7.31;
+        const float2 gx = mul(turn, dx), gy = mul(turn, dy);
+        colour[k] = groundTex.SampleGrad(groundSampler, float3(at, layer), gx, gy).rgb;
+        properties[k] = groundPropertiesTex.SampleGrad(groundPropertiesSampler, float3(at, layer), gx, gy);
+        float3 n = groundNormalTex.SampleGrad(groundNormalSampler, float3(at, layer), gx, gy).xyz * 2.0 - 1.0;
+        // The normal map's slope is in the copy's frame: turned back to the plane's.
+        n.xy = mul(n.xy, turn);
+        normal[k] = n;
+    }
+    // Nearest corner first, the brighter detail through: the scan's own
+    // stones and blades decide where one copy gives way to the next.
+    const float3 luminance = float3(0.2126, 0.7152, 0.0722);
+    const float3 light = float3(dot(colour[0], luminance), dot(colour[1], luminance), dot(colour[2], luminance));
+    float3 weights = lerp(1.0, light, kHexContrast) * pow(max(w, 0.0), kHexSharpness);
+    weights /= max(dot(weights, float3(1.0, 1.0, 1.0)), 1e-5);
     MaterialBand s;
-    // Constant offsets, continuous world-space weights: no floor-cell seams
-    // and no derivative of a random offset polluting mip selection.
-    const float2 a = uv + float2(0.17, 0.63);
-    const float2 b = uv + float2(0.71, 0.29);
-    // Keep scan contrast quiet through the copy hand-over: no grain boost.
-    s.colour = lerp(groundTex.SampleGrad(groundSampler, float3(a, layer), dx, dy).rgb,
-                    groundTex.SampleGrad(groundSampler, float3(b, layer), dx, dy).rgb, blend);
-    s.properties = lerp(groundPropertiesTex.SampleGrad(groundPropertiesSampler, float3(a, layer), dx, dy),
-                        groundPropertiesTex.SampleGrad(groundPropertiesSampler, float3(b, layer), dx, dy), blend);
-    s.normal = lerp(groundNormalTex.SampleGrad(groundNormalSampler, float3(a, layer), dx, dy).xyz,
-                    groundNormalTex.SampleGrad(groundNormalSampler, float3(b, layer), dx, dy).xyz, blend) * 2.0 - 1.0;
+    s.colour = colour[0] * weights.x + colour[1] * weights.y + colour[2] * weights.z;
+    s.properties = properties[0] * weights.x + properties[1] * weights.y + properties[2] * weights.z;
+    s.normal = normal[0] * weights.x + normal[1] * weights.y + normal[2] * weights.z;
     return s;
 }
 
