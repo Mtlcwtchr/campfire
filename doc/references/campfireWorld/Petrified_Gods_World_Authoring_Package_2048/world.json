@@ -1,0 +1,202 @@
+{
+  "format": "campfire.world-authoring",
+  "version": 1,
+  "world": {
+    "width_m": 1048576.0,
+    "height_m": 2228224.0,
+    "sample_m": 256,
+    "chunk_m": 32768
+  },
+  "origin_m": [
+    0.0,
+    0.0
+  ],
+  "size_m": [
+    1048576.0,
+    2228224.0
+  ],
+  "rasters": {
+    "height": {
+      "file": "raster/height.png",
+      "type": "u16",
+      "kind": "height",
+      "min_m": -200,
+      "max_m": 3200,
+      "default_m": -60.0,
+      "interpolation": "bicubic",
+      "optional": false,
+      "version": 1
+    },
+    "water": {
+      "file": "raster/water.png",
+      "type": "u8",
+      "kind": "flags",
+      "default": 0,
+      "bits": {
+        "lake": 0
+      },
+      "optional": true,
+      "version": 1
+    },
+    "control_0": {
+      "file": "raster/control_0.png",
+      "type": "rgba8",
+      "kind": "control",
+      "version": 1,
+      "channels": {
+        "R": {
+          "name": "moisture_bias",
+          "range": [
+            0,
+            1
+          ],
+          "default": 0.5,
+          "interpolation": "bilinear",
+          "optional": true,
+          "affects": [
+            "climate",
+            "ecology"
+          ]
+        },
+        "G": {
+          "name": "forest_bias",
+          "range": [
+            0,
+            1
+          ],
+          "default": 0.5,
+          "interpolation": "bilinear",
+          "optional": true,
+          "affects": [
+            "ecology",
+            "vegetation"
+          ]
+        },
+        "B": {
+          "name": "mountain_strength",
+          "range": [
+            0,
+            1
+          ],
+          "default": 0.0,
+          "interpolation": "bilinear",
+          "optional": true,
+          "affects": [
+            "terrain",
+            "drainage"
+          ]
+        },
+        "A": {
+          "name": "erosion_strength",
+          "range": [
+            0,
+            1
+          ],
+          "default": 0.5,
+          "interpolation": "bilinear",
+          "optional": true,
+          "affects": [
+            "terrain"
+          ]
+        }
+      }
+    },
+    "ground": {
+      "file": "raster/ground.png",
+      "type": "u8",
+      "kind": "categorical",
+      "default": 0,
+      "optional": true,
+      "version": 1,
+      "ids": {
+        "0": "default",
+        "1": "fertile",
+        "2": "sparse",
+        "3": "rough",
+        "4": "rock",
+        "5": "swamp",
+        "6": "wastes",
+        "7": "conifer",
+        "8": "old_oak",
+        "9": "eerie",
+        "10": "charred",
+        "11": "jagged",
+        "12": "lake",
+        "13": "tropical_forest",
+        "14": "tropical_soil",
+        "15": "savanna",
+        "16": "dunes",
+        "17": "savanna_wood",
+        "18": "beach",
+        "19": "scarlet",
+        "20": "crater",
+        "21": "desert",
+        "22": "atrod_valley",
+        "23": "atrod_rock",
+        "24": "volcanic_rock",
+        "25": "warm_rock",
+        "26": "elnor_fertile",
+        "27": "kagar_fertile"
+      }
+    },
+    "forest": {
+      "file": "raster/forest.png",
+      "type": "u8",
+      "kind": "categorical",
+      "default": 0,
+      "optional": true,
+      "version": 1,
+      "ids": {
+        "1": "old_mixed",
+        "2": "sparse_wood",
+        "3": "swamp_thin",
+        "4": "shrubland",
+        "5": "charred_dead",
+        "6": "beech_mixed",
+        "7": "conifer",
+        "8": "old_oak",
+        "9": "eerie",
+        "10": "withered",
+        "11": "tropical",
+        "12": "savanna_dry",
+        "13": "savanna_coast",
+        "14": "barren"
+      }
+    },
+    "decor": {
+      "file": "raster/decor.png",
+      "type": "u8",
+      "kind": "categorical",
+      "default": 0,
+      "optional": true,
+      "version": 1,
+      "ids": {
+        "1": "deadwood_mossy",
+        "2": "bog_snags",
+        "3": "stones_stumps",
+        "4": "wastes_debris",
+        "5": "elnor_deadwood",
+        "6": "driftwood_vines",
+        "7": "dry_branches_stones",
+        "8": "oak_litter"
+      }
+    },
+    "water_type": {
+      "file": "raster/water_type.png",
+      "type": "u8",
+      "kind": "categorical",
+      "default": 0,
+      "optional": true,
+      "version": 1,
+      "ids": {
+        "1": "clear",
+        "2": "bog",
+        "3": "rotten_green",
+        "4": "power_slime",
+        "5": "tropical",
+        "6": "shallow_clear"
+      }
+    }
+  },
+  "vectors": {}
+}

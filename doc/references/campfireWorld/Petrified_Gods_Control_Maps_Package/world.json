@@ -1,0 +1,66 @@
+{
+  "file": "raster/control_0.png",
+  "type": "rgba8",
+  "kind": "control",
+  "channels": {
+    "R": {
+      "name": "moisture_bias",
+      "range": [
+        0,
+        1
+      ],
+      "default": 0.5,
+      "interpolation": "bilinear",
+      "optional": true,
+      "version": 1,
+      "affects": [
+        "climate",
+        "ecology"
+      ]
+    },
+    "G": {
+      "name": "forest_bias",
+      "range": [
+        0,
+        1
+      ],
+      "default": 0.5,
+      "interpolation": "bilinear",
+      "optional": true,
+      "version": 1,
+      "affects": [
+        "ecology",
+        "vegetation"
+      ]
+    },
+    "B": {
+      "name": "mountain_strength",
+      "range": [
+        0,
+        1
+      ],
+      "default": 0,
+      "interpolation": "bilinear",
+      "optional": true,
+      "version": 1,
+      "affects": [
+        "terrain",
+        "drainage"
+      ]
+    },
+    "A": {
+      "name": "erosion_strength",
+      "range": [
+        0,
+        1
+      ],
+      "default": 0.5,
+      "interpolation": "bilinear",
+      "optional": true,
+      "version": 1,
+      "affects": [
+        "terrain"
+      ]
+    }
+  }
+}

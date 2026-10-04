@@ -28,6 +28,7 @@ out/
 
 # --- sim artifacts ---
 saves/
+worlds/
 reports/
 !/doc/reports/
 /doc/reports/*
@@ -39,7 +40,9 @@ reports/
 !/doc/reports/render_systems_step_*/
 !/doc/reports/render_systems_step_*/**
 /doc/reports/**/.DS_Store
+/doc/obsolete/
 *.log
+unnamed.patch
 
 # --- IDE and tooling caches ---
 .cache/
@@ -55,6 +58,7 @@ __pycache__/
 # baked texture maps and mip levels are reproducible outputs of pack_terrain.py.
 /assets/generated/
 /assets/downloaded/
+/assets/ref/
 /assets/retired/
 # Poly Haven scene-model sources: reproducible with tools/fetch_models.py from
 # content/config/scene_model_sources.json (md5-checked), and hundreds of MB.
