@@ -6194,6 +6194,7 @@ suppress и усиливается boost; вторичный разброс по
 В Debug детальные уровни у старта появляются к ~900 кадру против ~240 без
 контента; в Release разница должна быть кратно меньше.
 
-**Записи ассетов**: `assets/models/asset_meta.json` — 21 модель (Poly Haven CC0,
-Megascans). Без источника: базовые 8 моделей, gv_free_shrubs, hornbeam_forest,
-np_trident_maple — валидатор предупреждает.
+**Записи ассетов**: `assets/models/asset_meta.json` — 28 моделей: Poly Haven
+(CC0), Megascans, а также gv_free_shrubs, hornbeam_forest и np_trident_maple —
+это CC0 с Fab, скачанные по Personal-лицензии Fab. Без записи остаются только
+базовые модели (Bush_Common, Deadwood_*, Mushroom_Common, Rock_Medium_1).

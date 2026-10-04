@@ -1,5 +1,5 @@
 {
-  "comment": "Asset records (engine/environment/asset_meta.hpp) for the scene models, from content/config/scene_model_sources.json (Poly Haven, CC0) and the Megascans ids. Models whose source is not recorded anywhere are left out on purpose: content_validator lists them until someone records them.",
+  "comment": "Asset records (engine/environment/asset_meta.hpp) for the scene models, from content/config/scene_model_sources.json (Poly Haven, CC0) the Megascans ids, and the Fab downloads (CC0, fetched under the Fab Personal licence). Models whose source is not recorded anywhere are left out on purpose: content_validator lists them until someone records them.",
   "assets": [
     {
       "name": "Cliff_Face_Grey",
@@ -291,6 +291,92 @@
       "tags": [
         "tree_broadleaf"
       ]
+    },
+    {
+      "name": "Shrub_Dense",
+      "source": "Fab (fab.com): gv_free_shrubs",
+      "author": "Fab",
+      "license": "CC0-1.0",
+      "redistribution": "downloaded from Fab under the Personal licence; the asset itself is CC0",
+      "modifications": [
+        "decimated",
+        "prepared by tools/prepare_environment_models.py"
+      ],
+      "category": "shrub"
+    },
+    {
+      "name": "Shrub_Low",
+      "source": "Fab (fab.com): gv_free_shrubs",
+      "author": "Fab",
+      "license": "CC0-1.0",
+      "redistribution": "downloaded from Fab under the Personal licence; the asset itself is CC0",
+      "modifications": [
+        "decimated",
+        "prepared by tools/prepare_environment_models.py"
+      ],
+      "category": "shrub"
+    },
+    {
+      "name": "Hornbeam_Forest_A",
+      "source": "Fab (fab.com): hornbeam_forest",
+      "author": "Fab",
+      "license": "CC0-1.0",
+      "redistribution": "downloaded from Fab under the Personal licence; the asset itself is CC0",
+      "modifications": [
+        "decimated",
+        "prepared by tools/prepare_environment_models.py"
+      ],
+      "category": "tree_broadleaf"
+    },
+    {
+      "name": "Hornbeam_Forest_B",
+      "source": "Fab (fab.com): hornbeam_forest",
+      "author": "Fab",
+      "license": "CC0-1.0",
+      "redistribution": "downloaded from Fab under the Personal licence; the asset itself is CC0",
+      "modifications": [
+        "decimated",
+        "prepared by tools/prepare_environment_models.py"
+      ],
+      "category": "tree_broadleaf"
+    },
+    {
+      "name": "Trident_Maple",
+      "source": "Fab (fab.com): np_trident_maple",
+      "author": "Fab",
+      "license": "CC0-1.0",
+      "redistribution": "downloaded from Fab under the Personal licence; the asset itself is CC0",
+      "modifications": [
+        "decimated",
+        "prepared by tools/prepare_environment_models.py"
+      ],
+      "category": "tree_broadleaf"
+    },
+    {
+      "name": "Amber_Hornbeam",
+      "source": "Fab (fab.com): hornbeam_forest",
+      "author": "Fab",
+      "license": "CC0-1.0",
+      "redistribution": "downloaded from Fab under the Personal licence; the asset itself is CC0",
+      "modifications": [
+        "decimated",
+        "prepared by tools/prepare_environment_models.py",
+        "leaves recoloured"
+      ],
+      "category": "tree_broadleaf"
+    },
+    {
+      "name": "Blossom_Maple",
+      "source": "Fab (fab.com): np_trident_maple",
+      "author": "Fab",
+      "license": "CC0-1.0",
+      "redistribution": "downloaded from Fab under the Personal licence; the asset itself is CC0",
+      "modifications": [
+        "decimated",
+        "prepared by tools/prepare_environment_models.py",
+        "leaves recoloured"
+      ],
+      "category": "tree_broadleaf"
     }
   ]
 }
