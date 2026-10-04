@@ -1,0 +1,9 @@
+{
+  "comment": "Surface style regions (engine/environment/style.hpp), read by assets/shaders/game/style_surface.hlsli. Every row is a change from the unstyled colour; zeros draw as before. Regions are matched by the ground category and zone under the camera. Natural regions are proposed in doc/plan_procedural_environment_2026-10-03.md part J and wait for approval.",
+  "rows": ["shadow_tint", "highlight_tint", "shaping", "macro", "print"],
+  "default": "neutral",
+  "blend_seconds": 4,
+  "regions": [
+    {"name": "neutral", "rows": {}}
+  ]
+}

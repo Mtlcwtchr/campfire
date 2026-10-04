@@ -106,6 +106,21 @@ struct Scene {
     float terrainLook[4]{};
     // World-anchored forcing for long water waves, independent of eye position.
     float swellWind[4]{};
+    // The procedural environment's surface style (engine/environment/style.hpp):
+    // the rows of the game's palette for the region under the camera, blended
+    // as the camera crosses regions. Opaque to the engine; the game's
+    // styleSurface() (assets/shaders/game/style_surface.hlsli) reads them.
+    // All zero: no style, the surfaces are drawn as they always were.
+    float style[8][4]{};
+    // The picture's style: the rows of the game's grading profile for where
+    // the camera stands (content/config/style/grades.json), blended as it
+    // moves. Opaque to the engine like `style`; read by the game's
+    // stylePicture() in the grade pass. All zero: the built-in grade.
+    float gradeStyle[8][4]{};
+    // The environment's switches: x = page masks present, y = the mask channel
+    // (0-7) or zone (8) the debug view shows, z = ground cover table present,
+    // w = style rows present. gradeStyle is present when environment[3] > 1.5.
+    float environment[4]{};
 };
 
 // What CPU culling/LOD code must read instead of the drawing camera.

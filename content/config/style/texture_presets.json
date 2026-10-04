@@ -1,0 +1,17 @@
+{
+  "comment": "Presets for tools/stylize_textures.py (fantasy_80s_art_asset_style_spec §6). Draft: tune on real assets before use.",
+  "presets": {
+    "painted_base": {
+      "steps": [
+        {"op": "microcontrast", "radius": 3.0, "keep": 0.55},
+        {"op": "palette", "shadow": [0.42, 0.45, 0.62], "highlight": [1.0, 0.92, 0.74],
+         "shadow_strength": 0.3, "highlight_strength": 0.25, "saturation": 0.95},
+        {"op": "macro", "scale": 160, "value": 0.1, "warmth": 0.05},
+        {"op": "posterize", "levels": 14, "amount": 0.3},
+        {"op": "normal", "radius": 8.0, "large": 1.0, "fine": 0.45},
+        {"op": "roughness", "radius": 6.0, "levels": 5}
+      ],
+      "variants": []
+    }
+  }
+}

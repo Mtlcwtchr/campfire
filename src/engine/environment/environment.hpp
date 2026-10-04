@@ -38,6 +38,13 @@ struct EnvironmentSetup {
     DrainageClimate climate;
     DrainageSettings drainage;
     std::uint64_t seed = 0;
+    // Bumped by the game whenever its classifier or field source changes what
+    // it answers: it is part of the fingerprint baked pages are filed under.
+    std::uint64_t gameVersion = 0;
+    // Features removed by hand (PlannerContext::removed), and a number that
+    // changes when they do (it is part of the fingerprint).
+    std::uint64_t removedVersion = 0;
+    std::function<bool(std::uint64_t id, double x, double y)> removed;
 };
 
 struct EnvironmentProblem {
@@ -63,6 +70,13 @@ public:
     [[nodiscard]] const EnvironmentSetup& setup() const { return setup_; }
     [[nodiscard]] std::uint64_t generation() const { return generation_; }
 
+    // Whether anything writes masks: zones to classify, a zone callback, or a
+    // recipe with mask writes. When nothing does, pages carry no mask grid.
+    [[nodiscard]] bool writesMasks() const;
+    // Everything that decides what this environment does to the ground and
+    // the masks, as one number; 0 when it does nothing to either. Baked pages
+    // are filed under it, so editing a recipe cannot reuse a stale page.
+    [[nodiscard]] std::uint64_t fingerprint() const { return fingerprint_; }
     // The masks of a page, the way the page baker asks for them.
     [[nodiscard]] PageMasks masks(double x0, double y0, double step, int side) const;
     // The GPU cover table (cover.hpp) for this catalogue's zones.
@@ -76,6 +90,7 @@ private:
     std::shared_ptr<const FeatureLayer> features_;
     std::shared_ptr<const StyleTable> palettes_, grades_;
     std::uint64_t generation_ = 0;
+    std::uint64_t fingerprint_ = 0;
 };
 
 // The environment the world is drawn and placed with. Null until a game sets one.
@@ -84,7 +99,8 @@ void setActive(std::shared_ptr<const Environment> environment);
 std::uint64_t activeGeneration();
 
 // content/config/environment and content/config/style, found the way the
-// biome registry finds content/config/terrain.
+// biome registry finds content/config/terrain; ASR_ENVIRONMENT_CONTENT and
+// ASR_STYLE_CONTENT override them.
 std::filesystem::path defaultContentDirectory();
 std::filesystem::path defaultStyleDirectory();
 

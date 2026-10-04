@@ -1,11 +1,14 @@
 #pragma once
 #include "game/render/passes/character_pass.hpp"
+#include <optional>
 #include <chrono>
 #include <filesystem>
 
 #include <functional>
 #include "engine/pipeline/runner.hpp"
 #include "engine/pipeline/pass.hpp"
+#include "engine/environment/style.hpp"
+#include "engine/render/passes/grade_pass.hpp"
 #include "engine/render/geometry/mesh_cache.hpp"
 #include "game/client/camera.hpp"
 #include "game/content/ground_materials.hpp"
@@ -32,6 +35,7 @@ class ShadowClipmap;
 struct WorldRenderSettings {
     world::weather::Snapshot weather;
     world::MapView map = world::MapView::Natural;
+    int environmentChannel = 0;   // the mask channel the env-masks view shows
     generation::TerrainStage stage = generation::TerrainStage::Final;
     bool iceVisible = true, potentialOnly = false;
     bool shadows = true;
@@ -121,9 +125,18 @@ private:
     void pollBiomes();
     std::chrono::steady_clock::time_point biomesPolled_{};
     std::filesystem::file_time_type biomesWritten_{};
+    std::filesystem::file_time_type environmentWritten_{};
     // content/config/terrain_look.json, read again when it is written.
     TerrainLook terrainLook_{};
     std::filesystem::file_time_type terrainLookWritten_{};
+    // The environment's style for where the camera is (engine/environment/style.hpp).
+    void styleScene(engine::Scene& scene, double centreX, double centreY);
+    std::unique_ptr<engine::environment::GradeBlend> paletteBlend_, gradeBlend_;
+    engine::GradePass* gradePass_ = nullptr;
+    // The grading profiles' lookups, read once per environment, by profile.
+    std::vector<std::optional<engine::environment::Lut3d>> gradeLuts_;
+    std::uint64_t styleGeneration_ = 0;
+    std::chrono::steady_clock::time_point styled_{};
     bool rebuildShaders_ = false;
     bool restoredShaders_ = false;
     world::WorldSystem* source_ = nullptr; // requests/leases, never worker callbacks

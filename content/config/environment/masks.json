@@ -1,0 +1,13 @@
+{
+  "comment": "Mask channels a page carries (engine/environment/masks.hpp), in GPU order: plane 4 holds 0-3, plane 5 holds 4-7. The material, ground-cover and scatter rules read them by name.",
+  "channels": [
+    {"name": "wetness", "colour": [0.2, 0.45, 1.0]},
+    {"name": "suppress", "colour": [1.0, 0.2, 0.2]},
+    {"name": "boost", "colour": [0.3, 1.0, 0.3]},
+    {"name": "rock", "colour": [0.7, 0.7, 0.75]},
+    {"name": "talus", "colour": [0.85, 0.7, 0.45]},
+    {"name": "litter", "colour": [0.6, 0.4, 0.15]},
+    {"name": "moss", "colour": [0.35, 0.6, 0.2]},
+    {"name": "scar", "colour": [0.9, 0.3, 0.9]}
+  ]
+}

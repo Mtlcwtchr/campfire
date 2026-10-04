@@ -12,6 +12,7 @@
 #include "weather.hlsli"
 #include "climate_field.hlsli"
 #include "environment_detail.hlsli"
+#include "environment_style.hlsli"
 // Terrain categories (engine/biomes): the page variant binds the category
 // plane and the biome table after its shadow (t13, t14). The mesh variant
 // binds neither and draws every id as the engine's own ground.
@@ -1008,6 +1009,8 @@ float4 terrainSurface(TerrainOut input)
     // another black cavity layer or fade AO away with camera distance.
     const float skyVisibility = lerp(1.0, surfaceProperties.r, 0.38);
     const float shadow = proceduralShadow(float3(input.worldXY,input.worldHeight),normal);
+    // The game's surface style (environment_style.hlsli): untouched without a palette.
+    groundColour = styleSurfaceColour(groundColour, worldPos, kStyleGround, input.weights0.x, input.weights0.w);
     float3 lit = groundColour * landscapeDaylight(shadingNormal, skyVisibility, shadow);
     // A weak, broad dry-grain lobe: roughness really affects lighting, without
     // wet-looking glitter. Perspective uses the eye-to-surface direction.

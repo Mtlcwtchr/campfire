@@ -85,6 +85,37 @@ PageDetail pageDetail(float2 p)
     }
     return s;
 }
+// The procedural environment at p (environment_style.hlsli): planes 4 and 5
+// are the eight mask channels, filtered; plane 6 holds the zone ids, which a
+// filter would blend into ids nobody has, so they are loaded from the nearest
+// texel.
+float4 detailFieldsLoad(float2 uv, int level, int plane)
+{
+    uint w, h, layers;
+    if (level == 0) { detailFields4.GetDimensions(w, h, layers); return detailFields4.Load(int4(int2(uv * float2(w, h)), plane, 0)); }
+    if (level == 1) { detailFields8.GetDimensions(w, h, layers); return detailFields8.Load(int4(int2(uv * float2(w, h)), plane, 0)); }
+    if (level == 2) { detailFields16.GetDimensions(w, h, layers); return detailFields16.Load(int4(int2(uv * float2(w, h)), plane, 0)); }
+    detailFields64.GetDimensions(w, h, layers);
+    return detailFields64.Load(int4(int2(uv * float2(w, h)), plane, 0));
+}
+EnvironmentPoint pageEnvironment(float2 p)
+{
+    EnvironmentPoint e = (EnvironmentPoint)0;
+    if (envSwitchesPS.x < 0.5) return e;
+    const int level = (int)ringState.z;
+    float2 origin;
+    const float4 entry = detailEntryAt(p, level, origin);
+    if (entry.z == 0.0) return e;
+    const float2 uv = entry.xy + (p - origin) * entry.zw;
+    e.masksA = detailFields(uv, level, 4);
+    e.masksB = detailFields(uv, level, 5);
+    const float4 zones = detailFieldsLoad(uv, level, 6);
+    e.zone = (uint)round(zones.x * 255.0);
+    e.second = (uint)round(zones.y * 255.0);
+    e.share = zones.z;
+    e.cover = zones.w * 2.0;
+    return e;
+}
 // Only the two material planes, for the blur below.
 void pageWeightsAt(float2 p, int level, out float4 weights0, out float2 weights1)
 {

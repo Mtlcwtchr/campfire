@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include "engine/core/publication.hpp"
+#include "engine/environment/environment.hpp"
 #include "game/world/climate_field.hpp"
 #include "game/world/scene_scatter.hpp"
 #include "game/world/terrain_streaming/hydrology_builder.hpp"
@@ -43,8 +44,15 @@ public:
         std::call_once(macroOnce_, [&] { macroResolved_ = HeightField(&map_, map_.seed).macro().resolved(); });
         HeightField result(&map_, map_.seed, macroResolved_);
         result.edits(heights_.get());
+        if (const auto env = environment(); env && !env->features().empty()) result.features(&env->features());
         return result;
     }
+    // The procedural environment of this world (game/environment): its zones,
+    // features, masks and style. Never null once the snapshot is raised.
+    std::shared_ptr<const engine::environment::Environment> environment() const;
+    // Builds it again from the content (content/config/environment, /style):
+    // pages baked under the old one become stale and are baked again.
+    void reloadEnvironment() const;
     decor::Scatter scatter(int x, int y, int radiusMetres = decor::kRadius) const;
     decor::Scatter scatter(decor::ScatterBounds bounds) const;
     decor::Scatter scatter(decor::ScatterBounds bounds, const ecology::Delta& delta) const;
@@ -77,6 +85,9 @@ private:
     std::shared_ptr<const EditLayer> heights_;   // before pages_: its bakers read it
     mutable streaming::PageStore pages_; // destroyed first, joins its workers
     std::vector<Landmark> landmarks_;
+    mutable std::mutex environmentGuard_;
+    mutable std::shared_ptr<const engine::environment::Environment> environment_;
+    mutable std::vector<std::shared_ptr<const engine::environment::Environment>> retiredEnvironments_;
     void findLandmarks();
 };
 

@@ -145,17 +145,27 @@ std::vector<std::array<double, 2>> FeaturePlanner::march(const FeatureRecipe& r,
 }
 
 std::shared_ptr<const DrainageNetwork> FeaturePlanner::drainage(FeatureScale scale, std::int64_t cx, std::int64_t cy) const {
-    const Key key{0xffffffffu - std::uint32_t(scale), cx, cy};
+    // One network serves a tile of 4 x 4 cells, with a cell of halo all round:
+    // a window a cell's own would be worked out sixteen times over.
+    constexpr std::int64_t kTile = 4;
+    const auto tx = cx >= 0 ? cx / kTile : (cx - kTile + 1) / kTile;
+    const auto ty = cy >= 0 ? cy / kTile : (cy - kTile + 1) / kTile;
+    const Key key{0xffffffffu - std::uint32_t(scale), tx, ty};
     if (auto hit = drainage_.find(key)) return hit;
     const double cell = kPlanningCell[int(scale)];
     DrainageSettings s = context_.drainage;
     s.step = cell / 32.0;
     s.minReach = std::max(s.minReach, s.step * 3);
-    // A halo of a whole cell each way, so the flow reaching the cell from
-    // upstream is mostly the same flow its neighbour sees.
-    const int side = 32 * 3;
+    // Scaled with the step, so a network's channels begin at the same share of
+    // the window whatever the scale.
+    const double area = (s.step / 16.0) * (s.step / 16.0);
+    s.channelArea *= area;
+    s.seasonalArea *= area;
+    s.permanentArea *= area;
+    const int side = int(32 * (kTile + 2));
     auto net = std::make_shared<const DrainageNetwork>(
-            buildDrainage(context_.height, context_.climate, double(cx - 1) * cell, double(cy - 1) * cell, side, side, s));
+            buildDrainage(context_.height, context_.climate, double(tx * kTile - 1) * cell, double(ty * kTile - 1) * cell,
+                          side, side, s));
     return drainage_.put(key, net);
 }
 
@@ -331,6 +341,9 @@ std::shared_ptr<const InstanceList> FeaturePlanner::cell(std::uint32_t recipe, s
             }
         if (!kept || !clearOfEarlier(recipe, c.x, c.y)) continue;
         const auto id = hashOf(base, cx, cy, i + 1);
+        // Removed by hand: it still took its place in the spacing above, so
+        // taking it away does not let another feature move in.
+        if (context_.removed && context_.removed(id, c.x, c.y)) continue;
         out->push_back(instance(recipe, c, id, false));
         // The composition's secondaries: smaller relatives round the anchor.
         const auto& comp = r.composition;

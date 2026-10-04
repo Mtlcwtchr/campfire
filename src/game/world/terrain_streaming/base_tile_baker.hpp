@@ -33,6 +33,7 @@
 #include "game/world/terrain_streaming/worker_runtime.hpp"
 
 namespace generation { struct WorldMapData; }
+namespace engine::environment { class Environment; }
 
 namespace world::streaming {
 
@@ -139,6 +140,12 @@ struct BakedPage {
     std::uint16_t materialWidth = 0;      // samples per side, padding included
     std::int32_t materialMetres = 0;      // metres between them
     std::vector<std::uint8_t> materials;  // materialWidth^2 * kMaterialCount
+    // The procedural environment's masks on the same grid as the materials
+    // (engine/environment/masks.hpp): eight channels, then the two strongest
+    // zones, the second's share and the zone density. Empty when the
+    // environment writes none.
+    std::vector<std::uint8_t> envMasks;   // materialWidth^2 * 8, or empty
+    std::vector<std::uint8_t> envZones;   // materialWidth^2 * 4, or empty
 
     // Bake-only provenance, never serialized or dereferenced by a reader.
     const generation::WorldMapData* world = nullptr;
@@ -157,6 +164,9 @@ struct BakedPage {
     // nought for ground nobody touched - and is what names the page on disk
     // and tells a mesh built from it apart from one built from other ground.
     std::uint64_t groundRevision = 0, ground = 0;
+    // The environment generation this page was made under; a page from an
+    // older one is stale (PageStore::current).
+    std::uint64_t environment = 0;
 };
 
 // One worker's baker. The world and the graph must outlive it, and so must the
@@ -190,6 +200,9 @@ public:
     // the open sea's floor - so the coarse level and the fine one under it
     // agree, and nothing rises out of the sea as the camera comes down.
     void landMask(const terrain::LandMask64* mask) { landMask_ = mask; }
+    // The procedural environment the next pages are baked under: its features
+    // move the ground, its masks are written beside the materials. Null: none.
+    void environment(const engine::environment::Environment* environment);
     // How many distinct catchments the macro map holds, after the dense remap.
     [[nodiscard]] std::size_t watershedCount() const { return watershedCount_; }
 
@@ -199,6 +212,7 @@ private:
     HsimQuantisation quantisation_;
     HeightField field_;
     const terrain::LandMask64* landMask_ = nullptr;
+    const engine::environment::Environment* environment_ = nullptr;
     // Per macro cell, resolved once so a sample costs a lookup rather than a
     // search through the graph.
     std::vector<std::uint16_t> watershedOfCell_;

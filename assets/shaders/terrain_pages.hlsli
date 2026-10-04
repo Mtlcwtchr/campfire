@@ -58,6 +58,14 @@ float4 pageFields(float2 uv, int level, int plane)
     if (level == 2) return fields16.SampleLevel(fields16Sampler, float3(uv, plane), 0);
     return fields64.SampleLevel(fields64Sampler, float3(uv, plane), 0);
 }
+// The procedural environment's ground cover multiplier at a page address
+// (engine/environment/masks.hpp, plane 6 .w): 0..2, one where nothing says
+// otherwise. Vertex stages read it from the scene's `environment` switch.
+float pageCoverAt(float4 address, int level)
+{
+    if (envSwitches.x < 0.5 || address.z == 0.0) return 1.0;
+    return pageFields(address.xy, level, 6).w * 2.0;
+}
 float pageHeight(float2 p, int level)
 {
     const float4 at = pageAddress(p, level);

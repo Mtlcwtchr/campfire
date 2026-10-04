@@ -169,6 +169,9 @@ int runClientApp(SDL_Window* window, const fs::path& assets, const ClientOptions
 
     // --- the renderer and its windows ------------------------------------------
     ExploreMenu menu;
+    // The Environment tab's: problems from the last reload, features near the pointer.
+    std::vector<std::string> environmentProblems;
+    std::vector<std::pair<std::string, double>> environmentNear;
     menu.graphics() = game::loadGraphicsSettings(graphicsFile);
     if (touring) menu.graphics() = game::GraphicsSettings{};
     ui::Canvas canvas;
@@ -343,6 +346,23 @@ int runClientApp(SDL_Window* window, const fs::path& assets, const ClientOptions
                     nearest = d;
                     best = client::WorldEditor::PickedObject{o.id, o.x, o.y};
                 }
+            // A feature of the environment (a gully, an outcrop) is picked by
+            // its line or its anchor: the whole of it, ground and all, is
+            // removed with its id. An object right under the pointer wins.
+            if (const auto env = now->environment()) {
+                const auto fx = [](double v) { return core::Fixed::fromDoubleForContent(v); };
+                std::vector<engine::environment::FeatureInstance> features;
+                env->planner().instancesIn({{fx(x - 24), fx(y - 24)}, {fx(x + 24), fx(y + 24)}}, features);
+                for (const auto& f : features) {
+                    const double d = f.spline.empty()
+                            ? std::hypot(f.anchor.x.toDouble() - x, f.anchor.y.toDouble() - y)
+                            : f.spline.nearest({fx(x), fx(y)}).distance.toDouble();
+                    if (d < 6.0 && (d < nearest || nearest > 2.0)) {
+                        nearest = d;
+                        best = client::WorldEditor::PickedObject{f.id, f.anchor.x.toDouble(), f.anchor.y.toDouble()};
+                    }
+                }
+            }
             return best;
         });
         // The client saves the world (the top bar, the minute, the way out),
@@ -359,6 +379,21 @@ int runClientApp(SDL_Window* window, const fs::path& assets, const ClientOptions
     };
 
     const auto act = [&](const ClientActions& a) {
+        // The Environment tab: the content read again, the map's views of it.
+        if (a.environment.reload) {
+            if (const auto now = system.read()) {
+                now->reloadEnvironment();
+                environmentProblems.clear();
+                std::vector<engine::environment::CatalogueProblem> problems;
+                engine::environment::Catalogue::load(engine::environment::defaultContentDirectory(),
+                                                     now->environment()->setup().classifier.get(),
+                                                     now->environment()->setup().models, &problems);
+                for (const auto& p : problems) environmentProblems.push_back(p.file + ": " + p.what);
+            }
+        }
+        if (a.environment.view)
+            menu.selectMap(*a.environment.view == 1 ? "env-zones" : *a.environment.view == 2 ? "env-masks" : "");
+        if (a.environment.channel) menu.environmentChannel(*a.environment.channel);
         // The stages of the world's shape, through the world editor that
         // holds it.
         if (session) {
@@ -681,7 +716,8 @@ int runClientApp(SDL_Window* window, const fs::path& assets, const ClientOptions
             if (shift && key == SDLK_G) { renderer.cycleTerrainGrid(); continue; }
             if (shift && key == SDLK_M) { renderer.toggleObjectWireframe(); continue; }
             const bool stage = shift && event.key.scancode >= SDL_SCANCODE_1 && event.key.scancode <= SDL_SCANCODE_8;
-            const bool map = !shift && (key == SDLK_M || key == SDLK_0 || (key >= SDLK_F2 && key <= SDLK_F8));
+            const bool map = !shift && (key == SDLK_M || key == SDLK_0 || key == SDLK_PERIOD ||
+                                        (key >= SDLK_F2 && key <= SDLK_F8));
             if (stage || map) menu.handle(event);
         }
         if (window) {
@@ -845,6 +881,49 @@ int runClientApp(SDL_Window* window, const fs::path& assets, const ClientOptions
         shownView.pointerX = gx;
         shownView.pointerY = gy;
         shownView.pointerHeight = gz;
+
+        // The procedural environment, for the Environment tab: asked only
+        // while the tab is open, and the features near the pointer a few
+        // times a second.
+        if (inWorld && screens.mode == WorldMode::Edit && screens.tab == EditTab::Environment) {
+            auto& ev = shownView.environment;
+            if (const auto now = system.read(); now && now->environment()) {
+                const auto env = now->environment();
+                const auto& cat = env->catalogue();
+                ev.present = true;
+                ev.summary = std::to_string(cat.recipes().size()) + " recipes, " + std::to_string(cat.zones().size()) +
+                             " zone types, " + std::to_string(cat.masks().size()) + " mask channels, " +
+                             std::to_string(cat.cover().rules.size()) + " cover rules; " +
+                             (env->palettes() ? "a palette" : "no palette") + ", " +
+                             (env->grades() ? "grading profiles" : "the built-in grade");
+                ev.problems = environmentProblems;
+                for (const auto& m : cat.masks()) ev.channels.push_back(m.name);
+                ev.view = menu.mapView() == world::MapView::EnvZones ? 1 : menu.mapView() == world::MapView::EnvMasks ? 2 : 0;
+                ev.channel = menu.environmentChannel();
+                if (onGround) {
+                    if (const auto* zones = env->zones()) {
+                        const auto z = zones->at(gx, gy).type();
+                        if (z < cat.zones().size()) ev.zoneHere = cat.zones()[z].name;
+                    }
+                    if (frameIndex % 10 == 0) {
+                        environmentNear.clear();
+                        const auto fx = [](double v) { return core::Fixed::fromDoubleForContent(v); };
+                        std::vector<engine::environment::FeatureInstance> features;
+                        env->planner().instancesIn({{fx(gx - 64), fx(gy - 64)}, {fx(gx + 64), fx(gy + 64)}}, features);
+                        for (const auto& f : features) {
+                            const double d = f.spline.empty()
+                                    ? std::hypot(f.anchor.x.toDouble() - gx, f.anchor.y.toDouble() - gy)
+                                    : f.spline.nearest({fx(gx), fx(gy)}).distance.toDouble();
+                            if (d <= 64) environmentNear.emplace_back(cat.recipes()[f.recipe].name, d);
+                        }
+                        std::sort(environmentNear.begin(), environmentNear.end(),
+                                  [](const auto& a, const auto& b) { return a.second < b.second; });
+                        if (environmentNear.size() > 8) environmentNear.resize(8);
+                    }
+                    ev.features = environmentNear;
+                }
+            }
+        }
 
         // The canvas the size of the view, the interface in points on it.
         if (canvas.wouldResize(camera.viewportWidth, camera.viewportHeight)) {

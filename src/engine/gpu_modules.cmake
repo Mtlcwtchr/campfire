@@ -16,6 +16,7 @@ add_library(asr_engine_render STATIC
         src/engine/render/targets.cpp
         src/engine/render/draw_queue.cpp
         src/engine/render/render_pipeline.cpp
+        src/engine/render/passes/grade_pass.cpp
         src/engine/render/geometry/mesh_cache.cpp
         src/engine/render/geometry/instances.cpp
         src/engine/render/geometry/instanced.cpp

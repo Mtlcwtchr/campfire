@@ -6,6 +6,7 @@
 #include "impostor_depth.hlsli"
 #include "hemisphere_impostor.hlsli"
 #include "environment_detail.hlsli"
+#include "environment_style.hlsli"
 #define SHADOW_TEXTURE_SLOT t2
 #define SHADOW_SAMPLER_SLOT s2
 #include "shadow_field.hlsli"
@@ -202,7 +203,8 @@ float4 shadeModel(ModelOut i,bool front,bool depthAware,out float resultDepth) {
     }
     const float vegetation=saturate(i.flags.w);
     const float3 crown=lerp(float3(1,1,1),landscapeCrownTint(i.extra.y*0.15915494,texel.rgb),vegetation);
-    const float3 pigment=landscapePigment(texel.rgb*i.colour.rgb*i.extra.z*crown,vegetation);
+    const float3 pigment=styleSurfaceColour(landscapePigment(texel.rgb*i.colour.rgb*i.extra.z*crown,vegetation),
+                                            i.world,vegetation>0.5?kStyleVegetation:kStyleModel,vegetation,0.0);
     const float shadow=proceduralShadow(i.world,n);
     float3 lit=pigment*landscapeDaylight(n,lookRootOcclusion(i.extra.x),shadow);
     const float transmission=pow(saturate(dot(-landscapeSun(),landscapeEye(i.world))),3.0);

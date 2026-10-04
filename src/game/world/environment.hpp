@@ -9,17 +9,18 @@
 
 namespace world {
 enum class MapView { Natural, Temperature, Fertility, Moisture, Travel, Foundation, Flood, Relief, Wind,
-    Grey, Slope, StageDelta, Erosion, Catchment, Geology, Flow, Count };
-inline constexpr std::array<const char*, 16> kMapNames{
+    Grey, Slope, StageDelta, Erosion, Catchment, Geology, Flow, EnvZones, EnvMasks, Count };
+inline constexpr std::array<const char*, 18> kMapNames{
     "none", "temperature", "fertility", "moisture", "travel", "foundation", "flood", "relief", "wind",
-    "grey", "slope", "stage-delta", "erosion", "catchment", "geology", "flow"};
-inline constexpr std::array<const char*, 16> kMapTitles{
+    "grey", "slope", "stage-delta", "erosion", "catchment", "geology", "flow", "env-zones", "env-masks"};
+inline constexpr std::array<const char*, 18> kMapTitles{
     "NATURAL", "TEMPERATURE / model Celsius", "SOIL FERTILITY", "MOISTURE / drainage",
     "MOVEMENT / terrain cost", "BUILDING / terrain suitability", "FLOOD / connected scenario",
     "RELIEF / height contours (50m)", "WIND / relative speed + direction",
     "GREY / geometry only", "SLOPE / green=flat red=45deg+", "STAGE DELTA / blue=cut red=rise (100m)",
     "EROSION / removed height (150m)", "CATCHMENT / slope-stage log2 H64 cells", "GEOLOGY / rock type",
-    "FLOW / slope-stage H64 receiver arrows"};
+    "FLOW / slope-stage H64 receiver arrows",
+    "ENVIRONMENT ZONES / strongest zone, second blended in", "ENVIRONMENT MASKS / one channel (. cycles)"};
 struct EnvironmentalConditions {
     core::Fixed temperatureOffset;
     core::Fixed rainfall = core::kOne;

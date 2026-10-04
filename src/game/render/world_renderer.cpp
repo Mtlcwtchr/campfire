@@ -1,6 +1,7 @@
 #include "game/render/world_renderer.hpp"
 
 #include "engine/biomes/registry.hpp"
+#include "engine/environment/environment.hpp"
 #include "engine/biomes/shader_code.hpp"
 
 #include <algorithm>
@@ -21,7 +22,7 @@
 #include "game/render/passes/far_trees_pass.hpp"
 #include "game/render/passes/sky_pass.hpp"
 #include "game/render/passes/frustum_pass.hpp"
-#include "game/render/passes/grade_pass.hpp"
+#include "engine/render/passes/grade_pass.hpp"
 #include "game/render/passes/sprite_pass.hpp"
 #include "game/render/passes/terrain_pass.hpp"
 #include "game/render/passes/water_pass.hpp"
@@ -261,7 +262,12 @@ bool WorldRenderer::synchronize() {
     drawing->add(std::make_unique<SketchPass>(&sketch_));
     drawing->add(std::make_unique<HighlightPass>(&highlight_));
     drawing->add(std::make_unique<HoldPass>(&held_));
-    drawing->add(std::make_unique<GradePass>());
+    // The engine's grade, placed where this game's frame wants it; the look
+    // is assets/shaders/game/style_picture.hlsli.
+    gradePass_ = drawing->add(std::make_unique<engine::GradePass>(
+            engine::PassPlace{engine::passOf(Pass::Grade), engine::stageOf(Stage::Post),
+                              static_cast<engine::PassOrder>(Order::Opaque)},
+            engine::GradeLook{0.50f, 0.28f, 0.012f}));
     sprites_ = drawing->add(std::make_unique<SpritePass>(spriteQueue_, std::move(spriteImages)));
     if (overlay_) if (auto overlay = overlay_(*terrain)) drawing->add(std::move(overlay));
     render_ = runner_->add(std::move(drawing));
@@ -297,6 +303,20 @@ void WorldRenderer::pollBiomes() {
         if (ec || written != terrainLookWritten_) {
             terrainLookWritten_ = ec ? std::filesystem::file_time_type{} : written;
             terrainLook_.load(file);
+        }
+    }
+    // The procedural environment's content: rebuilt for the world on a change.
+    if (world_) {
+        std::filesystem::file_time_type newest{};
+        std::error_code ec;
+        for (const auto& root : {engine::environment::defaultContentDirectory(), engine::environment::defaultStyleDirectory()})
+            for (const auto& e : std::filesystem::recursive_directory_iterator(root, ec))
+                if (e.is_regular_file(ec)) newest = std::max(newest, e.last_write_time(ec));
+        if (environmentWritten_ == std::filesystem::file_time_type{}) environmentWritten_ = newest;
+        else if (newest != environmentWritten_) {
+            environmentWritten_ = newest;
+            world_->reloadEnvironment();
+            std::cerr << "environment: reloaded\n";
         }
     }
     const auto dir = engine::biomes::defaultDirectory();
@@ -385,6 +405,8 @@ bool WorldRenderer::draw(const client::Camera& camera, const WorldRenderSettings
     scene.parameters[20][1] = float(1.0 / (world_->climate().metres() * high));
     scene.parameters[20][2] = float(0.5 / wide); scene.parameters[20][3] = float(0.5 / high);
     scene.extra[3] = float(settings.map);
+    styleScene(scene, camera.centreX, camera.centreY);
+    scene.environment[1] = float(std::clamp(settings.environmentChannel, 0, 7));
     for (std::size_t i = 0; i < settings.editor.size(); ++i)
         std::copy(settings.editor[i].begin(), settings.editor[i].end(), scene.editor[i]);
     if (settings.map != world::MapView::Natural || !terrain.finalStage()) scene.extra[2] = 0;
@@ -507,4 +529,89 @@ bool WorldRenderer::objectWireframe() const { return models_ && models_->wirefra
 #if !ASR_ENABLE_PROFILING
 bool WorldRenderer::screenshot(const std::string& path) { return runner_->screenshot(device_, path); }
 #endif
+} // namespace game
+
+namespace game {
+
+void WorldRenderer::styleScene(engine::Scene& scene, double x, double y) {
+    const auto& environment = world_ ? world_->environment() : nullptr;
+    if (!environment) return;
+    scene.environment[0] = environment->writesMasks() ? 1.0f : 0.0f;
+    // A new environment (a world loaded, content reloaded): start the blends
+    // over, snapped to where the camera is.
+    const bool fresh = styleGeneration_ != environment->generation();
+    if (fresh) {
+        styleGeneration_ = environment->generation();
+        paletteBlend_ = environment->palettes()
+            ? std::make_unique<engine::environment::GradeBlend>(
+                      std::shared_ptr<const engine::environment::StyleTable>(environment, environment->palettes()))
+            : nullptr;
+        gradeBlend_ = environment->grades() ? std::make_unique<engine::environment::GradeBlend>(environment->gradesShared())
+                                            : nullptr;
+        gradeLuts_.clear();
+        if (const auto* grades = environment->grades())
+            for (const auto& profile : grades->entries()) {
+                std::optional<engine::environment::Lut3d> lut;
+                if (!profile.lut.empty()) {
+                    std::string problem;
+                    lut = engine::environment::loadCube(grades->directory() / profile.lut, &problem);
+                    if (!lut) std::fprintf(stderr, "style: %s: %s\n", profile.name.c_str(), problem.c_str());
+                }
+                gradeLuts_.push_back(std::move(lut));
+            }
+    }
+    if (!paletteBlend_ && !gradeBlend_) return;
+    // What the camera stands on: its ground category and its zone.
+    std::string category, zone;
+    if (const auto registry = engine::biomes::active()) {
+        const auto ids = world_->climate().categoriesAt(x, y);
+        if (const auto* c = registry->category(ids[0])) category = c->name;
+    }
+    if (const auto* zones = environment->zones()) {
+        const auto here = zones->at(x, y);
+        const auto types = environment->catalogue().zones();
+        if (here.type() < types.size()) zone = types[here.type()].name;
+    }
+    const auto now = std::chrono::steady_clock::now();
+    const double seconds = fresh ? 0.0 : std::chrono::duration<double>(now - styled_).count();
+    styled_ = now;
+    const auto blend = [&](engine::environment::GradeBlend& b, const engine::environment::StyleTable& table, float (*rows)[4]) {
+        const auto target = table.match(category, zone);
+        if (fresh) b.snap(target); else b.step(target, std::min(seconds, 0.5));
+        const auto out = b.rows();
+        for (std::size_t r = 0; r < out.size() && r < 8; ++r)
+            for (int k = 0; k < 4; ++k) rows[r][k] = out[r][k];
+    };
+    if (paletteBlend_) {
+        blend(*paletteBlend_, *environment->palettes(), scene.style);
+        scene.environment[3] = 1.0f;
+    }
+    if (gradeBlend_) {
+        blend(*gradeBlend_, *environment->grades(), scene.gradeStyle);
+        scene.environment[3] += 2.0f;
+        // The two strongest profiles' lookups. A profile without one stands
+        // for "no lookup", which the identity of the other's size is.
+        if (gradePass_) {
+            const auto pair = gradeBlend_->strongest();
+            const auto* a = pair.a < gradeLuts_.size() && gradeLuts_[pair.a] ? &*gradeLuts_[pair.a] : nullptr;
+            const auto* b = pair.b < gradeLuts_.size() && gradeLuts_[pair.b] ? &*gradeLuts_[pair.b] : nullptr;
+            const int size = a ? a->size : b ? b->size : 0;
+            static thread_local engine::environment::Lut3d identity;
+            if (size >= 2 && identity.size != size) {
+                identity.size = size;
+                identity.rgb.resize(std::size_t(size) * size * size);
+                for (int bl = 0; bl < size; ++bl)
+                    for (int g = 0; g < size; ++g)
+                        for (int r = 0; r < size; ++r)
+                            identity.rgb[(std::size_t(bl) * size + g) * size + r] = {
+                                    float(r) / float(size - 1), float(g) / float(size - 1), float(bl) / float(size - 1)};
+            }
+            const auto& first = a && a->size == size ? *a : identity;
+            const auto& second = b && b->size == size ? *b : identity;
+            if (size >= 2) gradePass_->luts(size, first.rgb, second.rgb, pair.t);
+            else gradePass_->luts(0, {}, {}, 0);
+        }
+    }
+}
+
 } // namespace game

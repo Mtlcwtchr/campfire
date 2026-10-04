@@ -1,5 +1,6 @@
 #include "engine/biomes/category_field.hpp"
 #include "engine/biomes/patch_field.hpp"
+#include "engine/environment/feature_layer.hpp"
 #include "game/world/height_field.hpp"
 
 #include "game/world/terrain_streaming/hydrology_builder.hpp"
@@ -40,13 +41,14 @@ struct HeightField::QueryCache::State {
     Memo<core::Fixed, 2048> slopes;
     Memo<MaterialWeights, 2048> materials;
     const EditLayer* edits = nullptr;
-    std::uint64_t revision = 0, epoch = 1;
+    std::uint64_t revision = 0, epoch = 1, features = 0;
     generation::TerrainStage stage = generation::TerrainStage::Final;
     void prepare(const HeightField& field) {
         const auto current = field.edits_ ? field.edits_->revision() : 0;
         const auto terrainStage = field.coarse_ ? field.coarse_->terrainStage : generation::TerrainStage::Final;
-        if (edits != field.edits_ || revision != current || stage != terrainStage) {
-            edits = field.edits_; revision = current; stage = terrainStage; ++epoch;
+        const auto layer = field.features_ ? field.features_->generation() : 0;
+        if (edits != field.edits_ || revision != current || stage != terrainStage || features != layer) {
+            edits = field.edits_; revision = current; stage = terrainStage; features = layer; ++epoch;
         }
     }
 };
@@ -1144,6 +1146,15 @@ HeightField::Residual HeightField::residualAt(WorldPos p) const {
 }
 
 HeightField::Pieces HeightField::piecesAt(Fixed x, Fixed y, std::int64_t strideMetres) const {
+    Pieces pieces = piecesWithout(x, y, strideMetres);
+    // The environment's features, on top of the detail: what they move is
+    // landscape, and the carve below still makes it give way to a channel.
+    if (features_ && !features_->empty())
+        pieces.moved += features_->at({x, y}, pieces.country + pieces.moved, strideMetres);
+    return pieces;
+}
+
+HeightField::Pieces HeightField::piecesWithout(Fixed x, Fixed y, std::int64_t strideMetres) const {
     if (coarse_ && coarse_->terrainFoundation) {
         const bool outside=x<core::kZero || y<core::kZero ||
             x>=Fixed::fromInt(std::int64_t(coarse_->width)*generation::kMetresPerCell) ||

@@ -9,6 +9,10 @@
 #include <iostream>
 
 #include "engine/biomes/registry.hpp"
+#include "engine/environment/asset_meta.hpp"
+#include "engine/environment/catalogue.hpp"
+#include "engine/environment/style.hpp"
+#include "game/environment/world_environment.hpp"
 #include "game/content/content_db.hpp"
 #include "game/generation/local_map_gen.hpp"
 #include "game/simulation/world.hpp"
@@ -78,6 +82,48 @@ int main(int argc, char** argv) {
                   << registry->forestBiomes().size() << " forest, " << registry->waterBiomes().size() << " water, "
                   << registry->decorBiomes().size() << " decor biomes\n";
         for (const auto& p : problems) std::cout << "error:   " << p.file << ": " << p.what << "\n";
+        if (!problems.empty()) ++failures;
+    }
+
+    // The procedural environment (content/config/environment and /style,
+    // engine/environment): recipes, masks and cover resolved against this
+    // game's zones and scene models; the style tables; and the records of the
+    // assets the content uses (licence, author, source).
+    {
+        namespace env = engine::environment;
+        const world::environment::NaturalZones zones;
+        const env::ModelResolver models = [](std::string_view name) -> std::optional<std::uint32_t> {
+            for (std::size_t i = 0; i < world::decor::kModels.size(); ++i)
+                if (name == world::decor::kModels[i]) return std::uint32_t(i);
+            return std::nullopt;
+        };
+        std::vector<env::CatalogueProblem> problems;
+        const auto catalogue = env::Catalogue::load(root / "config" / "environment", &zones, models, &problems);
+        for (const char* table : {"palettes.json", "grades.json"}) {
+            const auto file = root / "config" / "style" / table;
+            if (!std::filesystem::exists(file)) continue;
+            std::vector<env::StyleProblem> style;
+            env::StyleTable::load(file, &style);
+            for (const auto& p : style) problems.push_back({"style/" + p.file, p.what});
+        }
+        std::vector<env::AssetProblem> assets;
+        const auto metas = env::loadAssetMetas(root.parent_path() / "assets", &assets);
+        for (const auto& m : metas) env::validateAssetMeta(m, assets);
+        std::vector<std::string> used;
+        for (const auto& r : catalogue->recipes()) {
+            for (const auto& s : r.scatter) for (const auto& m : s.models) used.push_back(m.name);
+            for (const auto& m : r.meshes) if (!m.model.name.empty()) used.push_back(m.model.name);
+        }
+        for (const auto& rule : catalogue->cover().rules) for (const auto& m : rule.models) used.push_back(m.name);
+        for (const auto& name : env::unrecorded(metas, used))
+            assets.push_back({"asset_meta", name + ": used by the environment but has no asset record"});
+        std::cout << "\nenvironment: " << catalogue->recipes().size() << " recipes, " << catalogue->masks().size()
+                  << " mask channels, " << catalogue->cover().rules.size() << " cover rules, " << metas.size()
+                  << " asset records\n";
+        for (const auto& p : problems) std::cout << "error:   environment/" << p.file << ": " << p.what << "\n";
+        // Asset records are reported but do not fail the content yet: most of
+        // the catalogue predates them (doc/plan_procedural_environment_2026-10-03.md, part I).
+        for (const auto& p : assets) std::cout << "warning: " << p.file << ": " << p.what << "\n";
         if (!problems.empty()) ++failures;
     }
 

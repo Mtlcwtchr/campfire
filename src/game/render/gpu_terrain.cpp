@@ -1,5 +1,7 @@
 #include "game/render/gpu_terrain.hpp"
 
+#include "engine/environment/environment.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <chrono>
@@ -48,7 +50,7 @@ void GpuTerrain::reset() {
     vertexPages_.clear(); indexPages_.clear();
     leases_.clear(); persistent_.clear(); known_.clear();
     inflight_.clear(); // the atlases go below, with every pin they had
-    stale_.clear(); groundSeen_ = 0; restream_ = false;
+    stale_.clear(); groundSeen_ = 0; environmentSeen_ = 0; restream_ = false;
     staged_.clear();
     for (auto& atlas : atlases_) atlas.reset();
     table_.reset(); tableSampler_.reset();
@@ -159,6 +161,17 @@ void GpuTerrain::protect(Key key, std::uint64_t serial) {
 }
 
 void GpuTerrain::observeGround() {
+    // A new environment (content reloaded) moves ground and masks anywhere:
+    // every page on the card is stale, and is replaced as it is baked again.
+    if (const auto env = world_->pages().environment()) {
+        if (env->generation() != environmentSeen_) {
+            if (environmentSeen_ != 0) {
+                for (const auto key : known_) stale_.insert(key);
+                restream_ = true;
+            }
+            environmentSeen_ = env->generation();
+        }
+    }
     const auto* edits = world_->edits();
     if (!edits || edits->revision() == groundSeen_) return;
     std::vector<core::WorldRect> changed;

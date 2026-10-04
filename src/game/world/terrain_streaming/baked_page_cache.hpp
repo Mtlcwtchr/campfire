@@ -10,7 +10,7 @@ namespace world::streaming {
 // Full persistent H16/H64 pages, not mesh buffers or partial BaseTile records.
 // Bump the format for layout changes, the generation version for changes to
 // HeightField, GraphCarver, material/travel rules or parent refinement semantics.
-inline constexpr std::uint32_t kBakedPageCacheVersion = 2;       // + water estuary share
+inline constexpr std::uint32_t kBakedPageCacheVersion = 3;       // + environment masks
 inline constexpr std::uint32_t kBakedPageGenerationVersion = 14; // bog pools
 
 class BakedPageCache {

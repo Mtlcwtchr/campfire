@@ -60,6 +60,7 @@ float dataStep(float dataset) { return pageStepOf((int)(dataset + 0.5)); }
 float4 TerrainPagePS(TerrainOut input) : SV_Target0
 {
     const PageDetail detail = pageDetail(input.worldXY);
+    gEnvironment = pageEnvironment(input.worldXY);
     const float3 shape = pageShape(input.worldXY);
     const bool staged = ringState.y >= 3.0;
     // The drawn surface's slope from the frame's offset (world_frame.hlsli):
@@ -93,6 +94,15 @@ float4 TerrainPagePS(TerrainOut input) : SV_Target0
         } else if (mode == 12) colour=lerp(float3(0.75,0.72,0.65),float3(0.4,0.03,0.02),saturate(input.stageDiagnostic.y/150.0));
         else if (mode == 13) colour=lerp(float3(0.3,0.25,0.15),float3(0.05,0.55,1),saturate(input.stageDiagnostic.z/16.0));
         else if (mode == 14) colour=0.25+0.65*frac(float3(0.37,0.61,0.83)*(floor(input.stageDiagnostic.w+0.5)+1));
+        else if (mode == 16) {
+            // Environment zones: the strongest's colour, the second's blended in by its share.
+            const float3 first = gEnvironment.zone == 0 ? float3(0.35,0.35,0.35) : 0.25+0.65*frac(float3(0.37,0.61,0.83)*float(gEnvironment.zone));
+            const float3 second = gEnvironment.second == 0 ? float3(0.35,0.35,0.35) : 0.25+0.65*frac(float3(0.37,0.61,0.83)*float(gEnvironment.second));
+            colour=lerp(first,second,gEnvironment.share);
+        } else if (mode == 17) {
+            const float value=environmentMask(gEnvironment,(int)envSwitchesPS.y);
+            colour=lerp(float3(0.08,0.08,0.12),float3(1.0,0.75,0.2),value);
+        }
         else if (mode == 15) {
             const float magnitude=length(input.geography.xy);
             const float2 direction=input.geography.xy/max(0.001,magnitude);

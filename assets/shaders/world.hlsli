@@ -48,6 +48,9 @@ cbuffer SceneVertex : register(b0, space1)
     float4 editor[35];   // world editor overlay (editor_overlay.hlsli); kSceneEditorVectors
     float4 terrainLook;  // tile size, distance octaves, octave start, macro variation (terrain_material.hlsli)
     float4 swellWind;    // world-anchored swell direction xy, strength, gust
+    float4 envStyle[8];  // the game's surface style rows (environment_style.hlsli)
+    float4 envGrade[8];  // the game's picture style rows (grade.hlsl)
+    float4 envSwitches;  // masks present, debug channel, spare, style present (+2: grade rows)
 };
 
 cbuffer ScenePixel : register(b0, space3)
@@ -75,6 +78,9 @@ cbuffer ScenePixel : register(b0, space3)
     float4 editorPS[35];
     float4 terrainLookPS;
     float4 swellWindPS;
+    float4 envStylePS[8];
+    float4 envGradePS[8];
+    float4 envSwitchesPS;
 };
 
 // Where a point of the world lands on the screen.

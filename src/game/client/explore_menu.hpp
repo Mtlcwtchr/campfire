@@ -82,6 +82,8 @@ public:
         return false;
     }
     world::MapView mapView() const { return mapView_; }
+    int environmentChannel() const { return environmentChannel_; }
+    void environmentChannel(int channel) { environmentChannel_ = std::clamp(channel, 0, 7); dirty_ = true; }
     void setMapView(int map) {
         const auto next = static_cast<world::MapView>(std::clamp(map, 0, int(world::MapView::Count) - 1));
         if (next == mapView_) return;
@@ -263,6 +265,7 @@ private:
     bool dirty_ = true;
     bool wanted_ = false;
     world::MapView mapView_ = world::MapView::Natural;
+    int environmentChannel_ = 0;
     generation::TerrainStage terrainStage_=generation::TerrainStage::Final;
     bool stagesAvailable_=false;
     bool potentialOnly_ = false;

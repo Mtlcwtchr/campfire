@@ -16,6 +16,7 @@
 #include <functional>
 #include <vector>
 
+#include "engine/environment/cover.hpp"
 #include "engine/environment/feature_layer.hpp"
 #include "engine/environment/zones.hpp"
 
@@ -30,14 +31,28 @@ struct PageMasks {
     double x0 = 0, y0 = 0, step = 4;
     int side = 0;                        // samples a side, padding included
     std::vector<std::uint8_t> channels;  // side * side * kMaskChannels
-    std::vector<std::uint8_t> zones;     // side * side * 4: first type, second type, second's share 0..255, density
+    // side * side * 4: first type, second type, the second's share 0..255, and
+    // the ground cover multiplier of the cover rules' ground tier (cover.hpp),
+    // 0..2 as 0..255 - one where no rule says otherwise.
+    std::vector<std::uint8_t> zones;
     [[nodiscard]] float channel(int c, int r, int k) const { return channels[(std::size_t(r) * side + c) * kMaskChannels + k] / 255.0f; }
 };
 
 // The masks over a square of `side` samples `step` metres apart from (x0, y0).
 // `height` is the ground before features (the shape a mask is drawn against).
+//
+// `cover` and `fields` (either may be null) give the ground tier's multiplier:
+// the dense cover the GPU draws, thinned or thickened by zone and by mask.
 PageMasks rasteriseMasks(const FeatureLayer* features, const ZoneField* zones, const ZoneMasks& zoneMasks,
-                         const HeightAt& height, double x0, double y0, double step, int side);
+                         const HeightAt& height, double x0, double y0, double step, int side,
+                         const CoverRules* cover = nullptr, const FieldSource* fields = nullptr,
+                         std::uint64_t seed = 0);
+inline constexpr float kCoverEncode = 127.5f;   // multiplier * this = the stored byte
+
+// The ground tier's multiplier at a point, from the rule of each zone the
+// point belongs to (or the "*" rule), weighted by membership. 1 without rules.
+float groundCover(const CoverRules& cover, const EnvironmentZone& zone, const FieldSample* fields,
+                  const MaskValues& masks, double x, double y, std::uint64_t seed);
 
 // One instance's writes at a point, folded into `values`. What rasteriseMasks
 // does a sample at a time; public for the CPU scatter, which asks single points.

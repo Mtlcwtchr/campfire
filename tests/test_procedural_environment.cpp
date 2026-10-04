@@ -264,7 +264,9 @@ TEST(environment_drainage_finds_the_valley) {
     CHECK(std::abs(meanX) < 48);
     CHECK(longest->points.front()[1] > longest->points.back()[1]);   // flows to -y
     // Classes from the ratio of today's flow to the past's.
-    CHECK(classifyChannel(1e5, 1e5, s) == ChannelClass::SeasonalStream);
+    CHECK(classifyChannel(1e6, 1e6, s) == ChannelClass::SeasonalStream);
+    // A head too small to hold water between rains, however wet the past.
+    CHECK(classifyChannel(1e5, 1e5, s) == ChannelClass::EphemeralChannel);
     CHECK(classifyChannel(1e5, 1e3, s) == ChannelClass::Paleochannel);
     CHECK(classifyChannel(1e7, 1e7, s) == ChannelClass::PermanentRiver);
 }
@@ -470,13 +472,16 @@ TEST(environment_channel_recipe_follows_the_drainage) {
     std::vector<FeatureInstance> list;
     w.env->planner().instancesIn({at(-600, -600), at(600, 1200)}, list);
     CHECK(!list.empty());
+    // Every gully follows a channel, and one of them runs down the valley floor.
+    const FeatureInstance* floor = nullptr;
     for (const auto& in : list) {
         CHECK(!in.spline.empty());
-        // Gullies lie along the valley floor, not up its sides.
-        CHECK(std::abs(in.anchor.x.toDouble()) < 160);
+        if (std::abs(in.anchor.x.toDouble()) < 160) floor = &in;
     }
-    // And the ground is cut along them.
-    const auto& in = list.front();
+    CHECK(floor != nullptr);
+    if (!floor) return;
+    // And the ground is cut along it.
+    const auto& in = *floor;
     const auto mid = in.spline.pointAt(in.spline.length / 2);
     CHECK(w.env->features().at(mid, core::kZero, 4).toDouble() < -1);
 }

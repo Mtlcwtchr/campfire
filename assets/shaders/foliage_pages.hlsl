@@ -190,8 +190,11 @@ FoliageOut PageGrassVS(FoliageVertexIn vertex, PageGrassIn root)
     const float understory = wood * 0.45 * saturate((w0.x + w0.y) * 1.5) * (1.0 - saturate(w0.w * 1.5)) *
                              (1.0 - saturate(w1.y * 2.0)) * (1.0 - saturate(w0.z * 2.0));
     const float turfSlope = 1.0 - smoothstep(0.14, 0.36, 1.0 - root.heights.w);
-    const float occupied = biome.none ? 0.0 : island * turfSlope *
-        saturate(max(cover.grass * 2.8 * biome.density, understory * biome.under * 1.4));
+    // The environment's ground tier (content/config/environment/cover.json):
+    // a wet hollow thickens the cover, a talus fan or a clearing's path thins it.
+    const float occupied = biome.none ? 0.0 : saturate(island * turfSlope *
+        saturate(max(cover.grass * 2.8 * biome.density, understory * biome.under * 1.4)) *
+        pageCoverAt(address, level));
     // Parched ground takes the straw out of the green.
     const float3 grassTint = lerp(float3(cover.red, cover.green, cover.blue),
                                   float3(cover.red, cover.green, cover.blue) * float3(1.12, 0.96, 0.62), saturate(biome.dryness)) * biome.tint;

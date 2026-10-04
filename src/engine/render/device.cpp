@@ -220,12 +220,15 @@ std::uint64_t Device::shaderKey(const std::filesystem::path& file, const char* e
     const fs::path folder = file.parent_path();
     std::vector<fs::path> files;
     std::error_code ec;
-    for (const auto& item : fs::directory_iterator(folder, ec))
+    // Recursive: a game keeps its hook bodies in a folder of its own
+    // (assets/shaders/game), and an edit there must recompile the engine's
+    // shaders that include them.
+    for (const auto& item : fs::recursive_directory_iterator(folder, ec))
         if (item.is_regular_file(ec)) files.push_back(item.path());
     std::sort(files.begin(), files.end());
     std::uint64_t stamp = kFnvBasis;
     for (const auto& f : files) {
-        stamp = fnv(stamp, f.filename().string());
+        stamp = fnv(stamp, f.lexically_relative(folder).generic_string());
         const auto bytes = fs::file_size(f, ec);
         const auto when = fs::last_write_time(f, ec).time_since_epoch().count();
         stamp = fnv(stamp, &bytes, sizeof bytes);
@@ -234,7 +237,7 @@ std::uint64_t Device::shaderKey(const std::filesystem::path& file, const char* e
     if (stamp != folderStamp_ || folderDigest_ == 0) {
         std::uint64_t digest = kFnvBasis;
         for (const auto& f : files) {
-            digest = fnv(digest, f.filename().string());
+            digest = fnv(digest, f.lexically_relative(folder).generic_string());
             digest = fnv(digest, readText(f));
         }
         folderStamp_ = stamp;

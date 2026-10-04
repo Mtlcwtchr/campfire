@@ -42,8 +42,8 @@ enum class WorldMode { Explore, Edit };
 // Import is the other way to the same shape: height and control maps made
 // elsewhere, put into the regions a person selects (D158) - or made by the
 // generator there and then, a layer at a time (D182).
-enum class EditTab { Size, Land, Coast, Mountains, Water, Terrain, Objects, Import, Ground };
-inline constexpr int kEditTabs = 9;
+enum class EditTab { Size, Land, Coast, Mountains, Water, Terrain, Objects, Import, Ground, Environment };
+inline constexpr int kEditTabs = 10;
 // The tabs that paint the world's shape (its layers), rather than the ground
 // itself or what stands on it.
 inline bool shapeTab(EditTab tab) { return tab <= EditTab::Water || tab == EditTab::Import; }
@@ -144,6 +144,24 @@ struct ShapeActions {
 };
 
 // What the interface shows and cannot know itself.
+// The procedural environment as the Environment tab shows it
+// (doc/plan_procedural_environment_2026-10-03.md).
+struct EnvironmentView {
+    bool present = false;
+    std::string summary;                     // what the catalogue holds
+    std::vector<std::string> problems;       // from the last build of it
+    std::string zoneHere;                    // under the pointer
+    std::vector<std::pair<std::string, double>> features;   // near the pointer: recipe, metres
+    std::vector<std::string> channels;       // the mask channels, in order
+    int view = 0;                            // 0 the ground, 1 zones, 2 masks
+    int channel = 0;
+};
+struct EnvironmentActions {
+    bool reload = false;
+    std::optional<int> view;                 // 0 the ground, 1 zones, 2 masks
+    std::optional<int> channel;
+};
+
 struct ClientView {
     const std::vector<world::saves::SavedWorld>* worlds = nullptr;
     const std::vector<generation::WorldPreset>* presets = nullptr;
@@ -163,6 +181,7 @@ struct ClientView {
     bool settingsOpen = false, shapeEditorOpen = false;
     ui::Rect settingsRect{}, shapeEditorRect{};
     ShapeView shape;
+    EnvironmentView environment;
 };
 
 // What was asked for this frame.
@@ -181,6 +200,7 @@ struct ClientActions {
     std::optional<WorldMode> mode;
     std::optional<EditTab> tab;
     ShapeActions shape;
+    EnvironmentActions environment;
 };
 
 class ClientUi {
@@ -227,6 +247,7 @@ private:
     void topBar(ui::Ui& ui, const ClientView& view, ClientActions& out);
     void editPanel(ui::Ui& ui, const ClientView& view, ClientActions& out);
     void terrainTools(ui::Ui& ui, float x, float& y, float w);
+    void environmentTab(ui::Ui& ui, const ClientView& view, float x, float& y, float w, ClientActions& out);
     void sizeTab(ui::Ui& ui, const ClientView& view, float x, float& y, float w, ClientActions& out);
     void landTab(ui::Ui& ui, const ClientView& view, float x, float& y, float w, ClientActions& out);
     void coastTab(ui::Ui& ui, const ClientView& view, float x, float& y, float w, ClientActions& out);

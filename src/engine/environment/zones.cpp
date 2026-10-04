@@ -62,18 +62,26 @@ ZoneGrid ZoneField::build(double x0, double y0, int columns, int rows) const {
     std::vector<float> raw(std::size_t(wc) * wr * types, 0.0f);
     std::vector<ZoneScalars> scalars(std::size_t(wc) * wr);
     std::vector<float> across(std::size_t(wc) * wr * 2, 0.0f);   // unit gradient direction
-    std::vector<FieldSample> samples(std::size_t(wc) * wr);
+    std::vector<FieldSample> window(std::size_t(wc) * wr);
     const double bx = x0 - halo * step, by = y0 - halo * step;
+    // One batch for the whole window: a source that can answer a grid at once
+    // shares its height samples between neighbours' derivatives.
+    fields_.sampleGrid(bx, by, step, wc, wr, window);
+    // Breakup: each cell is classified from the sample a slow noise pushes it
+    // to, up to breakupMetres away. Noise breaks a border up; it never decides one.
+    std::vector<FieldSample> samples(window.size());
     const auto seed = settings_.seed ^ 0x5a0e5a0eULL;
     for (int r = 0; r < wr; ++r) {
         for (int c = 0; c < wc; ++c) {
-            double x = bx + c * step, y = by + r * step;
+            int sc = c, sr = r;
             if (settings_.breakupMetres > 0) {
-                x += (valueNoise(seed, x / 70.0, y / 70.0) - 0.5) * 2 * settings_.breakupMetres;
-                y += (valueNoise(seed + 1, x / 70.0, y / 70.0) - 0.5) * 2 * settings_.breakupMetres;
+                const double x = bx + c * step, y = by + r * step;
+                sc += int(std::lround((valueNoise(seed, x / 70.0, y / 70.0) - 0.5) * 2 * settings_.breakupMetres / step));
+                sr += int(std::lround((valueNoise(seed + 1, x / 70.0, y / 70.0) - 0.5) * 2 * settings_.breakupMetres / step));
+                sc = std::clamp(sc, 0, wc - 1);
+                sr = std::clamp(sr, 0, wr - 1);
             }
-            auto& f = samples[std::size_t(r) * wc + c];
-            fields_.sample(x, y, f);
+            samples[std::size_t(r) * wc + c] = window[std::size_t(sr) * wc + sc];
         }
     }
     for (std::size_t i = 0; i < samples.size(); ++i) {

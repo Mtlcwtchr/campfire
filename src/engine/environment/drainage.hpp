@@ -31,6 +31,9 @@ struct DrainageSettings {
     double seasonalRatio = 0.55, ephemeralRatio = 0.25, abandonedRatio = 0.08;
     // Today's upstream area that holds water all year, square metres.
     double permanentArea = 4.0e6;
+    // Below this much of today's upstream area a channel runs only after rain,
+    // however wet the past: the first-order heads of every network.
+    double seasonalArea = 6.0e5;
     // Widths from upstream area: outer = k * sqrt(area)^0.5 ... see drainage.cpp.
     double outerWidthPerRootArea = 0.9, innerWidthPerRootArea = 0.22, waterWidthPerRootArea = 0.05;
     double smoothing = 2;              // Chaikin passes over each reach
@@ -39,10 +42,17 @@ struct DrainageSettings {
 
 // How much more (or less) water fell here in the past than now, and how
 // easily the ground gives way. The game decides both; defaults are neutral.
+//
+// They change over hundreds of metres, so they are asked on a grid four times
+// coarser than the flow's and interpolated. The heights are asked for the
+// whole window at once when `heights` is given: a source that can answer a
+// grid shares its work between neighbours.
 struct DrainageClimate {
     std::function<double(double x, double y)> pastRain;     // relative, 1 = today's
     std::function<double(double x, double y)> rainToday;    // relative
     std::function<double(double x, double y)> erodibility;  // 0..1, 1 gives way easily
+    // Heights of `columns` x `rows` points `step` apart from (x0, y0), row-major.
+    std::function<void(double x0, double y0, double step, int columns, int rows, std::vector<double>& out)> heights;
 };
 
 struct ChannelReach {

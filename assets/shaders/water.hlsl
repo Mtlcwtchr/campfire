@@ -20,6 +20,7 @@
 #include "water_body.hlsli"
 #include "ice_surface.hlsli"
 #include "water_optics.hlsli"
+#include "environment_style.hlsli"
 
 // The surface, as four layers of one array (tools/bake_water.py and
 // tools/bake_foam_residue.py):
@@ -423,7 +424,7 @@ float4 WaterPS(WaterOut input) : SV_Target0
     const WaterShade shade = shadeWater(float3(input.worldXY, input.worldHeight), surface,
             max(input.depth + wobble, 0.0), input.lift, river, lake, ocean,
             metresPerPixel, sunshine * (1.0 - ice), windPS.z);
-    float3 colour = shade.colour;
+    float3 colour = styleSurfaceColour(shade.colour, float3(input.worldXY, input.worldHeight), kStyleWater, 0.0, 0.0);
 
     // Inland shorelines are depth intersections, not a repeating ocean swash
     // mask. Reuse the authored foam texture only on actual rapid river reaches.

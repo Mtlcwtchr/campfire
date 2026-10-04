@@ -84,8 +84,37 @@ void applyMaskWrites(const FeatureRecipe& recipe, const FeatureInstance& in, con
     }
 }
 
+float groundCover(const CoverRules& cover, const EnvironmentZone& zone, const FieldSample* fields,
+                  const MaskValues& masks, double x, double y, std::uint64_t seed) {
+    const auto ruleFor = [&](ZoneTypeId type) -> const CoverRule* {
+        const CoverRule* any = nullptr;
+        for (const auto& r : cover.rules) {
+            if (r.tier != CoverTier::Ground) continue;
+            if (!r.anyZone && r.zoneId == type) return &r;
+            if (r.anyZone && !any) any = &r;
+        }
+        return any;
+    };
+    const double contour = (fields ? fields->get(field::Aspect, 0) : 0.0f) + 1.5707963267948966;
+    const auto amount = [&](const CoverRule* rule) {
+        if (!rule) return 1.0f;
+        const CoverInputs in{fields, &zone.scalars, &masks};
+        return ruleDensity(*rule, in) * coverPatch(seed, *rule, x, y, contour);
+    };
+    float total = 0, weight = 0;
+    for (std::size_t s = 0; s < kZoneSlots; ++s) {
+        const float w = zone.weights.weight[s];
+        if (w <= 0) continue;
+        total += w * amount(ruleFor(zone.weights.type[s]));
+        weight += w;
+    }
+    if (weight <= 0) return amount(ruleFor(kNoZone));
+    return total / weight;
+}
+
 PageMasks rasteriseMasks(const FeatureLayer* features, const ZoneField* zones, const ZoneMasks& zoneMasks,
-                         const HeightAt& height, double x0, double y0, double step, int side) {
+                         const HeightAt& height, double x0, double y0, double step, int side,
+                         const CoverRules* cover, const FieldSource* fields, std::uint64_t seed) {
     PageMasks out;
     out.x0 = x0; out.y0 = y0; out.step = step; out.side = side;
     const std::size_t n = std::size_t(side) * side;
@@ -93,6 +122,19 @@ PageMasks rasteriseMasks(const FeatureLayer* features, const ZoneField* zones, c
     out.zones.assign(n * 4, 0);
     std::vector<FeatureLayer::Hit> hits;
     std::shared_ptr<const FeatureLayer::Block> keep;
+    // The ground tier, and the fields its rules read, a page at a time.
+    bool anyGround = false, wantsFields = false;
+    if (cover)
+        for (const auto& r : cover->rules)
+            if (r.tier == CoverTier::Ground) {
+                anyGround = true;
+                for (const auto& m : r.modifiers) wantsFields |= m.source == CoverModifier::Source::Field;
+            }
+    std::vector<FieldSample> sampled;
+    if (anyGround && wantsFields && fields) {
+        sampled.resize(n);
+        fields->sampleGrid(x0, y0, step, side, side, sampled);
+    }
     // Zones are cached a page at a time; fetching per sample would take the
     // zone cache's lock a quarter of a million times a page.
     std::shared_ptr<const ZoneGrid> grid;
@@ -113,7 +155,6 @@ PageMasks rasteriseMasks(const FeatureLayer* features, const ZoneField* zones, c
                 const float second = zone.weights.weight[0] + zone.weights.weight[1] > 0
                         ? zone.weights.weight[1] / (zone.weights.weight[0] + zone.weights.weight[1]) : 0.0f;
                 out.zones[i * 4 + 2] = std::uint8_t(std::lround(std::clamp(second, 0.0f, 1.0f) * 255));
-                out.zones[i * 4 + 3] = std::uint8_t(std::lround(std::clamp(zone.scalars.density, 0.0f, 1.0f) * 255));
             }
             if (zoneMasks) zoneMasks(x, y, zone, values);
             if (features) {
@@ -126,6 +167,8 @@ PageMasks rasteriseMasks(const FeatureLayer* features, const ZoneField* zones, c
             }
             for (std::size_t k = 0; k < kMaskChannels; ++k)
                 out.channels[i * kMaskChannels + k] = std::uint8_t(std::lround(std::clamp(values[k], 0.0f, 1.0f) * 255));
+            const float ground = anyGround ? groundCover(*cover, zone, sampled.empty() ? nullptr : &sampled[i], values, x, y, seed) : 1.0f;
+            out.zones[i * 4 + 3] = std::uint8_t(std::lround(std::clamp(ground * kCoverEncode, 0.0f, 255.0f)));
         }
     }
     return out;

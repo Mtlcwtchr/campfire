@@ -23,7 +23,7 @@ HeightPageAtlas::HeightPageAtlas(engine::Device& device, Layout layout, bool fie
     if (withFields_) {
         texture.type = SDL_GPU_TEXTURETYPE_2D_ARRAY;
         texture.format = SDL_GPU_TEXTUREFORMAT_R16G16B16A16_UNORM;
-        texture.layer_count_or_depth = 4;
+        texture.layer_count_or_depth = kPageFieldPlanes;
         fields_ = device.makeTexture(texture);
         if (!fields_) return;
     }

@@ -47,6 +47,13 @@ public:
     // before them. Nought almost everywhere.
     [[nodiscard]] core::Fixed at(core::WorldPos p, core::Fixed base, std::int64_t strideMetres) const;
 
+    // How deep today's water stands in a feature's channel at `p` (a carve
+    // with water_width): the trickle at the bottom of a broad dry valley.
+    // Nought almost everywhere. The height field's own water is the authority
+    // on rivers; this is water the world's hydrology does not carry.
+    [[nodiscard]] core::Fixed waterDepth(core::WorldPos p) const;
+    [[nodiscard]] bool anyWater() const { return anyWater_; }
+
     // Every instance touching `p` and where `p` falls in its shapes: what the
     // masks and the dressing read.
     struct Hit {
@@ -65,6 +72,7 @@ private:
 
     std::shared_ptr<const FeaturePlanner> planner_;
     bool movesGround_ = false;
+    bool anyWater_ = false;
     std::uint64_t generation_ = 0;
     mutable std::mutex lock_;
     struct KeyHash {

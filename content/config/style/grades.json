@@ -1,0 +1,9 @@
+{
+  "comment": "Picture grading profiles (engine/environment/style.hpp), read by assets/shaders/game/style_picture.hlsli. Rows are changes from the built-in storybook grade (D163); zeros are that grade. A profile may name a .cube lookup relative to this folder.",
+  "rows": ["highlight", "shadow", "bloom_tint", "curve"],
+  "default": "storybook",
+  "blend_seconds": 6,
+  "profiles": [
+    {"name": "storybook", "rows": {}}
+  ]
+}

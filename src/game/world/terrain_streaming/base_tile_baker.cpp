@@ -1,5 +1,7 @@
 #include "game/world/terrain_streaming/base_tile_baker.hpp"
 
+#include "engine/environment/environment.hpp"
+
 #include <algorithm>
 #include <limits>
 #include <memory>
@@ -152,6 +154,11 @@ BaseTileBaker::BaseTileBaker(const generation::WorldMapData& world, const Hydrol
 BaseTile BaseTileBaker::bake(TileKey key, std::int32_t sampleMetres, std::uint16_t padding,
                              const std::function<bool()>& cancelled) const {
     return bakePage(key, sampleMetres, padding, cancelled).base;
+}
+
+void BaseTileBaker::environment(const engine::environment::Environment* environment) {
+    environment_ = environment;
+    field_.features(environment && !environment->features().empty() ? &environment->features() : nullptr);
 }
 
 BakedPage BaseTileBaker::bakePage(TileKey key, std::int32_t sampleMetres, std::uint16_t padding,
@@ -353,6 +360,17 @@ BakedPage BaseTileBaker::bakePage(TileKey key, std::int32_t sampleMetres, std::u
                     }
                 }
             }
+            // Today's water in a feature's channel (engine/environment): a
+            // lens standing on the carved bed, where no river already is.
+            if (!carved.wet && environment_ && environment_->features().anyWater()) {
+                const Fixed lens = environment_->features().waterDepth(position);
+                if (lens > Fixed::ratio(5, 100)) {
+                    carved.surface = carved.floor + lens;
+                    carved.wet = true;
+                    carved.body = kBogPoolWaterBodyId;
+                    carved.bankDistance = -lens;
+                }
+            }
             tile.heightQuantized[at] = quantisation_.quantise(carved.floor);
             tile.waterBodyId[at] = carved.wet
                                            ? static_cast<std::uint16_t>(carved.body)
@@ -529,6 +547,15 @@ BakedPage BaseTileBaker::bakePage(TileKey key, std::int32_t sampleMetres, std::u
                             (weights.weight[m] * Fixed::fromInt(255)).roundToInt(), 0, 255));
             }
         }
+    }
+
+    // The environment's masks, on the materials' own grid.
+    if (environment_ && environment_->writesMasks()) {
+        const auto masks = environment_->masks(double(originX * stride * kSampleMetres),
+                                               double(originY * stride * kSampleMetres),
+                                               double(page.materialMetres), page.materialWidth);
+        page.envMasks = masks.channels;
+        page.envZones = masks.zones;
     }
 
     // What share of a sample's own footprint is under water, read off the

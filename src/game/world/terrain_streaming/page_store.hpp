@@ -34,6 +34,8 @@
 
 namespace generation { struct WorldMapData; }
 
+namespace engine::environment { class Environment; }
+
 namespace world::streaming {
 
 class BakedPageCache;
@@ -137,6 +139,11 @@ public:
     // the world (a pass over every cell), so nobody need work it out again.
     [[nodiscard]] const HsimQuantisation& quantisation() const { return quantisation_; }
     [[nodiscard]] const EditLayer* edits() const { return config_.edits.get(); }
+    // The procedural environment pages are baked under (its features move the
+    // ground, its masks ride beside the materials). Setting a different one
+    // makes every page baked under the old one stale. Null: none.
+    void environment(std::shared_ptr<const engine::environment::Environment> environment);
+    [[nodiscard]] std::shared_ptr<const engine::environment::Environment> environment() const;
 
     // Every metre of ground a page's samples are made from: the page, its
     // padding, one sample more for the slopes and normals taken across the
@@ -216,6 +223,9 @@ private:
     const HydrologyGraph& graph_;
     HsimQuantisation quantisation_;
     Config config_;
+    mutable std::mutex environmentGuard_;
+    std::shared_ptr<const engine::environment::Environment> environment_;
+    std::atomic<std::uint64_t> environmentGeneration_{0};
     terrain::LandMask64 landMask_;
     std::unique_ptr<BakedPageCache> diskCache_;
 

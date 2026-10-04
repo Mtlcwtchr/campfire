@@ -1,6 +1,10 @@
 #include "engine/environment/environment.hpp"
 
+#include "engine/environment/random.hpp"
+
 #include <atomic>
+#include <cstdlib>
+#include <string_view>
 #include <mutex>
 
 namespace engine::environment {
@@ -43,7 +47,9 @@ std::shared_ptr<Environment> Environment::build(EnvironmentSetup setup, std::sha
     env->generation_ = nextGeneration.fetch_add(1);
     auto zs = env->setup_.zones;
     if (zs.seed == 0) zs.seed = env->setup_.seed;
-    if (env->setup_.fields && env->setup_.classifier)
+    // A classifier with no zone but "unclassified" classifies nothing: no
+    // zone field, and nothing is sampled for it.
+    if (env->setup_.fields && env->setup_.classifier && env->setup_.classifier->types().size() > 1)
         env->zones_ = std::make_unique<ZoneField>(*env->setup_.fields, *env->setup_.classifier, zs);
     PlannerContext ctx;
     ctx.catalogue = env->catalogue_;
@@ -53,13 +59,38 @@ std::shared_ptr<Environment> Environment::build(EnvironmentSetup setup, std::sha
     ctx.climate = env->setup_.climate;
     ctx.drainage = env->setup_.drainage;
     ctx.seed = env->setup_.seed;
+    ctx.removed = env->setup_.removed;
     env->planner_ = std::make_shared<FeaturePlanner>(std::move(ctx));
     env->features_ = std::make_shared<FeatureLayer>(env->planner_);
+    if (env->catalogue_->movesGround() || env->writesMasks()) {
+        std::uint64_t h = mix64(env->setup_.seed ^ 0xe7f1ULL) ^ mix64(env->setup_.gameVersion + 1) ^
+                          mix64(env->setup_.removedVersion ^ 0x7e3dULL);
+        const auto add = [&](std::string_view text) {
+            for (unsigned char c : text) h = mix64(h ^ c);
+            h = mix64(h ^ 0xffULL);
+        };
+        for (const auto& r : env->catalogue_->recipes()) add(recipeToJson(r));
+        for (const auto& m : env->catalogue_->masks()) add(m.name);
+        for (const auto& z : env->catalogue_->zones()) add(z.name);
+        for (const auto& row : env->coverTable())
+            for (float v : row) h = mix64(h ^ std::uint64_t(std::int64_t(double(v) * 65536.0)));
+        env->fingerprint_ = h ? h : 1;
+    }
     return env;
 }
 
+bool Environment::writesMasks() const {
+    if (zones_ || setup_.zoneMasks) return true;
+    for (const auto& r : catalogue_->cover().rules)
+        if (r.tier == CoverTier::Ground) return true;
+    for (const auto& r : catalogue_->recipes())
+        if (!r.masks.empty()) return true;
+    return false;
+}
+
 PageMasks Environment::masks(double x0, double y0, double step, int side) const {
-    return rasteriseMasks(features_.get(), zones_.get(), setup_.zoneMasks, setup_.height, x0, y0, step, side);
+    return rasteriseMasks(features_.get(), zones_.get(), setup_.zoneMasks, setup_.height, x0, y0, step, side,
+                          &catalogue_->cover(), setup_.fields.get(), setup_.seed);
 }
 
 std::vector<std::array<float, 4>> Environment::coverTable() const {
@@ -79,7 +110,15 @@ void setActive(std::shared_ptr<const Environment> environment) {
 
 std::uint64_t activeGeneration() { return currentGeneration.load(); }
 
-fs::path defaultContentDirectory() { return contentRoot() / "config" / "environment"; }
-fs::path defaultStyleDirectory() { return contentRoot() / "config" / "style"; }
+// ASR_ENVIRONMENT_CONTENT and ASR_STYLE_CONTENT point a tool or a test at
+// other content without touching the game's.
+fs::path defaultContentDirectory() {
+    if (const char* over = std::getenv("ASR_ENVIRONMENT_CONTENT"); over && *over) return over;
+    return contentRoot() / "config" / "environment";
+}
+fs::path defaultStyleDirectory() {
+    if (const char* over = std::getenv("ASR_STYLE_CONTENT"); over && *over) return over;
+    return contentRoot() / "config" / "style";
+}
 
 } // namespace engine::environment

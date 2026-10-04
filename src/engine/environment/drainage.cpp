@@ -34,7 +34,7 @@ std::vector<std::array<double, 2>> chaikin(const std::vector<std::array<double, 
 ChannelClass classifyChannel(double pastArea, double todayArea, const DrainageSettings& s) {
     if (todayArea >= s.permanentArea) return ChannelClass::PermanentRiver;
     const double ratio = pastArea > 0 ? todayArea / pastArea : 0;
-    if (ratio >= s.seasonalRatio) return ChannelClass::SeasonalStream;
+    if (ratio >= s.seasonalRatio) return todayArea >= s.seasonalArea ? ChannelClass::SeasonalStream : ChannelClass::EphemeralChannel;
     if (ratio >= s.ephemeralRatio) return ChannelClass::EphemeralChannel;
     if (ratio >= s.abandonedRatio) return ChannelClass::AbandonedChannel;
     return ChannelClass::Paleochannel;
@@ -54,16 +54,35 @@ DrainageNetwork buildDrainage(const HeightAt& height, const DrainageClimate& cli
     if (n == 0) return net;
     std::vector<double> z(n), filled(n);
     std::vector<double> past(n, 1.0), today(n, 1.0), erode(n, 0.5);
-    for (int r = 0; r < rows; ++r) {
-        for (int c = 0; c < columns; ++c) {
-            const double x = x0 + (c + 0.5) * s.step, y = y0 + (r + 0.5) * s.step;
-            const std::size_t i = std::size_t(r) * columns + c;
-            z[i] = height(x, y);
-            if (climate.pastRain) past[i] = std::max(0.0, climate.pastRain(x, y));
-            if (climate.rainToday) today[i] = std::max(0.0, climate.rainToday(x, y));
-            if (climate.erodibility) erode[i] = std::clamp(climate.erodibility(x, y), 0.0, 1.0);
-        }
+    const double half = 0.5 * s.step;
+    if (climate.heights) {
+        climate.heights(x0 + half, y0 + half, s.step, columns, rows, z);
+    } else {
+        for (int r = 0; r < rows; ++r)
+            for (int c = 0; c < columns; ++c) z[std::size_t(r) * columns + c] = height(x0 + (c + 0.5) * s.step, y0 + (r + 0.5) * s.step);
     }
+    // The climate on a grid four cells to a step, read bilinearly.
+    constexpr int kCoarse = 4;
+    const int cc = columns / kCoarse + 2, cr = rows / kCoarse + 2;
+    const auto coarse = [&](const std::function<double(double, double)>& f, std::vector<double>& out, double lo, double hi) {
+        if (!f) return;
+        std::vector<double> g(std::size_t(cc) * cr);
+        for (int r = 0; r < cr; ++r)
+            for (int c = 0; c < cc; ++c)
+                g[std::size_t(r) * cc + c] = std::clamp(f(x0 + half + c * kCoarse * s.step, y0 + half + r * kCoarse * s.step), lo, hi);
+        for (int r = 0; r < rows; ++r)
+            for (int c = 0; c < columns; ++c) {
+                const double gx = double(c) / kCoarse, gy = double(r) / kCoarse;
+                const int ix = std::min(int(gx), cc - 2), iy = std::min(int(gy), cr - 2);
+                const double fx = gx - ix, fy = gy - iy;
+                const auto at = [&](int a, int b) { return g[std::size_t(b) * cc + a]; };
+                out[std::size_t(r) * columns + c] = (at(ix, iy) * (1 - fx) + at(ix + 1, iy) * fx) * (1 - fy) +
+                                                    (at(ix, iy + 1) * (1 - fx) + at(ix + 1, iy + 1) * fx) * fy;
+            }
+    };
+    coarse(climate.pastRain, past, 0.0, 1e9);
+    coarse(climate.rainToday, today, 0.0, 1e9);
+    coarse(climate.erodibility, erode, 0.0, 1.0);
     // Priority flood from the border: every pit drains, with a tiny rise so the
     // flats have a direction. Ties broken by index so the order is the same
     // on every machine.

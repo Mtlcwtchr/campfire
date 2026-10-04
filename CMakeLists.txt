@@ -212,7 +212,8 @@ add_library(asr_world STATIC
         src/game/world/terrain_streaming/worker_runtime.cpp
         src/game/world/spatial.cpp
         src/game/world/navmesh.cpp
-        src/game/world/macro.cpp)
+        src/game/world/macro.cpp
+        src/game/environment/world_environment.cpp)
 target_include_directories(asr_world PUBLIC src)
 target_sources(asr_world PRIVATE src/game/world/scene_scatter.cpp)
 target_sources(asr_world PRIVATE src/game/world/scene_entities.cpp)
@@ -222,7 +223,7 @@ target_sources(asr_world PRIVATE src/game/world/terrain_source_tree.cpp)
 # chunk by chunk under the world root (engine/world_store).
 target_sources(asr_world PRIVATE src/game/world/world_delta.cpp src/game/world/world_delta_codec.cpp
         src/game/world/world_saves.cpp src/game/world/world_tools.cpp)
-target_link_libraries(asr_world PUBLIC asr_core asr_generation asr_geometry asr_render_systems
+target_link_libraries(asr_world PUBLIC asr_core asr_generation asr_geometry asr_render_systems asr_environment
         PRIVATE nlohmann_json asr_warnings)
 target_link_libraries(asr_world PUBLIC asr_world_store)
 
@@ -335,7 +336,15 @@ add_executable(impostor_bake tools/impostor_bake.cpp)
 target_link_libraries(impostor_bake PRIVATE asr_warnings)
 
 add_executable(content_validator tools/content_validator.cpp)
-target_link_libraries(content_validator PRIVATE asr_content asr_simulation asr_warnings)
+target_link_libraries(content_validator PRIVATE asr_content asr_simulation asr_environment asr_world asr_warnings)
+
+# environment_probe - what the procedural environment makes of a world:
+# zones, features, masks, ground moved, and whether it is deterministic.
+add_executable(feature_forms tools/feature_forms.cpp)
+target_link_libraries(feature_forms PRIVATE asr_environment asr_warnings)
+
+add_executable(environment_probe tools/environment_probe.cpp)
+target_link_libraries(environment_probe PRIVATE asr_world asr_generation asr_environment asr_warnings)
 
 # ---------------------------------------------------------------------------
 # client - SDL3 top-down renderer. Optional; the simulation never links it.
@@ -406,7 +415,6 @@ if(ASR_BUILD_CLIENT)
             src/game/render/passes/far_trees_pass.cpp
             src/game/render/passes/water_pass.cpp
             src/game/render/passes/weather_pass.cpp
-            src/game/render/passes/grade_pass.cpp
             src/game/render/passes/hold_pass.cpp
             src/game/render/passes/sketch_pass.cpp
             src/game/render/passes/highlight_pass.cpp

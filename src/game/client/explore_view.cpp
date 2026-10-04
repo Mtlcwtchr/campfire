@@ -192,6 +192,7 @@ bool ExploreView::draw(const Camera& camera) {
     }
     settings_.weather = weather;
     settings_.map = menu_->mapView();
+    settings_.environmentChannel = menu_->environmentChannel();
     settings_.stage = menu_->terrainStage();
     settings_.iceVisible = menu_->iceVisible();
     settings_.potentialOnly = menu_->potentialOnly();

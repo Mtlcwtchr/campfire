@@ -4,7 +4,10 @@
 #include "engine/biomes/detail_edits.hpp"
 #include "engine/biomes/registry.hpp"
 #include "engine/core/progress.hpp"
+#include "engine/environment/scatter.hpp"
+#include "game/environment/world_environment.hpp"
 
+#include <cstdio>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -64,6 +67,15 @@ WorldSnapshot::WorldSnapshot(generation::WorldMapData map, streaming::PageStore:
     HeightField query(&map_, map_.seed);
     climate_.raise(map_, query);
     const auto climateRaised = std::chrono::steady_clock::now();
+    // The procedural environment, over the generator's ground and the climate
+    // just raised. Features plan lazily, a cell at a time, as pages ask.
+    core::progress("environment");
+    std::call_once(macroOnce_, [&] { macroResolved_ = HeightField(&map_, map_.seed).macro().resolved(); });
+    std::vector<engine::environment::EnvironmentProblem> problems;
+    environment_ = environment::buildWorldEnvironment(map_, macroResolved_, climate_, &problems);
+    for (const auto& p : problems)
+        std::fprintf(stderr, "environment: %s: %s\n", p.file.c_str(), p.what.c_str());
+    pages_.environment(environment_);
     core::progress("landmarks");
     findLandmarks();
     const auto landmarksFound = std::chrono::steady_clock::now();
@@ -77,6 +89,26 @@ WorldSnapshot::WorldSnapshot(generation::WorldMapData map, streaming::PageStore:
     // by two thousand kilometres the game is built for. H64 is streamed like
     // every other level, around the camera, and the disk keeps what was baked.
     if (std::getenv("ASR_TERRAIN_PREBAKE")) pages_.prebakeInBackground({2, 4});
+}
+
+std::shared_ptr<const engine::environment::Environment> WorldSnapshot::environment() const {
+    const std::lock_guard<std::mutex> held(environmentGuard_);
+    return environment_;
+}
+
+void WorldSnapshot::reloadEnvironment() const {
+    std::vector<engine::environment::EnvironmentProblem> problems;
+    auto next = environment::buildWorldEnvironment(map_, macroResolved_, climate_, &problems);
+    for (const auto& p : problems)
+        std::fprintf(stderr, "environment: %s: %s\n", p.file.c_str(), p.what.c_str());
+    {
+        const std::lock_guard<std::mutex> held(environmentGuard_);
+        // The old one stays alive with the snapshot: height fields made from
+        // it point into its feature layer and may still be answering.
+        retiredEnvironments_.push_back(std::move(environment_));
+        environment_ = next;
+    }
+    pages_.environment(std::move(next));
 }
 
 void WorldBuilder::build(const generation::WorldMapParams& params) {
@@ -222,6 +254,41 @@ decor::Scatter WorldSnapshot::scatter(decor::ScatterBounds bounds, const ecology
             return query.underWater({core::Fixed::fromDoubleForContent(wx),
                                      core::Fixed::fromDoubleForContent(wy)});
         },true);
+    // The procedural environment (engine/environment): the supporting pieces
+    // of every feature, and the secondary cover by zone. Each object is kept
+    // only by the region its position falls in, so neighbouring regions that
+    // both see a feature do not both set its stones down. In the same list,
+    // and under the same removals, as everything the generator placed.
+    if (const auto env = environment();
+        env && (!env->catalogue().recipes().empty() || !env->catalogue().cover().rules.empty())) {
+        namespace e = engine::environment;
+        const auto fx = [](double v) { return core::Fixed::fromDoubleForContent(v); };
+        const auto groundAt = [&](double x, double y) { return query.heightAt({fx(x), fx(y)}).toDouble(); };
+        std::vector<e::PlacedObject> placed;
+        std::vector<e::FeatureInstance> instances;
+        env->planner().instancesIn({{fx(double(bounds.minX)), fx(double(bounds.minY))},
+                                    {fx(double(bounds.maxX)), fx(double(bounds.maxY))}}, instances);
+        for (const auto& in : instances) e::dress(env->catalogue(), in, groundAt, placed);
+        e::CoverContext under;
+        under.catalogue = &env->catalogue();
+        under.fields = env->setup().fields.get();
+        under.zones = env->zones();
+        under.features = &env->features();
+        under.zoneMasks = env->setup().zoneMasks;
+        under.height = env->setup().height;
+        under.ground = groundAt;
+        under.seed = map_.seed;
+        e::cover(under, double(bounds.minX), double(bounds.minY), double(bounds.maxX), double(bounds.maxY), placed);
+        for (const auto& o : placed) {
+            if (o.x < double(bounds.minX) || o.x >= double(bounds.maxX) || o.y < double(bounds.minY) ||
+                o.y >= double(bounds.maxY) || o.model >= decor::kModels.size())
+                continue;
+            if (query.underWater({fx(o.x), fx(o.y)})) continue;
+            result.objects.push_back({o.id | (1ull << 62), o.x, o.y, o.z - decor::groundSink(o.model, o.scale), o.scale,
+                                      o.yaw, float(double(o.id & 0xffff) / 65535.0 * 6.2831853), o.tint, o.model});
+            ++result.populations[o.model];
+        }
+    }
     result.revision = delta.region(double(bounds.minX), double(bounds.minY));
     result.ground = ground;
     std::erase_if(result.objects, [&](const auto& object) {

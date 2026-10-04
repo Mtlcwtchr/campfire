@@ -584,7 +584,7 @@ void ClientUi::editPanel(ui::Ui& ui, const ClientView& view, ClientActions& out)
     // how the ground is painted.
     static constexpr const char* names[kEditTabs] = {"1 Size", "2 Land", "3 Coast", "4 Mountains",
                                                      "5 Climate", "6 Sculpt", "7 Objects", "8 Import",
-                                                     "9 Ground"};
+                                                     "9 Ground", "10 Environment"};
     const float tw4 = std::floor((w - 12) / 4.0f);
     constexpr int kTabRows = (kEditTabs + 3) / 4;
     for (int i = 0; i < kEditTabs; ++i) {
@@ -613,6 +613,7 @@ void ClientUi::editPanel(ui::Ui& ui, const ClientView& view, ClientActions& out)
         case EditTab::Objects: objectTools(ui, cx, cy, cw); break;
         case EditTab::Import: importTab(ui, view, cx, cy, cw, out); break;
         case EditTab::Ground: ground.draw(ui, cx, cy, cw); break;
+        case EditTab::Environment: environmentTab(ui, view, cx, cy, cw, out); break;
     }
     ui.endScroll(cy + 6);
     const std::string last = tab == EditTab::Ground
@@ -975,6 +976,66 @@ void ClientUi::importTab(ui::Ui& ui, const ClientView& view, float x, float& y, 
     y += ui.paragraph(x, y, w, held + " Imports are not undone by Undo: clear the regions instead.", t.labelSoft, 0.8f) + 4;
     if (!shape.sourcePath.empty()) y += ui.paragraph(x, y, w, shape.sourcePath, t.labelSoft, 0.72f) + 4;
     y += ui.paragraph(x, y, w, stageLine(shape), t.label, 0.85f) + 6;
+}
+
+void ClientUi::environmentTab(ui::Ui& ui, const ClientView& view, float x, float& y, float w, ClientActions& out) {
+    const auto& t = ui.theme();
+    const auto& e = view.environment;
+    if (!e.present) {
+        y += ui.paragraph(x, y, w, "No environment: the world is still being raised.", t.labelSoft, 0.9f) + 8;
+        return;
+    }
+    section(ui, x, y, w, "CONTENT");
+    y += ui.paragraph(x, y, w, e.summary, t.label, 0.88f) + 6;
+    y += ui.paragraph(x, y, w,
+                      "content/config/environment (masks, recipes, cover) and content/config/style (palettes, grades). "
+                      "Edited files are read again within a second; the ground is baked again under them.",
+                      t.labelSoft, 0.8f) + 8;
+    if (ui.button(id("env.reload"), {x, y, w, 30}, "Read the content again")) out.environment.reload = true;
+    y += 38;
+    if (!e.problems.empty()) {
+        section(ui, x, y, w, "PROBLEMS");
+        for (std::size_t i = 0; i < e.problems.size() && i < 12; ++i)
+            y += ui.paragraph(x, y, w, e.problems[i], t.labelSoft, 0.8f) + 3;
+        if (e.problems.size() > 12)
+            y += ui.paragraph(x, y, w, std::to_string(e.problems.size() - 12) + " more (content_validator lists them all)",
+                              t.labelSoft, 0.8f) + 3;
+        y += 6;
+    }
+
+    section(ui, x, y, w, "SHOW");
+    const float bw = std::floor((w - 16) / 3.0f);
+    const char* views[3] = {"Ground", "Zones", "Masks"};
+    for (int v = 0; v < 3; ++v)
+        if (ui.toggle(id("env.view", v), {x + float(v) * (bw + 8), y, bw, 30}, views[v], e.view == v))
+            out.environment.view = v;
+    y += 38;
+    if (e.view == 2 && !e.channels.empty()) {
+        const float cw = std::floor((w - 8) * 0.5f);
+        for (std::size_t c = 0; c < e.channels.size(); ++c) {
+            const Rect r{x + float(c % 2) * (cw + 8), y + float(c / 2) * 34.0f, cw, 30};
+            if (ui.toggle(id("env.channel", int(c)), r, e.channels[c], e.channel == int(c))) out.environment.channel = int(c);
+        }
+        y += float((e.channels.size() + 1) / 2) * 34.0f + 4;
+    }
+
+    section(ui, x, y, w, "UNDER THE POINTER");
+    y += ui.paragraph(x, y, w, view.pointerOnGround ? "Zone: " + (e.zoneHere.empty() ? std::string("none") : e.zoneHere)
+                                                    : std::string("Point at the ground."), t.label, 0.88f) + 6;
+    if (e.features.empty()) {
+        y += ui.paragraph(x, y, w, "No feature within 64 m.", t.labelSoft, 0.85f) + 6;
+    } else {
+        for (const auto& [name, metres] : e.features) {
+            char line[96];
+            std::snprintf(line, sizeof line, "%s  %.0f m", name.c_str(), metres);
+            y += ui.paragraph(x, y, w, line, t.label, 0.85f) + 2;
+        }
+        y += 4;
+    }
+    y += ui.paragraph(x, y, w,
+                      "To take a feature away, ground and all: the Ground tab's details, Remove, at its line or its "
+                      "anchor. It is kept with the world's other removed details.",
+                      t.labelSoft, 0.8f) + 8;
 }
 
 void ClientUi::terrainTools(ui::Ui& ui, float x, float& y, float w) {

@@ -98,6 +98,8 @@ bool channels(Page& p, Function&& f) {
         f(p.water.flowX, n, false) && f(p.water.flowY, n, false) && f(p.water.estuary, n, false) &&
         f(p.large.deltaQuantized, n, false) && f(p.medium.deltaQuantized, 0, false) &&
         f(p.materials, std::size_t(p.materialWidth) * p.materialWidth * kMaterialCount, false) &&
+        f(p.envMasks, std::size_t(p.materialWidth) * p.materialWidth * 8u, true) &&
+        f(p.envZones, std::size_t(p.materialWidth) * p.materialWidth * 4u, true) &&
         f(p.refinementDepth, n, false) && f(p.refinementAshore, n, false) &&
         f(p.featureCells, p.base.sampleMetres == 16 && p.base.padding >= 1 ? 1024u : 0u, false);
 }

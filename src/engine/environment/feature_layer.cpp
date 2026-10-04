@@ -25,7 +25,12 @@ thread_local LastBlock last;
 
 FeatureLayer::FeatureLayer(std::shared_ptr<const FeaturePlanner> planner)
     : planner_(std::move(planner)), movesGround_(planner_ && planner_->catalogue().movesGround()),
-      generation_(nextGeneration.fetch_add(1)) {}
+      generation_(nextGeneration.fetch_add(1)) {
+    if (planner_)
+        for (const auto& r : planner_->catalogue().recipes())
+            for (const auto& op : r.terrain)
+                anyWater_ = anyWater_ || (op.kind == TerrainOpKind::CarveProfile && op.waterWidth > 0);
+}
 
 std::shared_ptr<const FeatureLayer::Block> FeatureLayer::block(std::int64_t bx, std::int64_t by) const {
     const auto key = std::make_pair(bx, by);
@@ -78,6 +83,29 @@ core::Fixed FeatureLayer::at(core::WorldPos p, core::Fixed base, std::int64_t st
         applyOps(cat.ops(in.recipe), in, p, base, strideMetres, totals);
     }
     return totals.total();
+}
+
+core::Fixed FeatureLayer::waterDepth(core::WorldPos p) const {
+    if (!anyWater_) return core::kZero;
+    const auto b = blockAt(p);
+    const auto& cat = planner_->catalogue();
+    core::Fixed deepest = core::kZero;
+    for (const auto& in : b->instances) {
+        if (!in.bounds.contains(p) || in.spline.empty()) continue;
+        for (const auto& op : cat.ops(in.recipe)) {
+            if (op.kind != TerrainOpKind::CarveProfile || op.waterHalf.raw <= 0) continue;
+            const auto half = op.waterHalf * in.scale;
+            const auto n = in.spline.nearest(p);
+            if (n.distance >= half) continue;
+            // A shallow lens: a quarter metre in the middle at scale one,
+            // thinning to nothing at the water's edge.
+            const auto u = n.distance / half;
+            const auto taper = core::min(fixedSmoothstep(core::kZero, op.taper, n.along),
+                                         fixedSmoothstep(core::kZero, op.taper, in.spline.length - n.along));
+            deepest = core::max(deepest, core::Fixed::ratio(1, 4) * in.scale * (core::kOne - u * u) * taper);
+        }
+    }
+    return deepest;
 }
 
 void FeatureLayer::probe(core::WorldPos p, core::Fixed base, std::vector<Hit>& out,

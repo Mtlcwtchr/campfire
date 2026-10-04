@@ -38,6 +38,7 @@
 #include "game/world/terrain_streaming/graph_carve.hpp"
 
 namespace generation { struct WorldMapData; }
+namespace engine::environment { class FeatureLayer; }
 
 namespace world {
 
@@ -402,6 +403,13 @@ public:
     void edits(const EditLayer* layer) { edits_ = layer; }
     [[nodiscard]] const EditLayer* edits() const { return edits_; }
 
+    // The procedural environment's features (engine/environment/feature_layer.hpp):
+    // gullies, cliff bands, outcrops. Added to the detail, so the water still
+    // carves through them and a channel's banks still give way. Null, or a
+    // layer that moves no ground, costs one branch.
+    void features(const engine::environment::FeatureLayer* layer) { features_ = layer; }
+    [[nodiscard]] const engine::environment::FeatureLayer* features() const { return features_; }
+
 private:
     QueryCache::State* cachedQueries() const;
     struct CoarseLookup {
@@ -460,6 +468,9 @@ private:
     [[nodiscard]] streaming::CarvedSample carved(core::WorldPos at, core::Fixed country,
                                                  core::Fixed detail) const;
     const EditLayer* edits_ = nullptr;
+    const engine::environment::FeatureLayer* features_ = nullptr;
+    // piecesAt before the features: what the features themselves stand on.
+    Pieces piecesWithout(core::Fixed x, core::Fixed y, std::int64_t strideMetres) const;
     const generation::WorldMapData* coarse_ = nullptr;
     std::uint64_t seed_ = 0;
     MacroWorld macro_;

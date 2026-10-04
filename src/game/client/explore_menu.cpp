@@ -101,6 +101,11 @@ bool ExploreMenu::handle(const SDL_Event& event) {
         dirty_ = true;
         return true;
     }
+    if (key == SDLK_PERIOD && mapView_ == world::MapView::EnvMasks) {
+        environmentChannel_ = (environmentChannel_ + 1) % 8;
+        dirty_ = true;
+        return true;
+    }
     if (key == SDLK_M) {
         mapView_ = static_cast<world::MapView>(
                 (static_cast<int>(mapView_) + 1) % static_cast<int>(world::MapView::Count));

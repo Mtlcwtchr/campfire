@@ -13,10 +13,16 @@ namespace game {
 
 // Page fields, not vertices. Packed once on a worker, shared by every grid
 // reading this page, including geometry-only 32/128/256 m levels.
+inline constexpr std::uint32_t kPageFieldPlanes = 7;
+
 struct PackedHeightPage {
     std::shared_ptr<const world::streaming::BakedPage> source;
-    // RGBA16_UNORM: residuals/water, weights0, weights1/coverage, flow/kind.
-    std::array<std::vector<std::uint16_t>, 4> fields;
+    // RGBA16_UNORM: residuals/water, weights0, weights1/coverage, flow/kind,
+    // then the environment (engine/environment/masks.hpp): mask channels 0-3,
+    // mask channels 4-7, and the zones - first type, second type (both id/255,
+    // read with Load, never filtered), the second's share and the ground cover
+    // multiplier (0..2 as 0..1).
+    std::array<std::vector<std::uint16_t>, 7> fields;
     // False proves the entire stored page (including filtering padding) cannot
     // survive WaterPS's coverage clip. Unknown/manually built pages stay wet.
     bool mayHaveWater = true;

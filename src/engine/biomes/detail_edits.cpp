@@ -201,4 +201,16 @@ std::vector<PinnedDetail> DetailEdits::pinnedIn(double x0, double y0, double x1,
     return out;
 }
 
+std::uint64_t DetailEdits::removedFingerprint() const {
+    std::uint64_t h = 0x9e3779b97f4a7c15ULL;
+    const auto mix = [&](std::uint64_t v) {
+        h ^= v + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
+        h *= 0xbf58476d1ce4e5b9ULL;
+    };
+    // std::map and std::set: the order is the keys', the same every session.
+    for (const auto& [key, chunk] : chunks_)
+        for (const auto id : chunk.removed) mix(id);
+    return h;
+}
+
 } // namespace engine::biomes

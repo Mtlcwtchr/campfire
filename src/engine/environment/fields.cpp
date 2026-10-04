@@ -109,6 +109,31 @@ void deriveShape(const HeightAt& height, double x, double y, const ShapeSettings
     out.set(field::Exposure, float(std::clamp(facing + crest, 0.0, 1.0)));
 }
 
+void deriveShapeGrid(std::span<const double> heights, int columns, int rows, int margin, double step,
+                     const ShapeSettings& s, std::span<FieldSample> out) {
+    const int wc = columns + 2 * margin;
+    const auto H = [&](int c, int r) {
+        c = std::clamp(c, -margin, columns - 1 + margin);
+        r = std::clamp(r, -margin, rows - 1 + margin);
+        return heights[std::size_t(r + margin) * wc + (c + margin)];
+    };
+    const int small = std::clamp(int(std::lround(s.smallRing / step)), 1, std::max(1, margin));
+    const int large = std::clamp(int(std::lround(s.largeRing / step)), 1, std::max(1, margin));
+    for (int r = 0; r < rows; ++r) {
+        for (int c = 0; c < columns; ++c) {
+            // The same arithmetic as deriveShape, read off the grid.
+            const HeightAt grid = [&](double x, double y) {
+                return H(c + int(std::lround(x / step)), r + int(std::lround(y / step)));
+            };
+            ShapeSettings local = s;
+            local.step = step;
+            local.smallRing = small * step;
+            local.largeRing = large * step;
+            deriveShape(grid, 0, 0, local, out[std::size_t(r) * columns + c]);
+        }
+    }
+}
+
 ShapedSource::ShapedSource(const FieldSource* base, HeightAt height, ShapeSettings settings)
     : base_(base), height_(std::move(height)), settings_(settings) {}
 

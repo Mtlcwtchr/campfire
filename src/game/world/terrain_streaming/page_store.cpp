@@ -1,5 +1,8 @@
 #include "game/world/terrain_streaming/page_store.hpp"
 
+#include "engine/core/rng.hpp"
+#include "engine/environment/environment.hpp"
+
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -64,8 +67,20 @@ std::shared_ptr<const BakedPage> PageStore::resident(TileKey key) const {
 }
 
 bool PageStore::current(const BakedPage& page) const {
+    if (page.environment != environmentGeneration_.load(std::memory_order_acquire)) return false;
     const auto* edits = config_.edits.get();
     return !edits || edits->revisionIn(reach(page.base.key)) <= page.groundRevision;
+}
+
+void PageStore::environment(std::shared_ptr<const engine::environment::Environment> environment) {
+    const std::lock_guard<std::mutex> held(environmentGuard_);
+    environment_ = std::move(environment);
+    environmentGeneration_.store(environment_ ? environment_->generation() : 0, std::memory_order_release);
+}
+
+std::shared_ptr<const engine::environment::Environment> PageStore::environment() const {
+    const std::lock_guard<std::mutex> held(environmentGuard_);
+    return environment_;
 }
 
 std::size_t PageStore::footprintOf(const BakedPage& page) {
@@ -164,7 +179,17 @@ std::shared_ptr<const BakedPage> PageStore::page(TileKey key) {
         // The ground as this attempt begins. Read before anything is sampled:
         // every edit at or below this revision is in what the attempt reads.
         const std::uint64_t revision = edits ? edits->revision() : 0;
-        const std::uint64_t ground = edits ? edits->fingerprint(area) : 0;
+        // The environment's fingerprint goes into the name too, and only when
+        // it does anything: a world without one keeps its cached pages.
+        const auto environment = this->environment();
+        const std::uint64_t environmentId = environment ? environment->generation() : 0;
+        const std::uint64_t ground = [&] {
+            const std::uint64_t dug = edits ? edits->fingerprint(area) : 0;
+            const std::uint64_t made = environment ? environment->fingerprint() : 0;
+            if (!made) return dug;
+            const auto mixed = core::splitmix64(dug ^ core::splitmix64(made));
+            return mixed ? mixed : std::uint64_t{1};
+        }();
         const auto unchanged = [&] { return !edits || edits->revisionIn(area) <= revision; };
         const auto stale = [&] {
             const std::lock_guard<std::mutex> held(guard_);
@@ -176,6 +201,7 @@ std::shared_ptr<const BakedPage> PageStore::page(TileKey key) {
             const auto result = diskCache_->read(key, stored, ground);
             if (result) {
                 stored.groundRevision = revision;
+                stored.environment = environmentId;
                 auto loaded = std::make_shared<const BakedPage>(std::move(stored));
                 if (unchanged() || attempt == kAttempts) {
                     const std::lock_guard<std::mutex> held(guard_);
@@ -197,14 +223,18 @@ std::shared_ptr<const BakedPage> PageStore::page(TileKey key) {
         // A parent's samples are reused as they are, so a parent older than
         // the ground this page reaches would carry the old ground into it.
         if (parent && edits && edits->revisionIn(area) > parent->groundRevision) parent.reset();
+        if (parent && parent->environment != environmentId) parent.reset();
 
         // Baked outside the residency lock. A bake is tens of milliseconds and
         // every other page in the store would otherwise wait on it; the cost of
         // two workers baking one page at the same moment is one wasted bake of an
         // identical answer, which is counted rather than prevented.
-        BakedPage made = bakerForThisThread().bakePage(key, spacing, config_.padding, {}, parent.get());
+        auto& baker = bakerForThisThread();
+        baker.environment(environment.get());
+        BakedPage made = baker.bakePage(key, spacing, config_.padding, {}, parent.get());
         if (!made.base.valid()) return nullptr;
         made.groundRevision = revision;
+        made.environment = environmentId;
         made.ground = ground;
         auto baked = std::make_shared<const BakedPage>(std::move(made));
         const bool current = unchanged();

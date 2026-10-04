@@ -64,6 +64,9 @@ public:
     // Pinned instances inside [x0, x1) x [y0, y1).
     [[nodiscard]] std::vector<PinnedDetail> pinnedIn(double x0, double y0, double x1, double y1) const;
     [[nodiscard]] bool empty() const { return chunks_.empty(); }
+    // Every removed id, as one number: the same removals give the same number
+    // in any session (what a derived product that honours them is filed under).
+    [[nodiscard]] std::uint64_t removedFingerprint() const;
     [[nodiscard]] std::size_t chunks() const { return chunks_.size(); }
     // Changes with every edit: what was placed under another is stale.
     [[nodiscard]] std::uint64_t revision() const { return revision_; }

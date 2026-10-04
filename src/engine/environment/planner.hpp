@@ -20,6 +20,7 @@
 // scale in catalogue order. A recipe's `clearance` keeps it off the ground an
 // earlier recipe has already taken.
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <unordered_map>
@@ -44,6 +45,9 @@ struct PlannerContext {
     DrainageSettings drainage;
     std::uint64_t seed = 0;
     double windX = -0.857, windY = 0.516;
+    // Features a person removed by hand: an instance whose id this answers
+    // true for (at its anchor) is not placed, and moves no ground. Null: none.
+    std::function<bool(std::uint64_t id, double x, double y)> removed;
 };
 
 using InstanceList = std::vector<FeatureInstance>;

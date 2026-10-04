@@ -98,6 +98,27 @@ PackedHeightPage packHeightPage(std::shared_ptr<const world::streaming::BakedPag
             }
             if (sum > 0) for (auto& w : weights) w /= sum;
         }
+        // The environment's masks, off the same grid as the materials: the
+        // channels interpolated, the zone ids taken from the nearest texel.
+        out.fields[6][i * 4 + 3] = 32768;   // cover multiplier one: as the ground has always grown
+        if (!p.envMasks.empty() && p.materialWidth && p.materialMetres > 0) {
+            const int w = p.materialWidth;
+            const double gx = double(i % side) * p.base.sampleMetres / p.materialMetres;
+            const double gy = double(i / side) * p.base.sampleMetres / p.materialMetres;
+            const int x = std::min(int(gx), w - 1), y = std::min(int(gy), w - 1);
+            const int x1 = std::min(x + 1, w - 1), y1 = std::min(y + 1, w - 1);
+            const double fx = std::clamp(gx - x, 0.0, 1.0), fy = std::clamp(gy - y, 0.0, 1.0);
+            for (int k = 0; k < 8; ++k) {
+                const auto at = [&](int a, int b) { return p.envMasks[std::size_t(b * w + a) * 8 + k] / 255.0; };
+                out.fields[4 + k / 4][i * 4 + k % 4] = unorm(std::lerp(std::lerp(at(x, y), at(x1, y), fx),
+                                                                       std::lerp(at(x, y1), at(x1, y1), fx), fy));
+            }
+            if (!p.envZones.empty()) {
+                const int nx = std::min(int(std::lround(gx)), w - 1), ny = std::min(int(std::lround(gy)), w - 1);
+                const auto* z = &p.envZones[std::size_t(ny * w + nx) * 4];
+                for (int k = 0; k < 4; ++k) out.fields[6][i * 4 + k] = std::uint16_t(z[k] * 257u);
+            }
+        }
         for (int m = 0; m < 4; ++m) out.fields[1][i * 4 + m] = unorm(weights[m]);
         out.fields[2][i * 4] = unorm(weights[4]);
         out.fields[2][i * 4 + 1] = unorm(weights[5]);

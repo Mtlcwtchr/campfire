@@ -234,6 +234,7 @@ private:
     // written over them in place - so a stroke never opens a hole.
     std::unordered_set<Key> stale_;
     std::uint64_t groundSeen_ = 0;
+    std::uint64_t environmentSeen_ = 0;   // the environment generation the pages were made under
     std::size_t refreshed_ = 0;
     bool restream_ = false;
     std::vector<PackedHeightPage> staged_;

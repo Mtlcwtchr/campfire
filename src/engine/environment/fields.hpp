@@ -102,6 +102,14 @@ struct ShapeSettings {
 // out from the height function and written into `out` (Elevation too).
 void deriveShape(const HeightAt& height, double x, double y, const ShapeSettings& s, FieldSample& out);
 
+// The same shape fields for a whole grid at once, from heights already
+// sampled on it. `heights` is (columns + 2 * margin) x (rows + 2 * margin),
+// row-major, `step` metres apart, the grid's (0, 0) at heights' (margin, margin).
+// Derivatives are taken over one step; the TPI rings snap to whole steps, and
+// a margin smaller than the large ring clamps it to the margin.
+void deriveShapeGrid(std::span<const double> heights, int columns, int rows, int margin, double step,
+                     const ShapeSettings& s, std::span<FieldSample> out);
+
 // A FieldSource that is the game's source with the shape fields filled in
 // from height wherever the game left them out.
 class ShapedSource final : public FieldSource {

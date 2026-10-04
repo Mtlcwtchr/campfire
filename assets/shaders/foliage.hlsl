@@ -11,6 +11,7 @@
 #include "ring_reveal.hlsli"
 #include "landscape_look.hlsli"
 #include "weather.hlsli"
+#include "environment_style.hlsli"
 #define SHADOW_TEXTURE_SLOT t1
 #define SHADOW_SAMPLER_SLOT s1
 #include "shadow_field.hlsli"
@@ -246,6 +247,7 @@ float4 FoliagePS(FoliageOut input) : SV_Target0
     const float3 normal = normalize(input.blade.xyz);
     const float root = lookRootOcclusion(up);
     float3 pigment = landscapePigment(foliageCardAlbedo(texel.rgb, input.tint.rgb, input.uvLayer.z), 1.0);
+    pigment=styleSurfaceColour(pigment,input.worldPosition,kStyleVegetation,1.0,0.0);
     pigment=weatherVegetation(pigment,parametersPS[0].z,input.weather.y,input.weather.w);
     pigment=lerp(pigment,float3(0.76,0.80,0.82),
                  wxSmooth(0.01,0.25,input.weather.x)*wxSmooth(0.45,1.0,up)*0.8);
