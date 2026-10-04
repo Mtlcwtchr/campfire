@@ -1,4 +1,1446 @@
 {
-  "comment": "Ground cover and secondary scatter by zone (engine/environment/cover.hpp). Empty until the natural zones are approved.",
-  "rules": []
+  "comment": "Ground cover by zone (engine/environment/cover.hpp). Ground tier: the dense grass the GPU draws, as a multiplier; secondary: objects a 100 m2, in clumps and patches. Part J of doc/plan_procedural_environment_2026-10-03.md.",
+  "rules": [
+    {
+      "zone": "old_growth",
+      "tier": "ground",
+      "foliage": "old_growth",
+      "density": 0.45,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "open_woodland",
+      "tier": "ground",
+      "foliage": "open_woodland",
+      "density": 0.8,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "forest_edge",
+      "tier": "ground",
+      "foliage": "forest_edge",
+      "density": 1.0,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        },
+        {
+          "mask": "boost",
+          "range": [
+            0.0,
+            1.0
+          ],
+          "floor": 0.85
+        }
+      ]
+    },
+    {
+      "zone": "clearing",
+      "tier": "ground",
+      "foliage": "clearing",
+      "density": 1.25,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        },
+        {
+          "mask": "boost",
+          "range": [
+            0.0,
+            1.0
+          ],
+          "floor": 0.85
+        }
+      ]
+    },
+    {
+      "zone": "windthrow",
+      "tier": "ground",
+      "foliage": "windthrow",
+      "density": 1.2,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        },
+        {
+          "mask": "boost",
+          "range": [
+            0.0,
+            1.0
+          ],
+          "floor": 0.85
+        }
+      ]
+    },
+    {
+      "zone": "wet_hollow",
+      "tier": "ground",
+      "foliage": "wet_hollow",
+      "density": 0.9,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "stream_bank",
+      "tier": "ground",
+      "foliage": "stream_bank",
+      "density": 1.1,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        },
+        {
+          "mask": "boost",
+          "range": [
+            0.0,
+            1.0
+          ],
+          "floor": 0.85
+        }
+      ]
+    },
+    {
+      "zone": "cliff_foot",
+      "tier": "ground",
+      "foliage": "cliff_foot",
+      "density": 0.6,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "rocky_slope",
+      "tier": "ground",
+      "foliage": "rocky_slope",
+      "density": 0.5,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "meadow",
+      "tier": "ground",
+      "foliage": "meadow",
+      "density": 1.15,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        },
+        {
+          "mask": "boost",
+          "range": [
+            0.0,
+            1.0
+          ],
+          "floor": 0.85
+        }
+      ]
+    },
+    {
+      "zone": "scrub",
+      "tier": "ground",
+      "foliage": "scrub",
+      "density": 0.9,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "heath",
+      "tier": "ground",
+      "foliage": "heath",
+      "density": 0.9,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "steppe",
+      "tier": "ground",
+      "foliage": "steppe",
+      "density": 0.9,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "dry_wash",
+      "tier": "ground",
+      "foliage": "dry_wash",
+      "density": 0.4,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "floodplain",
+      "tier": "ground",
+      "foliage": "floodplain",
+      "density": 1.25,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        },
+        {
+          "mask": "boost",
+          "range": [
+            0.0,
+            1.0
+          ],
+          "floor": 0.85
+        }
+      ]
+    },
+    {
+      "zone": "swamp_forest",
+      "tier": "ground",
+      "foliage": "swamp_forest",
+      "density": 0.5,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "bog",
+      "tier": "ground",
+      "foliage": "bog",
+      "density": 0.8,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "fen",
+      "tier": "ground",
+      "foliage": "fen",
+      "density": 1.2,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        },
+        {
+          "mask": "boost",
+          "range": [
+            0.0,
+            1.0
+          ],
+          "floor": 0.85
+        }
+      ]
+    },
+    {
+      "zone": "quagmire",
+      "tier": "ground",
+      "foliage": "quagmire",
+      "density": 0.35,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "marsh",
+      "tier": "ground",
+      "foliage": "marsh",
+      "density": 1.4,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        },
+        {
+          "mask": "boost",
+          "range": [
+            0.0,
+            1.0
+          ],
+          "floor": 0.85
+        }
+      ]
+    },
+    {
+      "zone": "river_marsh",
+      "tier": "ground",
+      "foliage": "river_marsh",
+      "density": 1.45,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        },
+        {
+          "mask": "boost",
+          "range": [
+            0.0,
+            1.0
+          ],
+          "floor": 0.85
+        }
+      ]
+    },
+    {
+      "zone": "salt_marsh",
+      "tier": "ground",
+      "foliage": "salt_marsh",
+      "density": 0.7,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "shore",
+      "tier": "ground",
+      "foliage": "shore",
+      "density": 0.7,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "dunes",
+      "tier": "ground",
+      "foliage": "dunes",
+      "density": 0.25,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "scree",
+      "tier": "ground",
+      "foliage": "scree",
+      "density": 0.1,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "outcrop",
+      "tier": "ground",
+      "foliage": "outcrop",
+      "density": 0.15,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "alpine_meadow",
+      "tier": "ground",
+      "foliage": "alpine_meadow",
+      "density": 1.0,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        },
+        {
+          "mask": "boost",
+          "range": [
+            0.0,
+            1.0
+          ],
+          "floor": 0.85
+        }
+      ]
+    },
+    {
+      "zone": "tundra",
+      "tier": "ground",
+      "foliage": "tundra",
+      "density": 0.6,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "old_growth",
+      "tier": "secondary",
+      "models": [
+        [
+          "Fern_Clump",
+          1
+        ]
+      ],
+      "density": 0.6,
+      "cluster": [
+        2,
+        4
+      ],
+      "cluster_radius": 1.8,
+      "patch": [
+        6,
+        45
+      ],
+      "patch_contrast": 0.55,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        },
+        {
+          "field": "moisture",
+          "range": [
+            0.3,
+            0.6
+          ]
+        }
+      ]
+    },
+    {
+      "zone": "old_growth",
+      "tier": "secondary",
+      "models": [
+        [
+          "Mushroom_Common",
+          1
+        ],
+        [
+          "Red_Mushrooms",
+          0.4
+        ]
+      ],
+      "density": 0.12,
+      "cluster": [
+        2,
+        5
+      ],
+      "cluster_radius": 1.8,
+      "patch": [
+        6,
+        45
+      ],
+      "patch_contrast": 0.55,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "old_growth",
+      "tier": "secondary",
+      "models": [
+        [
+          "Deadwood_Branch",
+          1
+        ],
+        [
+          "Deadwood_Log",
+          0.3
+        ]
+      ],
+      "density": 0.25,
+      "cluster": [
+        1,
+        2
+      ],
+      "cluster_radius": 1.8,
+      "patch": [
+        6,
+        45
+      ],
+      "patch_contrast": 0.55,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "old_growth",
+      "tier": "secondary",
+      "models": [
+        [
+          "Moss_Clump",
+          1
+        ]
+      ],
+      "density": 0.3,
+      "cluster": [
+        2,
+        4
+      ],
+      "cluster_radius": 1.8,
+      "patch": [
+        6,
+        45
+      ],
+      "patch_contrast": 0.55,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        },
+        {
+          "mask": "moss",
+          "range": [
+            0.0,
+            0.6
+          ],
+          "floor": 0.4
+        }
+      ]
+    },
+    {
+      "zone": "open_woodland",
+      "tier": "secondary",
+      "models": [
+        [
+          "Fern_Clump",
+          1
+        ],
+        [
+          "Shrub_Low",
+          1
+        ]
+      ],
+      "density": 0.3,
+      "cluster": [
+        1,
+        3
+      ],
+      "cluster_radius": 1.8,
+      "patch": [
+        6,
+        45
+      ],
+      "patch_contrast": 0.55,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "open_woodland",
+      "tier": "secondary",
+      "models": [
+        [
+          "Deadwood_Branch",
+          1
+        ]
+      ],
+      "density": 0.15,
+      "cluster": [
+        1,
+        2
+      ],
+      "cluster_radius": 1.8,
+      "patch": [
+        6,
+        45
+      ],
+      "patch_contrast": 0.55,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "forest_edge",
+      "tier": "secondary",
+      "models": [
+        [
+          "Shrub_Dense",
+          1
+        ],
+        [
+          "Bush_Common",
+          0.8
+        ],
+        [
+          "Shrub_Leafy",
+          0.5
+        ]
+      ],
+      "density": 0.4,
+      "cluster": [
+        2,
+        4
+      ],
+      "cluster_radius": 1.8,
+      "patch": [
+        6,
+        45
+      ],
+      "patch_contrast": 0.55,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "clearing",
+      "tier": "secondary",
+      "models": [
+        [
+          "Shrub_Low",
+          1
+        ]
+      ],
+      "density": 0.15,
+      "cluster": [
+        1,
+        3
+      ],
+      "cluster_radius": 1.8,
+      "patch": [
+        6,
+        45
+      ],
+      "patch_contrast": 0.55,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "windthrow",
+      "tier": "secondary",
+      "models": [
+        [
+          "Deadwood_Branch",
+          1
+        ],
+        [
+          "Shrub_Low",
+          0.5
+        ]
+      ],
+      "density": 0.4,
+      "cluster": [
+        2,
+        4
+      ],
+      "cluster_radius": 1.8,
+      "patch": [
+        6,
+        45
+      ],
+      "patch_contrast": 0.55,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "wet_hollow",
+      "tier": "secondary",
+      "models": [
+        [
+          "Fern_Clump",
+          1
+        ],
+        [
+          "Moss_Clump",
+          0.6
+        ]
+      ],
+      "density": 1.0,
+      "cluster": [
+        3,
+        6
+      ],
+      "cluster_radius": 1.8,
+      "patch": [
+        6,
+        45
+      ],
+      "patch_contrast": 0.55,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "stream_bank",
+      "tier": "secondary",
+      "models": [
+        [
+          "Fern_Clump",
+          1
+        ],
+        [
+          "Moss_Clump",
+          0.4
+        ]
+      ],
+      "density": 0.8,
+      "cluster": [
+        2,
+        5
+      ],
+      "cluster_radius": 1.8,
+      "patch": [
+        6,
+        45
+      ],
+      "patch_contrast": 0.55,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "swamp_forest",
+      "tier": "secondary",
+      "models": [
+        [
+          "Moss_Clump",
+          1
+        ],
+        [
+          "Deadwood_Stump",
+          0.15
+        ],
+        [
+          "Fern_Clump",
+          0.3
+        ]
+      ],
+      "density": 0.8,
+      "cluster": [
+        3,
+        6
+      ],
+      "cluster_radius": 1.8,
+      "patch": [
+        6,
+        45
+      ],
+      "patch_contrast": 0.55,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "bog",
+      "tier": "secondary",
+      "models": [
+        [
+          "Moss_Clump",
+          1
+        ],
+        [
+          "Shrub_Low",
+          0.3
+        ]
+      ],
+      "density": 0.7,
+      "cluster": [
+        3,
+        7
+      ],
+      "cluster_radius": 1.8,
+      "patch": [
+        6,
+        45
+      ],
+      "patch_contrast": 0.55,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "fen",
+      "tier": "secondary",
+      "models": [
+        [
+          "Shrub_Low",
+          1
+        ],
+        [
+          "Moss_Clump",
+          0.6
+        ]
+      ],
+      "density": 0.35,
+      "cluster": [
+        2,
+        5
+      ],
+      "cluster_radius": 1.8,
+      "patch": [
+        6,
+        45
+      ],
+      "patch_contrast": 0.55,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "quagmire",
+      "tier": "secondary",
+      "models": [
+        [
+          "Moss_Clump",
+          1
+        ]
+      ],
+      "density": 0.3,
+      "cluster": [
+        2,
+        4
+      ],
+      "cluster_radius": 1.8,
+      "patch": [
+        6,
+        45
+      ],
+      "patch_contrast": 0.55,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "marsh",
+      "tier": "secondary",
+      "models": [
+        [
+          "Shrub_Low",
+          1
+        ]
+      ],
+      "density": 0.15,
+      "cluster": [
+        2,
+        4
+      ],
+      "cluster_radius": 1.8,
+      "patch": [
+        6,
+        45
+      ],
+      "patch_contrast": 0.55,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "river_marsh",
+      "tier": "secondary",
+      "models": [
+        [
+          "Shrub_Low",
+          1
+        ],
+        [
+          "Shrub_Leafy",
+          0.4
+        ]
+      ],
+      "density": 0.2,
+      "cluster": [
+        2,
+        4
+      ],
+      "cluster_radius": 1.8,
+      "patch": [
+        6,
+        45
+      ],
+      "patch_contrast": 0.55,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "scrub",
+      "tier": "secondary",
+      "models": [
+        [
+          "Shrub_Round",
+          1
+        ],
+        [
+          "Shrub_Leafy",
+          0.6
+        ],
+        [
+          "Rooibos_Bush",
+          0.4
+        ]
+      ],
+      "density": 0.5,
+      "cluster": [
+        2,
+        5
+      ],
+      "cluster_radius": 1.8,
+      "patch": [
+        6,
+        45
+      ],
+      "patch_contrast": 0.55,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "heath",
+      "tier": "secondary",
+      "models": [
+        [
+          "Shrub_Low",
+          1
+        ],
+        [
+          "Forest_Rock_Small",
+          0.2
+        ]
+      ],
+      "density": 0.5,
+      "cluster": [
+        2,
+        5
+      ],
+      "cluster_radius": 1.8,
+      "patch": [
+        6,
+        45
+      ],
+      "patch_contrast": 0.55,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "steppe",
+      "tier": "secondary",
+      "models": [
+        [
+          "Rooibos_Bush",
+          1
+        ],
+        [
+          "Forest_Rock_Small",
+          0.6
+        ]
+      ],
+      "density": 0.1,
+      "cluster": [
+        1,
+        3
+      ],
+      "cluster_radius": 1.8,
+      "patch": [
+        6,
+        45
+      ],
+      "patch_contrast": 0.55,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "rocky_slope",
+      "tier": "secondary",
+      "models": [
+        [
+          "Forest_Rock_Small",
+          1
+        ],
+        [
+          "Rock_Angular",
+          0.4
+        ]
+      ],
+      "density": 0.4,
+      "cluster": [
+        2,
+        5
+      ],
+      "cluster_radius": 1.8,
+      "patch": [
+        6,
+        45
+      ],
+      "patch_contrast": 0.55,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "cliff_foot",
+      "tier": "secondary",
+      "models": [
+        [
+          "Rock_Angular",
+          1
+        ],
+        [
+          "Forest_Rock_Small",
+          1
+        ]
+      ],
+      "density": 0.5,
+      "cluster": [
+        2,
+        5
+      ],
+      "cluster_radius": 1.8,
+      "patch": [
+        6,
+        45
+      ],
+      "patch_contrast": 0.55,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        },
+        {
+          "mask": "talus",
+          "range": [
+            0.0,
+            0.6
+          ],
+          "floor": 0.5
+        }
+      ]
+    },
+    {
+      "zone": "scree",
+      "tier": "secondary",
+      "models": [
+        [
+          "Forest_Rock_Small",
+          1
+        ],
+        [
+          "Rock_Angular",
+          0.5
+        ]
+      ],
+      "density": 0.8,
+      "cluster": [
+        3,
+        7
+      ],
+      "cluster_radius": 1.8,
+      "patch": [
+        6,
+        45
+      ],
+      "patch_contrast": 0.55,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "alpine_meadow",
+      "tier": "secondary",
+      "models": [
+        [
+          "Forest_Rock_Small",
+          1
+        ]
+      ],
+      "density": 0.1,
+      "cluster": [
+        1,
+        3
+      ],
+      "cluster_radius": 1.8,
+      "patch": [
+        6,
+        45
+      ],
+      "patch_contrast": 0.55,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "tundra",
+      "tier": "secondary",
+      "models": [
+        [
+          "Moss_Clump",
+          1
+        ],
+        [
+          "Forest_Rock_Small",
+          0.6
+        ]
+      ],
+      "density": 0.2,
+      "cluster": [
+        2,
+        4
+      ],
+      "cluster_radius": 1.8,
+      "patch": [
+        6,
+        45
+      ],
+      "patch_contrast": 0.55,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    },
+    {
+      "zone": "shore",
+      "tier": "secondary",
+      "models": [
+        [
+          "Forest_Rock_Small",
+          1
+        ]
+      ],
+      "density": 0.1,
+      "cluster": [
+        1,
+        3
+      ],
+      "cluster_radius": 1.8,
+      "patch": [
+        6,
+        45
+      ],
+      "patch_contrast": 0.55,
+      "by": [
+        {
+          "mask": "suppress",
+          "range": [
+            0.1,
+            0.9
+          ],
+          "invert": true
+        }
+      ]
+    }
+  ]
 }

@@ -55,9 +55,15 @@ void WorldFields::heights(double x0, double y0, double step, int columns, int ro
     auto& f = field();
     HeightField::QueryCache memo(f);
     out.resize(std::size_t(columns) * rows);
+    const auto lattice = double(kSampleMetres);
+    const bool aligned = std::fmod(step, lattice) == 0 && std::fmod(x0, lattice) == 0 && std::fmod(y0, lattice) == 0;
     for (int r = 0; r < rows; ++r)
-        for (int c = 0; c < columns; ++c)
-            out[std::size_t(r) * columns + c] = f.heightAt(pos(x0 + c * step, y0 + r * step)).toDouble();
+        for (int c = 0; c < columns; ++c) {
+            const double x = x0 + c * step, y = y0 + r * step;
+            out[std::size_t(r) * columns + c] = aligned
+                    ? f.sampleHeight(std::int64_t(std::floor(x / lattice)), std::int64_t(std::floor(y / lattice))).toDouble()
+                    : f.heightAt(pos(x, y)).toDouble();
+        }
 }
 
 void WorldFields::climateInto(double x, double y, FieldSample& out) const {
@@ -69,14 +75,40 @@ void WorldFields::climateInto(double x, double y, FieldSample& out) const {
         out.set(field::Fertility, float(c.environment[1].toDouble()));
         out.set(field::Moisture, float(c.environment[2].toDouble()));
         out.set(field::Drainage, float(c.environment[5].toDouble()));
-        out.set(field::Canopy, std::clamp(climate_->forestCoverAt(x, y), 0.0f, 1.0f));
+        out.set(gameFields().woodland, std::clamp(float(c.woodland.toDouble()), 0.0f, 1.0f));
+        // The canopy as the trees are placed (scene_scatter.hpp): the climate's
+        // forest cover times the metre-scale masses and clearings of the wood.
+        const auto canopyAt = [&](double px, double py) {
+            return std::clamp(climate_->forestCoverAt(px, py) * float(decor::forestDensity(map_->seed, px, py)), 0.0f, 1.0f);
+        };
+        out.set(field::Canopy, canopyAt(x, y));
+        float ring = 0;
+        for (int k = 0; k < 6; ++k)
+            ring += canopyAt(x + 120.0 * std::cos(k * 1.0471975512), y + 120.0 * std::sin(k * 1.0471975512));
+        out.set(gameFields().canopyBroad, ring / 6.0f);
     }
-    const auto m = f.materialsAt(p);
+    // Height and slope are on the sample already (the shape came first):
+    // the field's own materialsAt and underWater would work both out again.
+    const bool shaped = out.has(field::Elevation) && out.has(field::Slope);
+    const core::Fixed height = shaped ? core::Fixed::fromDoubleForContent(out[field::Elevation]) : f.heightAt(p);
+    const core::Fixed slope = shaped ? core::Fixed::fromDoubleForContent(out[field::Slope]) : f.slopeAt(p);
+    const auto m = f.materialsGiven(std::int64_t(std::floor(x / kSampleMetres)), std::int64_t(std::floor(y / kSampleMetres)),
+                                    height, slope);
     out.set(field::Rockiness, float(m.of(Material::Rock).toDouble()));
     out.set(field::Sand, float(m.of(Material::Sand).toDouble()));
     out.set(field::Snow, float(m.of(Material::Snow).toDouble()));
-    const bool wet = f.underWater(p);
-    out.set(field::Water, wet ? 1.0f : 0.0f);
+    // How much of the country round the point is river, lake or sea: a
+    // footprint two hundred metres across, so a bank knows its water. The
+    // same answer says whether the point itself is under it.
+    {
+        const auto& g = gameFields();
+        const auto here = f.waterOver(p, core::Fixed::fromInt(200), slope);
+        const float share = std::clamp(float(here.cover.toDouble()), 0.0f, 1.0f);
+        out.set(g.riverNear, here.kind == HeightField::WaterKind::River ? share : 0.0f);
+        out.set(g.lakeNear, here.kind == HeightField::WaterKind::Lake ? share : 0.0f);
+        out.set(g.seaNear, here.kind == HeightField::WaterKind::Ocean ? share : 0.0f);
+        out.set(field::Water, share > 0.0f && here.level > height + core::Fixed::ratio(1, 20) ? 1.0f : 0.0f);
+    }
     // Standing moisture of the ground: marsh where the ground is marsh, and
     // otherwise rain that the soil does not drain, gathered where the ground
     // converges.
@@ -84,9 +116,10 @@ void WorldFields::climateInto(double x, double y, FieldSample& out) const {
     const float marsh = float(m.of(Material::Marsh).toDouble());
     const float gathered = out.get(field::Convergence, 0.0f);
     out.set(field::Wetness, std::clamp(std::max(marsh, moisture * (1 - drainage) * 0.8f + gathered * 0.3f), 0.0f, 1.0f));
-    const auto soil = f.soilAt(p);
-    out.set(field::SoilDepth, std::clamp(1.0f - float(soil.weights.of(Soil::Rocky).toDouble()) -
-                                             out.get(field::Rockiness, 0) * 0.5f, 0.0f, 1.0f));
+    // Soil depth from what shows through it: rock and steepness. The soil
+    // model itself costs as much again as everything above.
+    out.set(field::SoilDepth, std::clamp(1.0f - out.get(field::Rockiness, 0) * 0.8f -
+                                             std::max(0.0f, out.get(field::Slope, 0) - 0.5f) * 0.6f, 0.0f, 1.0f));
 }
 
 void WorldFields::sample(double x, double y, FieldSample& out) const {
@@ -101,28 +134,35 @@ void WorldFields::sampleGrid(double x0, double y0, double step, int columns, int
     const int margin = int(std::ceil(settings.largeRing / step)) + 1;
     const int wc = columns + 2 * margin, wr = rows + 2 * margin;
     std::vector<double> heights(std::size_t(wc) * wr);
+    // On the height field's own lattice the samples are read as they are,
+    // not interpolated from the four around them.
+    const auto lattice = double(kSampleMetres);
+    const bool aligned = std::fmod(step, lattice) == 0 && std::fmod(x0, lattice) == 0 && std::fmod(y0, lattice) == 0;
     for (int r = 0; r < wr; ++r)
-        for (int c = 0; c < wc; ++c)
-            heights[std::size_t(r) * wc + c] = f.heightAt(pos(x0 + (c - margin) * step, y0 + (r - margin) * step)).toDouble();
+        for (int c = 0; c < wc; ++c) {
+            const double x = x0 + (c - margin) * step, y = y0 + (r - margin) * step;
+            heights[std::size_t(r) * wc + c] = aligned
+                    ? f.sampleHeight(std::int64_t(std::floor(x / lattice)), std::int64_t(std::floor(y / lattice))).toDouble()
+                    : f.heightAt(pos(x, y)).toDouble();
+        }
     env::deriveShapeGrid(heights, columns, rows, margin, step, settings, out);
-    for (int r = 0; r < rows; ++r)
-        for (int c = 0; c < columns; ++c)
-            climateInto(x0 + c * step, y0 + r * step, out[std::size_t(r) * columns + c]);
-}
-
-NaturalZones::NaturalZones() : types_{{"unclassified", {0.5f, 0.5f, 0.5f}}} {}
-
-void NaturalZones::classify(const FieldSample& f, std::span<float> weights, env::ZoneScalars& s) const {
-    std::fill(weights.begin(), weights.end(), 0.0f);
-    weights[0] = 1;
-    s.density = f.get(field::Canopy, 0);
-    s.wetness = f.get(field::Wetness, 0);
-    s.exposure = f.get(field::Exposure, 0.5f);
-    s.age = f.get(field::Age, 0.5f);
-    s.disturbance = f.get(field::Disturbance, 0);
-    s.rockiness = f.get(field::Rockiness, 0);
-    s.canopy = f.get(field::Canopy, 0);
-    s.soilDepth = f.get(field::SoilDepth, 0.5f);
+    // The climate, the ground's make and the nearness of water change over
+    // tens of metres and cost a dozen field queries a point: at fine steps
+    // they are asked every other point and shared with the neighbours.
+    const int every = step < 24.0 ? 2 : 1;
+    const auto fields = env::FieldId(env::fieldCount());
+    for (int r = 0; r < rows; r += every)
+        for (int c = 0; c < columns; c += every) {
+            auto& here = out[std::size_t(r) * columns + c];
+            climateInto(x0 + c * step, y0 + r * step, here);
+            for (int dr = 0; dr < every && r + dr < rows; ++dr)
+                for (int dc = 0; dc < every && c + dc < columns; ++dc) {
+                    if (!dr && !dc) continue;
+                    auto& other = out[std::size_t(r + dr) * columns + (c + dc)];
+                    for (env::FieldId id = env::field::Wetness; id < fields; ++id)
+                        if (here.has(id)) other.set(id, here[id]);
+                }
+        }
 }
 
 std::shared_ptr<const env::Environment> buildWorldEnvironment(
@@ -135,6 +175,7 @@ std::shared_ptr<const env::Environment> buildWorldEnvironment(
     setup.classifier = std::make_shared<NaturalZones>();
     setup.fields = fields;
     setup.height = [fields](double x, double y) { return fields->height(x, y); };
+    setup.zoneMasks = naturalZoneMasks;
     setup.models = [](std::string_view name) -> std::optional<std::uint32_t> {
         for (std::size_t i = 0; i < decor::kModels.size(); ++i)
             if (name == decor::kModels[i]) return std::uint32_t(i);

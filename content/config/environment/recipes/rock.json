@@ -1,0 +1,207 @@
+{
+  "comment": "Rock features (part J).",
+  "recipes": [
+    {
+      "name": "escarpment",
+      "scale": "local",
+      "age": "geological",
+      "comment": "A cliff band along a hillside: the face, its brow, the talus fan below (spec §3, §7).",
+      "placement": {
+        "zones": [
+          "rocky_slope",
+          "cliff_foot",
+          "scree",
+          "outcrop",
+          "heath",
+          "alpine_meadow"
+        ],
+        "density_per_km2": 2,
+        "min_spacing": 300,
+        "align": "contour",
+        "length": [
+          60,
+          220
+        ],
+        "scale": [
+          0.7,
+          1.4
+        ],
+        "fields": {
+          "slope": [
+            0.3,
+            1.3
+          ]
+        }
+      },
+      "terrain": [
+        {
+          "op": "step",
+          "height": 9,
+          "width": 8,
+          "breaks": 0.35,
+          "amphitheatre": 8,
+          "blend": 20
+        }
+      ],
+      "meshes": [
+        {
+          "model": "Cliff_Face_Grey",
+          "attach": "edge",
+          "spacing": 22,
+          "count": 0,
+          "sink": 0.2
+        }
+      ],
+      "masks": [
+        {
+          "channel": "rock",
+          "shape": "footprint",
+          "value": 1
+        },
+        {
+          "channel": "talus",
+          "shape": "fan",
+          "length": 35,
+          "value": 0.8
+        }
+      ],
+      "scatter": [
+        {
+          "primitive": "rock_hierarchy",
+          "models": [
+            "Boulder_Round",
+            "Rock_Angular",
+            "Rock_Medium_1",
+            "Forest_Rock_Small"
+          ],
+          "radius": 40,
+          "spread": 0.6
+        }
+      ],
+      "composition": {
+        "negative_space": 10
+      }
+    },
+    {
+      "name": "rock_outcrop",
+      "scale": "local",
+      "age": "geological",
+      "comment": "Bedrock breaking the surface: a hard knoll, its stones spilling downhill.",
+      "placement": {
+        "zones": [
+          "outcrop",
+          "rocky_slope",
+          "heath",
+          "alpine_meadow",
+          "open_woodland"
+        ],
+        "density_per_km2": 3,
+        "min_spacing": 260,
+        "align": "slope",
+        "scale": [
+          0.8,
+          1.4
+        ],
+        "fields": {
+          "slope": [
+            0.1,
+            1.0
+          ]
+        }
+      },
+      "terrain": [
+        {
+          "op": "raise",
+          "height": 6,
+          "radius": [
+            22,
+            14
+          ],
+          "exponent": 3,
+          "harden": true,
+          "blend": 8
+        }
+      ],
+      "masks": [
+        {
+          "channel": "rock",
+          "shape": "footprint",
+          "value": 1
+        },
+        {
+          "channel": "talus",
+          "shape": "fan",
+          "length": 30,
+          "value": 0.7
+        },
+        {
+          "channel": "moss",
+          "shape": "footprint",
+          "value": 0.3
+        }
+      ],
+      "scatter": [
+        {
+          "primitive": "rock_hierarchy",
+          "models": [
+            "Boulder_Round",
+            "Rock_Angular",
+            "Forest_Rock_Small"
+          ],
+          "radius": 35,
+          "spread": 0.7
+        }
+      ],
+      "composition": {
+        "negative_space": 12
+      }
+    },
+    {
+      "name": "scree_tongue",
+      "scale": "micro",
+      "comment": "A tongue of scree running down from a face: big blocks near it, small stones far out.",
+      "placement": {
+        "zones": [
+          "scree",
+          "cliff_foot",
+          "rocky_slope"
+        ],
+        "density_per_km2": 10,
+        "min_spacing": 80,
+        "align": "slope"
+      },
+      "masks": [
+        {
+          "channel": "talus",
+          "shape": "fan",
+          "length": 40,
+          "spread": 0.4,
+          "value": 1
+        },
+        {
+          "channel": "suppress",
+          "shape": "fan",
+          "length": 40,
+          "spread": 0.4,
+          "value": 0.7
+        }
+      ],
+      "scatter": [
+        {
+          "primitive": "fan",
+          "models": [
+            "Rock_Angular",
+            "Forest_Rock_Small"
+          ],
+          "count": [
+            20,
+            40
+          ],
+          "radius": 40,
+          "spread": 0.4,
+          "size_falloff": 0.7
+        }
+      ]
+    }
+  ]
+}

@@ -53,16 +53,11 @@ void FeaturePlanner::clear() {
 
 bool FeaturePlanner::passes(const FeatureRecipe& r, double x, double y) const {
     const auto& p = r.placement;
-    FieldSample f;
-    if (context_.fields) context_.fields->sample(x, y, f);
-    if (p.avoidWater && (f.get(field::Water, 0) > 0.3f || f.get(field::DistWater, 1e9f) < 4.0f)) return false;
-    for (const auto& range : p.fields) {
-        if (!f.has(range.field)) return false;
-        const float v = f[range.field];
-        if (v < range.min || v > range.max) return false;
-    }
+    // The zone first: it is read off a cached page, while the fields at a
+    // point cost a dozen height and climate queries, and most candidates of
+    // a zone-bound recipe fall outside its zones.
     if (!p.zoneIds.empty() || !p.excludeZoneIds.empty() || p.source == PlacementSource::Edge) {
-        if (!context_.zones) return p.zoneIds.empty();
+        if (!context_.zones) return p.zoneIds.empty() && p.source != PlacementSource::Edge;
         const auto zone = context_.zones->at(x, y);
         if (!p.zoneIds.empty()) {
             float w = 0;
@@ -74,6 +69,17 @@ bool FeaturePlanner::passes(const FeatureRecipe& r, double x, double y) const {
         if (p.source == PlacementSource::Edge && !(zone.weights.weight[0] < 0.75f && zone.weights.weight[1] > 0.25f))
             return false;
     }
+    const bool needsFields = p.avoidWater || !p.fields.empty() || p.source == PlacementSource::Ridge ||
+                             p.source == PlacementSource::CliffFoot;
+    if (!needsFields || !context_.fields) return true;
+    FieldSample f;
+    context_.fields->sample(x, y, f);
+    if (p.avoidWater && (f.get(field::Water, 0) > 0.3f || f.get(field::DistWater, 1e9f) < 4.0f)) return false;
+    for (const auto& range : p.fields) {
+        if (!f.has(range.field)) return false;
+        const float v = f[range.field];
+        if (v < range.min || v > range.max) return false;
+    }
     switch (p.source) {
         case PlacementSource::Ridge:
             if (f.get(field::TpiLarge, 0) < 4.0f || f.get(field::Curvature, 0) < 0) return false;
@@ -83,7 +89,7 @@ bool FeaturePlanner::passes(const FeatureRecipe& r, double x, double y) const {
             // Up the slope, within twenty metres, the ground must stand steep.
             const float aspect = f.get(field::Aspect, 0);
             FieldSample up;
-            if (context_.fields) context_.fields->sample(x - std::cos(aspect) * 20, y - std::sin(aspect) * 20, up);
+            context_.fields->sample(x - std::cos(aspect) * 20, y - std::sin(aspect) * 20, up);
             if (up.get(field::Slope, 0) < 1.0f) return false;
             break;
         }

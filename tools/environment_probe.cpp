@@ -11,6 +11,7 @@
 //   - the ground: how far the features move it, at most and on average
 // --determinism builds the environment a second time and compares every
 // instance and every mask byte.
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
@@ -25,6 +26,7 @@
 #include "game/environment/world_environment.hpp"
 #include "game/generation/world_layout.hpp"
 #include "game/generation/world_map_gen.hpp"
+#include "game/world/terrain_streaming/tile_layout.hpp"
 #include "game/world/world_builder.hpp"
 
 namespace {
@@ -47,13 +49,15 @@ core::WorldPos at(double x, double y) {
 int main(int argc, char** argv) {
     std::uint64_t seed = 4242;
     double x0 = -1, y0 = -1, size = 2048;
-    bool determinism = false;
+    bool determinism = false, fields = false, bake = false;
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
         const auto next = [&]() -> std::string { return i + 1 < argc ? argv[++i] : std::string(); };
         if (a == "--seed") seed = std::strtoull(next().c_str(), nullptr, 10);
         else if (a == "--area") { x0 = std::atof(next().c_str()); y0 = std::atof(next().c_str()); size = std::atof(next().c_str()); }
         else if (a == "--determinism") determinism = true;
+        else if (a == "--fields") fields = true;
+        else if (a == "--bake") bake = true;
         else { std::cerr << "usage: environment_probe [--seed N] [--area X Y SIZE] [--determinism]\n"; return 2; }
     }
     const auto presets = generation::loadWorldPresets(contentDirectory() / "config" / "world_presets.json");
@@ -76,11 +80,60 @@ int main(int argc, char** argv) {
               << (cat.movesGround() ? "moves the ground" : "leaves the ground") << ", "
               << (environment->writesMasks() ? "writes masks" : "writes no masks") << "\n";
     if (x0 < 0) {
-        // The middle of the world, where there is land if anywhere.
-        x0 = snapshot.worldMap().width * generation::kMetresPerCell * 0.5 - size * 0.5;
-        y0 = snapshot.worldMap().height * generation::kMetresPerCell * 0.5 - size * 0.5;
+        // Round the world's starting point, which is on land.
+        const auto start = snapshot.startingPoint();
+        x0 = start.x.toDouble() - size * 0.5;
+        y0 = start.y.toDouble() - size * 0.5;
     }
     std::cout << "area " << x0 << ", " << y0 << " + " << size << " m\n";
+
+    // What baking a page costs at each level, round the area's middle.
+    if (bake) {
+        for (std::uint8_t level = 0; level <= 6; ++level) {
+            const double metres = world::streaming::pageMetresAtLevel(level);
+            if (metres <= 0) continue;
+            const world::streaming::TileKey key{std::int32_t(std::floor((x0 + size * 0.5) / metres)),
+                                                std::int32_t(std::floor((y0 + size * 0.5) / metres)), level};
+            const auto t = Clock::now();
+            const auto page = snapshot.pages().page(key);
+            std::cout << "bake level " << int(level) << " (" << world::streaming::PageStore::sampleMetresAtLevel(level) << " m, "
+                      << metres << " m page): " << ms(t, Clock::now()) << " ms" << (page ? "" : " FAILED")
+                      << (page && !page->envMasks.empty() ? ", masks" : "") << "\n";
+        }
+    }
+
+    if (bake) {
+        const auto cx = std::int64_t(x0 + size * 0.5), cy = std::int64_t(y0 + size * 0.5);
+        const auto t = Clock::now();
+        const auto scattered = snapshot.scatter(world::decor::ScatterBounds{cx - 768, cy - 768, cx + 768, cy + 768});
+        std::cout << "scatter 1536 m region: " << ms(t, Clock::now()) << " ms, " << scattered.objects.size() << " objects\n";
+    }
+
+    // The fields the zones are classified from: percentiles over the area.
+    if (fields && environment->setup().fields) {
+        const int side = 24;
+        std::vector<env::FieldSample> samples(std::size_t(side) * side);
+        environment->setup().fields->sampleGrid(x0, y0, size / side, side, side, samples);
+        {
+            env::FieldSample one;
+            environment->setup().fields->sample(x0 + size / 2, y0 + size / 2, one);
+            std::cout << "centre: height " << snapshot.field().heightAt(at(x0 + size / 2, y0 + size / 2)).toDouble()
+                      << ", field elevation " << one.get(env::field::Elevation, -999) << ", slope "
+                      << one.get(env::field::Slope, -999) << ", world " << snapshot.worldMap().width << "x"
+                      << snapshot.worldMap().height << " cells\n";
+        }
+        std::cout << "fields (p5 / p25 / p50 / p75 / p95):\n";
+        for (std::size_t id = 0; id < env::fieldCount(); ++id) {
+            std::vector<float> v;
+            for (const auto& s : samples) if (s.has(env::FieldId(id))) v.push_back(s[env::FieldId(id)]);
+            if (v.empty()) continue;
+            std::sort(v.begin(), v.end());
+            const auto q = [&](double p) { return v[std::min(v.size() - 1, std::size_t(p * double(v.size())))]; };
+            std::cout << "  " << std::setw(16) << env::fieldName(env::FieldId(id)) << std::setprecision(3) << "  " << q(0.05)
+                      << " / " << q(0.25) << " / " << q(0.5) << " / " << q(0.75) << " / " << q(0.95) << "\n";
+        }
+        std::cout << std::setprecision(1);
+    }
 
     // Zones.
     if (const auto* zones = environment->zones()) {

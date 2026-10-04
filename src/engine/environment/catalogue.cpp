@@ -178,6 +178,15 @@ void Catalogue::resolve(const ZoneClassifier* classifier, const ModelResolver& m
         reach_.push_back(r.reach() * p.scaleMax + (needsSpline(r) ? p.lengthMax : 0.0));
         maxReach_ = std::max(maxReach_, reach_.back());
         if (!r.terrain.empty()) movesGround_ = true;
+        for (const auto& op : r.terrain) {
+            double width = 0;
+            switch (op.kind) {
+                case TerrainOpKind::CarveProfile: width = op.outerWidth; break;
+                case TerrainOpKind::Step: width = op.width + 2 * (op.amphitheatre + op.blend); break;
+                default: width = 2 * std::max(op.radiusA, op.radiusB) + 2 * op.blend; break;
+            }
+            widestGround_ = std::max(widestGround_, width * p.scaleMax * 1.35);
+        }
         byScale_[int(r.scale)].push_back(i);
     }
     for (std::size_t i = 0; i < cover_.rules.size(); ++i) {

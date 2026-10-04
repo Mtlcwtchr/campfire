@@ -72,6 +72,11 @@ public:
     // Whether any recipe moves the ground. A world whose recipes only dress it
     // costs the height field nothing.
     [[nodiscard]] bool movesGround() const { return movesGround_; }
+    // The widest any recipe moves the ground, metres, at its largest scale.
+    // Samples further apart than this cannot draw any feature, so the height
+    // field at that spacing does not ask for them (a level of detail leaves
+    // out what it cannot carry, as it leaves out narrow valleys).
+    [[nodiscard]] double widestGround() const { return widestGround_; }
     // The recipes of one scale, in catalogue order.
     [[nodiscard]] const std::vector<std::uint32_t>& ofScale(FeatureScale s) const { return byScale_[int(s)]; }
 
@@ -85,6 +90,7 @@ private:
     CoverRules cover_;
     const ZoneClassifier* classifier_ = nullptr;
     double maxReach_ = 0;
+    double widestGround_ = 0;
     bool movesGround_ = false;
     std::array<std::vector<std::uint32_t>, 3> byScale_;
 };

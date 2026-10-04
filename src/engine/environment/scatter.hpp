@@ -79,6 +79,7 @@ bool keptClear(const FeatureLayer& features, double x, double y);
 
 // The mask channels at one point: the zones' share, then every feature's writes.
 MaskValues masksAt(const FeatureLayer* features, const ZoneField* zones, const ZoneMasks& zoneMasks,
-                   const HeightAt& height, double x, double y, EnvironmentZone* zoneOut = nullptr);
+                   const HeightAt& height, double x, double y, EnvironmentZone* zoneOut = nullptr,
+                   const EnvironmentZone* known = nullptr);
 
 } // namespace engine::environment

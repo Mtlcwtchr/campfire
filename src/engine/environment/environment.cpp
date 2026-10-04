@@ -50,11 +50,24 @@ std::shared_ptr<Environment> Environment::build(EnvironmentSetup setup, std::sha
     // A classifier with no zone but "unclassified" classifies nothing: no
     // zone field, and nothing is sampled for it.
     if (env->setup_.fields && env->setup_.classifier && env->setup_.classifier->types().size() > 1)
+    {
         env->zones_ = std::make_unique<ZoneField>(*env->setup_.fields, *env->setup_.classifier, zs);
+        auto coarse = zs;
+        const double k = 128.0 / zs.step;
+        coarse.step = 128.0;
+        coarse.pageMetres = 8192.0;
+        coarse.alongMetres *= k * 0.75;
+        coarse.acrossMetres *= k * 0.75;
+        coarse.breakupMetres *= k * 0.5;
+        env->coarseZones_ = std::make_unique<ZoneField>(*env->setup_.fields, *env->setup_.classifier, coarse);
+    }
     PlannerContext ctx;
     ctx.catalogue = env->catalogue_;
     ctx.fields = env->setup_.fields.get();
-    ctx.zones = env->zones_.get();
+    // Features are placed by the coarse zones: a feature is tens to hundreds of
+    // metres, and its planning cell's neighbours would otherwise classify
+    // kilometres of country at sixteen metres before one page could bake.
+    ctx.zones = env->coarseZones_ ? env->coarseZones_.get() : env->zones_.get();
     ctx.height = env->setup_.height;
     ctx.climate = env->setup_.climate;
     ctx.drainage = env->setup_.drainage;
@@ -89,7 +102,12 @@ bool Environment::writesMasks() const {
 }
 
 PageMasks Environment::masks(double x0, double y0, double step, int side) const {
-    return rasteriseMasks(features_.get(), zones_.get(), setup_.zoneMasks, setup_.height, x0, y0, step, side,
+    // Pages read coarser than 32 m carry no masks: at that distance the ground's
+    // wetness and moss are a few pixels and no grass is drawn, and classifying
+    // the kilometres such a page covers would hold its bake up for seconds.
+    if (step > 32.0) return PageMasks{x0, y0, step, side, {}, {}};
+    const ZoneField* zones = zones_.get();
+    return rasteriseMasks(features_.get(), zones, setup_.zoneMasks, setup_.height, x0, y0, step, side,
                           &catalogue_->cover(), setup_.fields.get(), setup_.seed);
 }
 

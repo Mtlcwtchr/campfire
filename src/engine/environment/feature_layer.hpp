@@ -51,7 +51,7 @@ public:
     // with water_width): the trickle at the bottom of a broad dry valley.
     // Nought almost everywhere. The height field's own water is the authority
     // on rivers; this is water the world's hydrology does not carry.
-    [[nodiscard]] core::Fixed waterDepth(core::WorldPos p) const;
+    [[nodiscard]] core::Fixed waterDepth(core::WorldPos p, std::int64_t strideMetres = 4) const;
     [[nodiscard]] bool anyWater() const { return anyWater_; }
 
     // Every instance touching `p` and where `p` falls in its shapes: what the

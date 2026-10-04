@@ -1,9 +1,168 @@
 {
   "comment": "Picture grading profiles (engine/environment/style.hpp), read by assets/shaders/game/style_picture.hlsli. Rows are changes from the built-in storybook grade (D163); zeros are that grade. A profile may name a .cube lookup relative to this folder.",
-  "rows": ["highlight", "shadow", "bloom_tint", "curve"],
+  "rows": [
+    "highlight",
+    "shadow",
+    "bloom_tint",
+    "curve"
+  ],
   "default": "storybook",
   "blend_seconds": 6,
   "profiles": [
-    {"name": "storybook", "rows": {}}
+    {
+      "name": "storybook",
+      "rows": {}
+    },
+    {
+      "name": "forest",
+      "match": {
+        "zones": [
+          "old_growth",
+          "open_woodland",
+          "forest_edge",
+          "clearing",
+          "windthrow",
+          "wet_hollow",
+          "stream_bank"
+        ]
+      },
+      "rows": {
+        "shadow": [
+          -0.02,
+          0.01,
+          0.02,
+          1
+        ],
+        "bloom_tint": [
+          1.0,
+          0.9,
+          0.6,
+          0.2
+        ],
+        "curve": [
+          0.03,
+          0.05,
+          0.05,
+          0
+        ]
+      }
+    },
+    {
+      "name": "open_country",
+      "match": {
+        "zones": [
+          "meadow",
+          "scrub",
+          "heath",
+          "steppe",
+          "dry_wash"
+        ]
+      },
+      "rows": {
+        "highlight": [
+          0.02,
+          0.01,
+          -0.02,
+          1
+        ],
+        "curve": [
+          0.02,
+          0.06,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "name": "wetland",
+      "match": {
+        "zones": [
+          "floodplain",
+          "swamp_forest",
+          "bog",
+          "fen",
+          "quagmire",
+          "marsh",
+          "river_marsh"
+        ]
+      },
+      "rows": {
+        "highlight": [
+          -0.02,
+          0.0,
+          0.03,
+          1
+        ],
+        "shadow": [
+          0.0,
+          0.01,
+          -0.02,
+          1
+        ],
+        "bloom_tint": [
+          0.9,
+          0.95,
+          0.9,
+          0.3
+        ],
+        "curve": [
+          -0.08,
+          -0.12,
+          0.1,
+          0.3
+        ]
+      }
+    },
+    {
+      "name": "mountains",
+      "match": {
+        "zones": [
+          "rocky_slope",
+          "cliff_foot",
+          "scree",
+          "outcrop",
+          "alpine_meadow",
+          "tundra"
+        ]
+      },
+      "rows": {
+        "shadow": [
+          0.0,
+          0.0,
+          0.04,
+          1
+        ],
+        "curve": [
+          0.08,
+          -0.04,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "name": "coast",
+      "match": {
+        "zones": [
+          "shore",
+          "dunes",
+          "salt_marsh"
+        ]
+      },
+      "rows": {
+        "bloom_tint": [
+          1.0,
+          0.95,
+          0.85,
+          0.4
+        ],
+        "curve": [
+          -0.02,
+          0.0,
+          -0.1,
+          0
+        ]
+      }
+    }
   ]
 }

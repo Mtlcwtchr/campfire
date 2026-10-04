@@ -74,6 +74,8 @@ std::shared_ptr<const FeatureLayer::Block> FeatureLayer::blockAt(core::WorldPos 
 
 core::Fixed FeatureLayer::at(core::WorldPos p, core::Fixed base, std::int64_t strideMetres) const {
     if (!movesGround_) return core::kZero;
+    // Too coarse a reading to draw any feature: nothing is planned for it.
+    if (double(strideMetres) > planner_->catalogue().widestGround()) return core::kZero;
     const auto b = blockAt(p);
     if (b->instances.empty()) return core::kZero;
     const auto& cat = planner_->catalogue();
@@ -85,8 +87,9 @@ core::Fixed FeatureLayer::at(core::WorldPos p, core::Fixed base, std::int64_t st
     return totals.total();
 }
 
-core::Fixed FeatureLayer::waterDepth(core::WorldPos p) const {
+core::Fixed FeatureLayer::waterDepth(core::WorldPos p, std::int64_t strideMetres) const {
     if (!anyWater_) return core::kZero;
+    if (double(strideMetres) > planner_->catalogue().widestGround()) return core::kZero;
     const auto b = blockAt(p);
     const auto& cat = planner_->catalogue();
     core::Fixed deepest = core::kZero;

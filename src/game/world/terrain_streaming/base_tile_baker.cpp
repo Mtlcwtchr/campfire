@@ -163,6 +163,8 @@ void BaseTileBaker::environment(const engine::environment::Environment* environm
 
 BakedPage BaseTileBaker::bakePage(TileKey key, std::int32_t sampleMetres, std::uint16_t padding,
                                   const std::function<bool()>& cancelled, const BakedPage* parent) const {
+    // Features as wide as this level can draw (HeightField::featureStride).
+    field_.featureStride(sampleMetres);
     BakedPage page;
     BaseTile& tile = page.base;
     WaterTile& water = page.water;
@@ -363,7 +365,7 @@ BakedPage BaseTileBaker::bakePage(TileKey key, std::int32_t sampleMetres, std::u
             // Today's water in a feature's channel (engine/environment): a
             // lens standing on the carved bed, where no river already is.
             if (!carved.wet && environment_ && environment_->features().anyWater()) {
-                const Fixed lens = environment_->features().waterDepth(position);
+                const Fixed lens = environment_->features().waterDepth(position, sampleMetres);
                 if (lens > Fixed::ratio(5, 100)) {
                     carved.surface = carved.floor + lens;
                     carved.wet = true;

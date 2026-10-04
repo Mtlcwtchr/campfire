@@ -1,0 +1,359 @@
+{
+  "comment": "Wetland features: bogs, fens, quagmires, marshes, river marshes, salt marshes (part J).",
+  "recipes": [
+    {
+      "name": "quagmire_window",
+      "scale": "micro",
+      "age": "ancient",
+      "comment": "An open eye of a quagmire: black water in a ring of moss, nothing standing on it.",
+      "placement": {
+        "zones": [
+          "quagmire",
+          "bog"
+        ],
+        "density_per_km2": 25,
+        "min_spacing": 40,
+        "align": "random",
+        "length": [
+          20,
+          50
+        ],
+        "scale": [
+          0.7,
+          1.3
+        ],
+        "avoid_water": false
+      },
+      "terrain": [
+        {
+          "op": "carve_profile",
+          "outer_width": 16,
+          "outer_depth": 0.8,
+          "inner_width": 7,
+          "inner_depth": 0.4,
+          "water_width": 6,
+          "taper": 8
+        }
+      ],
+      "masks": [
+        {
+          "channel": "wetness",
+          "shape": "bed",
+          "value": 1,
+          "falloff": 4
+        },
+        {
+          "channel": "suppress",
+          "shape": "bed",
+          "value": 0.9
+        },
+        {
+          "channel": "moss",
+          "shape": "bank",
+          "value": 1
+        }
+      ],
+      "scatter": [
+        {
+          "primitive": "edge",
+          "models": [
+            "Moss_Clump"
+          ],
+          "count": [
+            6,
+            12
+          ],
+          "spread": 1
+        }
+      ]
+    },
+    {
+      "name": "bog_hummocks",
+      "scale": "micro",
+      "comment": "Hummocks: moss cushions and low shrubs on the drier knolls of a bog or fen.",
+      "placement": {
+        "zones": [
+          "bog",
+          "fen",
+          "quagmire"
+        ],
+        "density_per_km2": 30,
+        "min_spacing": 35,
+        "align": "random"
+      },
+      "masks": [
+        {
+          "channel": "moss",
+          "shape": "footprint",
+          "radius": 7,
+          "value": 0.8
+        }
+      ],
+      "scatter": [
+        {
+          "primitive": "cluster",
+          "models": [
+            "Moss_Clump"
+          ],
+          "count": [
+            6,
+            14
+          ],
+          "radius": 7
+        },
+        {
+          "primitive": "cluster",
+          "models": [
+            "Shrub_Low"
+          ],
+          "count": [
+            2,
+            5
+          ],
+          "radius": 6
+        }
+      ]
+    },
+    {
+      "name": "drowned_wood",
+      "scale": "local",
+      "age": "recent",
+      "comment": "Dead wood standing in rising water: the swamp taking a wood back.",
+      "placement": {
+        "zones": [
+          "swamp_forest",
+          "bog",
+          "quagmire",
+          "river_marsh"
+        ],
+        "density_per_km2": 6,
+        "min_spacing": 90,
+        "align": "random",
+        "avoid_water": false
+      },
+      "masks": [
+        {
+          "channel": "wetness",
+          "shape": "footprint",
+          "radius": 12,
+          "value": 0.8
+        },
+        {
+          "channel": "scar",
+          "shape": "footprint",
+          "radius": 10,
+          "value": 0.4
+        }
+      ],
+      "scatter": [
+        {
+          "primitive": "cluster",
+          "models": [
+            "Dead_Trunk",
+            "Stump_Old",
+            "Deadwood_Stump"
+          ],
+          "count": [
+            4,
+            9
+          ],
+          "radius": 18
+        },
+        {
+          "primitive": "cluster",
+          "models": [
+            "Deadwood_Branch"
+          ],
+          "count": [
+            6,
+            10
+          ],
+          "radius": 16
+        }
+      ]
+    },
+    {
+      "name": "marsh_creek",
+      "scale": "local",
+      "age": "geological",
+      "comment": "A creek winding through a marsh, reeds thick on its banks and none in its bed.",
+      "placement": {
+        "zones": [
+          "marsh",
+          "river_marsh",
+          "fen",
+          "salt_marsh",
+          "floodplain"
+        ],
+        "source": "channel",
+        "channel_classes": [
+          "seasonal_stream",
+          "ephemeral_channel",
+          "abandoned_channel",
+          "paleochannel"
+        ],
+        "density_per_km2": 8,
+        "min_spacing": 120,
+        "length": [
+          80,
+          260
+        ],
+        "avoid_water": false
+      },
+      "terrain": [
+        {
+          "op": "carve_profile",
+          "outer_width": 14,
+          "outer_depth": 1.4,
+          "inner_width": 5,
+          "inner_depth": 0.6,
+          "water_width": 4,
+          "asymmetry": 0.5,
+          "taper": 15
+        }
+      ],
+      "masks": [
+        {
+          "channel": "wetness",
+          "shape": "bed",
+          "value": 1,
+          "radius": 4,
+          "falloff": 8
+        },
+        {
+          "channel": "boost",
+          "shape": "bank",
+          "value": 0.7
+        },
+        {
+          "channel": "suppress",
+          "shape": "bed",
+          "value": 0.8
+        }
+      ],
+      "scatter": [
+        {
+          "primitive": "edge",
+          "models": [
+            "Shrub_Low"
+          ],
+          "count": [
+            3,
+            6
+          ],
+          "spread": 2
+        }
+      ]
+    },
+    {
+      "name": "oxbow_hollow",
+      "scale": "local",
+      "age": "ancient",
+      "comment": "An old meander cut off: a long damp hollow on the inside of a bend (spec §4).",
+      "placement": {
+        "zones": [
+          "floodplain",
+          "river_marsh",
+          "wet_hollow",
+          "swamp_forest",
+          "fen",
+          "marsh"
+        ],
+        "source": "channel",
+        "density_per_km2": 50,
+        "min_spacing": 150,
+        "align": "random",
+        "avoid_water": false
+      },
+      "terrain": [
+        {
+          "op": "depress",
+          "height": 1.2,
+          "radius": [
+            28,
+            12
+          ],
+          "exponent": 2,
+          "edge_noise": 0.25,
+          "blend": 6
+        }
+      ],
+      "masks": [
+        {
+          "channel": "wetness",
+          "shape": "footprint",
+          "radius": 6,
+          "value": 1
+        },
+        {
+          "channel": "moss",
+          "shape": "footprint",
+          "value": 0.5
+        },
+        {
+          "channel": "boost",
+          "shape": "ring",
+          "radius": 26,
+          "falloff": 8,
+          "value": 0.6
+        }
+      ],
+      "scatter": [
+        {
+          "primitive": "ring",
+          "models": [
+            "Shrub_Low",
+            "Fern_Clump"
+          ],
+          "count": [
+            5,
+            10
+          ],
+          "radius": 26
+        }
+      ],
+      "composition": {
+        "elongation": 2.2
+      }
+    },
+    {
+      "name": "salt_pan",
+      "scale": "micro",
+      "comment": "A bare mud pan in a salt marsh, wet and empty.",
+      "placement": {
+        "zones": [
+          "salt_marsh"
+        ],
+        "density_per_km2": 20,
+        "min_spacing": 50,
+        "align": "random",
+        "avoid_water": false
+      },
+      "terrain": [
+        {
+          "op": "depress",
+          "height": 0.5,
+          "radius": [
+            20,
+            12
+          ],
+          "exponent": 3,
+          "edge_noise": 0.3,
+          "blend": 4
+        }
+      ],
+      "masks": [
+        {
+          "channel": "wetness",
+          "shape": "footprint",
+          "value": 0.9
+        },
+        {
+          "channel": "suppress",
+          "shape": "footprint",
+          "value": 0.8
+        }
+      ]
+    }
+  ]
+}

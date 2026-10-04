@@ -157,7 +157,10 @@ PageMasks rasteriseMasks(const FeatureLayer* features, const ZoneField* zones, c
                 out.zones[i * 4 + 2] = std::uint8_t(std::lround(std::clamp(second, 0.0f, 1.0f) * 255));
             }
             if (zoneMasks) zoneMasks(x, y, zone, values);
-            if (features) {
+            // A page read coarser than 32 m carries the zones only: a feature is
+            // narrower than its samples, and asking for them would plan its
+            // whole kilometres of country.
+            if (features && step <= 32.0) {
                 const core::WorldPos p{quantised(x), quantised(y)};
                 hits.clear();
                 const auto base = height ? quantised(height(x, y)) : core::kZero;

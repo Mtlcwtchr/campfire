@@ -46,7 +46,7 @@ struct HeightField::QueryCache::State {
     void prepare(const HeightField& field) {
         const auto current = field.edits_ ? field.edits_->revision() : 0;
         const auto terrainStage = field.coarse_ ? field.coarse_->terrainStage : generation::TerrainStage::Final;
-        const auto layer = field.features_ ? field.features_->generation() : 0;
+        const auto layer = field.features_ ? field.features_->generation() * 1000003ull + std::uint64_t(field.featureStride_) : 0;
         if (edits != field.edits_ || revision != current || stage != terrainStage || features != layer) {
             edits = field.edits_; revision = current; stage = terrainStage; features = layer; ++epoch;
         }
@@ -1150,7 +1150,7 @@ HeightField::Pieces HeightField::piecesAt(Fixed x, Fixed y, std::int64_t strideM
     // The environment's features, on top of the detail: what they move is
     // landscape, and the carve below still makes it give way to a channel.
     if (features_ && !features_->empty())
-        pieces.moved += features_->at({x, y}, pieces.country + pieces.moved, strideMetres);
+        pieces.moved += features_->at({x, y}, pieces.country + pieces.moved, std::max(strideMetres, featureStride_));
     return pieces;
 }
 

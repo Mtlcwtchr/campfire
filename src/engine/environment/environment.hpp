@@ -61,6 +61,10 @@ public:
     [[nodiscard]] const Catalogue& catalogue() const { return *catalogue_; }
     [[nodiscard]] std::shared_ptr<const Catalogue> catalogueShared() const { return catalogue_; }
     [[nodiscard]] const ZoneField* zones() const { return zones_.get(); }
+    // The same zones at 128 m to the sample, on 8 km pages: what a page
+    // sampled coarser than 32 m reads, so a far page does not build a
+    // hundred fine pages of zones.
+    [[nodiscard]] const ZoneField* coarseZones() const { return coarseZones_.get(); }
     [[nodiscard]] const FeaturePlanner& planner() const { return *planner_; }
     [[nodiscard]] const FeatureLayer& features() const { return *features_; }
     [[nodiscard]] std::shared_ptr<const FeatureLayer> featuresShared() const { return features_; }
@@ -77,7 +81,8 @@ public:
     // the masks, as one number; 0 when it does nothing to either. Baked pages
     // are filed under it, so editing a recipe cannot reuse a stale page.
     [[nodiscard]] std::uint64_t fingerprint() const { return fingerprint_; }
-    // The masks of a page, the way the page baker asks for them.
+    // The masks of a page, the way the page baker asks for them; empty for a
+    // page sampled coarser than 32 m.
     [[nodiscard]] PageMasks masks(double x0, double y0, double step, int side) const;
     // The GPU cover table (cover.hpp) for this catalogue's zones.
     [[nodiscard]] std::vector<std::array<float, 4>> coverTable() const;
@@ -85,7 +90,7 @@ public:
 private:
     EnvironmentSetup setup_;
     std::shared_ptr<const Catalogue> catalogue_;
-    std::unique_ptr<ZoneField> zones_;
+    std::unique_ptr<ZoneField> zones_, coarseZones_;
     std::shared_ptr<const FeaturePlanner> planner_;
     std::shared_ptr<const FeatureLayer> features_;
     std::shared_ptr<const StyleTable> palettes_, grades_;

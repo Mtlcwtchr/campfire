@@ -94,6 +94,18 @@ ZoneGrid ZoneField::build(double x0, double y0, int columns, int rows) const {
         across[i * 2] = std::cos(aspect) * k;
         across[i * 2 + 1] = std::sin(aspect) * k;
     }
+    // Each sample's non-zero weights, as a short list: a point belongs to two
+    // or three of dozens of types, and the kernel below reads every sample a
+    // hundred times over.
+    std::vector<std::uint32_t> firstOf(samples.size() + 1, 0);
+    std::vector<std::pair<ZoneTypeId, float>> sparse;
+    sparse.reserve(samples.size() * 4);
+    for (std::size_t i = 0; i < samples.size(); ++i) {
+        firstOf[i] = std::uint32_t(sparse.size());
+        for (std::size_t t = 0; t < types; ++t)
+            if (raw[i * types + t] > 0) sparse.emplace_back(ZoneTypeId(t), raw[i * types + t]);
+    }
+    firstOf[samples.size()] = std::uint32_t(sparse.size());
     ZoneGrid grid;
     grid.x0 = x0; grid.y0 = y0; grid.step = step; grid.columns = columns; grid.rows = rows;
     grid.cells.resize(std::size_t(columns) * rows);
@@ -125,7 +137,7 @@ ZoneGrid ZoneField::build(double x0, double y0, int columns, int rows) const {
                     if (d2 > 4.0) continue;
                     const double w = std::exp(-d2);
                     const std::size_t i = std::size_t(wry + dy) * wc + (wcx + dx);
-                    for (std::size_t t = 0; t < types; ++t) dense[t] += float(w) * raw[i * types + t];
+                    for (auto e = firstOf[i]; e < firstOf[i + 1]; ++e) dense[sparse[e].first] += float(w) * sparse[e].second;
                     for (std::size_t s = 0; s < kZoneScalars; ++s)
                         scalarAt(sum, s) += float(w) * scalarAt(scalars[i], s);
                     total += w;

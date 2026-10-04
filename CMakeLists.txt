@@ -213,7 +213,8 @@ add_library(asr_world STATIC
         src/game/world/spatial.cpp
         src/game/world/navmesh.cpp
         src/game/world/macro.cpp
-        src/game/environment/world_environment.cpp)
+        src/game/environment/world_environment.cpp
+        src/game/environment/natural_zones.cpp)
 target_include_directories(asr_world PUBLIC src)
 target_sources(asr_world PRIVATE src/game/world/scene_scatter.cpp)
 target_sources(asr_world PRIVATE src/game/world/scene_entities.cpp)

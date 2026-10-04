@@ -107,6 +107,10 @@ void deriveShape(const HeightAt& height, double x, double y, const ShapeSettings
     if (slope > 1e-6) facing = 0.5 + 0.5 * ((-p / slope) * s.exposureX + (-q / slope) * s.exposureY) * std::min(1.0, slope * 2);
     const double crest = std::clamp(out[field::TpiLarge] / 30.0, -0.5, 0.5);
     out.set(field::Exposure, float(std::clamp(facing + crest, 0.0, 1.0)));
+    // Ground off the edge of a world answers one flat height; nothing above may
+    // turn that into a NaN that would poison a zone's weights.
+    for (FieldId id = 0; id < field::Wetness; ++id)
+        if (out.has(id) && !std::isfinite(out[id])) out.set(id, 0.0f);
 }
 
 void deriveShapeGrid(std::span<const double> heights, int columns, int rows, int margin, double step,

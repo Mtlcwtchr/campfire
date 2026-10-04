@@ -408,6 +408,11 @@ public:
     // carves through them and a channel's banks still give way. Null, or a
     // layer that moves no ground, costs one branch.
     void features(const engine::environment::FeatureLayer* layer) { features_ = layer; }
+    // How far apart the samples are that whoever holds this field is working
+    // out, for the features alone: a page baked at sixty-four metres is the
+    // same ground as one at four, but no feature is wide enough to be drawn
+    // by it, and planning the kilometres it covers would cost the bake.
+    void featureStride(std::int64_t metres) const { featureStride_ = metres; }
     [[nodiscard]] const engine::environment::FeatureLayer* features() const { return features_; }
 
 private:
@@ -469,6 +474,7 @@ private:
                                                  core::Fixed detail) const;
     const EditLayer* edits_ = nullptr;
     const engine::environment::FeatureLayer* features_ = nullptr;
+    mutable std::int64_t featureStride_ = kSampleMetres;
     // piecesAt before the features: what the features themselves stand on.
     Pieces piecesWithout(core::Fixed x, core::Fixed y, std::int64_t strideMetres) const;
     const generation::WorldMapData* coarse_ = nullptr;

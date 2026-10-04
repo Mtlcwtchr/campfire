@@ -4,20 +4,18 @@
 //
 //   WorldFields     the engine's named fields, answered from the height field,
 //                   the climate and the soil of a generated world
-//   NaturalZones    the zone classifier: which local scene types this game
-//                   has and how they follow from the fields
+//   NaturalZones    the zone classifier (natural_zones.hpp)
 //   buildWorldEnvironment   the two, the content directories and the model
 //                   catalogue, put together for one world
 //
-// The zones are the game's to decide and are not decided yet: until they are
-// approved the classifier knows only "unclassified", which the engine treats
-// as no zones at all - nothing is sampled, nothing changes on screen.
+// The zones are natural_zones.hpp; fantasy regions are not decided yet.
 #include <cstdint>
 #include <memory>
 #include <span>
 #include <vector>
 
 #include "engine/environment/environment.hpp"
+#include "game/environment/natural_zones.hpp"
 #include "game/world/macro.hpp"
 
 namespace generation { struct WorldMapData; }
@@ -29,7 +27,7 @@ namespace env = engine::environment;
 
 // Bumped whenever WorldFields or NaturalZones change what they answer: baked
 // pages are filed under it (Environment::fingerprint).
-inline constexpr std::uint64_t kGameEnvironmentVersion = 1;
+inline constexpr std::uint64_t kGameEnvironmentVersion = 2;   // 2: the natural zones
 
 class WorldFields final : public env::FieldSource {
 public:
@@ -56,15 +54,6 @@ private:
     std::uint64_t id_;
 };
 
-class NaturalZones final : public env::ZoneClassifier {
-public:
-    NaturalZones();
-    [[nodiscard]] std::span<const env::ZoneType> types() const override { return types_; }
-    void classify(const env::FieldSample& fields, std::span<float> weights, env::ZoneScalars& scalars) const override;
-
-private:
-    std::vector<env::ZoneType> types_;
-};
 
 // The environment of one world. `macro` is the snapshot's resolved macro
 // layer (shared so no field over the map works it out again).

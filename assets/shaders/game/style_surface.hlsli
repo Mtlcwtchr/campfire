@@ -13,6 +13,10 @@
 //   3 macro            x amplitude, y metres across, z warmth amplitude, w print grain
 //   4 print            x posterize amount, y levels, z, w spare
 //   5-7 spare
+//
+// And on the ground, the environment's masks (content/config/environment/
+// masks.json, in its order): wet ground darker and cooler, moss greening it,
+// litter browning a forest floor, talus and bare rock greying, a scar raw.
 #ifndef GAME_STYLE_SURFACE_HLSLI
 #define GAME_STYLE_SURFACE_HLSLI
 
@@ -51,6 +55,19 @@ void styleSurface(inout StyleSurface s)
         const float m = noiseAt(s.worldPos.xy / (metres * 0.37) + 17.3) * 2.0 - 1.0;
         c *= 1.0 + n * macro.x;
         c *= 1.0 + float3(1.0, 0.0, -1.0) * m * macro.z;
+    }
+
+    // The ground's state, from the masks the page carries.
+    if (s.kind == kStyleGround) {
+        const EnvironmentPoint e = s.environment;
+        const float wet = environmentMask(e, 0), rock = environmentMask(e, 3), talus = environmentMask(e, 4);
+        const float litter = environmentMask(e, 5), moss = environmentMask(e, 6), scar = environmentMask(e, 7);
+        const float l = dot(c, float3(0.2126, 0.7152, 0.0722));
+        c = lerp(c, c * float3(0.88, 0.92, 0.98) * 0.74, wet * 0.8);
+        c = lerp(c, float3(0.16, 0.22, 0.08) * (0.7 + l), moss * 0.35);
+        c = lerp(c, c * float3(1.08, 0.88, 0.68), litter * 0.25);
+        c = lerp(c, l * float3(1.0, 0.97, 0.93) * 1.1, max(talus * 0.4, rock * 0.5));
+        c = lerp(c, c * float3(1.06, 0.92, 0.78), scar * 0.3);
     }
 
     // Print response: a light, partial quantisation and a fixed grain in the

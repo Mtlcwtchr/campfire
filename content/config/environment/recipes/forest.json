@@ -1,0 +1,404 @@
+{
+  "comment": "Forest features (doc/plan_procedural_environment_2026-10-03.md part J).",
+  "recipes": [
+    {
+      "name": "dry_gully",
+      "scale": "local",
+      "age": "ancient",
+      "comment": "A broad old valley cut by more water than it carries: a forest trench with a damp bed (spec §4).",
+      "placement": {
+        "zones": [
+          "old_growth",
+          "open_woodland",
+          "forest_edge",
+          "windthrow",
+          "wet_hollow"
+        ],
+        "source": "channel",
+        "channel_classes": [
+          "ephemeral_channel",
+          "abandoned_channel",
+          "paleochannel"
+        ],
+        "density_per_km2": 4,
+        "min_spacing": 220,
+        "length": [
+          120,
+          340
+        ],
+        "scale": [
+          0.7,
+          1.5
+        ],
+        "fields": {
+          "slope": [
+            0,
+            0.7
+          ]
+        }
+      },
+      "terrain": [
+        {
+          "op": "carve_profile",
+          "outer_width": 36,
+          "outer_depth": 4.5,
+          "inner_width": 6,
+          "inner_depth": 1.2,
+          "asymmetry": 0.45,
+          "taper": 40
+        }
+      ],
+      "masks": [
+        {
+          "channel": "wetness",
+          "shape": "bed",
+          "value": 0.7,
+          "falloff": 5
+        },
+        {
+          "channel": "litter",
+          "shape": "bank",
+          "value": 0.8
+        },
+        {
+          "channel": "moss",
+          "shape": "bank",
+          "value": 0.5
+        },
+        {
+          "channel": "suppress",
+          "shape": "bed",
+          "value": 0.4
+        }
+      ],
+      "scatter": [
+        {
+          "primitive": "along_channel",
+          "models": [
+            "Forest_Rock_Small",
+            [
+              "Rock_Angular",
+              0.5
+            ]
+          ],
+          "count": [
+            6,
+            14
+          ],
+          "size_falloff": 0.5
+        },
+        {
+          "primitive": "edge",
+          "models": [
+            "Fern_Clump"
+          ],
+          "count": [
+            8,
+            16
+          ],
+          "spread": 2
+        },
+        {
+          "primitive": "along_channel",
+          "models": [
+            "Deadwood_Branch",
+            "Deadwood_Log"
+          ],
+          "count": [
+            3,
+            7
+          ]
+        }
+      ]
+    },
+    {
+      "name": "stream_bank_undercut",
+      "scale": "local",
+      "age": "geological",
+      "comment": "A stream that still runs, its outer bank cut under, roots and stones at the water.",
+      "placement": {
+        "zones": [
+          "stream_bank",
+          "old_growth",
+          "open_woodland",
+          "swamp_forest",
+          "floodplain",
+          "wet_hollow"
+        ],
+        "source": "channel",
+        "channel_classes": [
+          "seasonal_stream"
+        ],
+        "density_per_km2": 5,
+        "min_spacing": 160,
+        "length": [
+          80,
+          220
+        ],
+        "scale": [
+          0.8,
+          1.3
+        ]
+      },
+      "terrain": [
+        {
+          "op": "carve_profile",
+          "outer_width": 16,
+          "outer_depth": 2.2,
+          "inner_width": 5,
+          "inner_depth": 0.8,
+          "water_width": 2.5,
+          "asymmetry": 0.75,
+          "taper": 20
+        }
+      ],
+      "masks": [
+        {
+          "channel": "wetness",
+          "shape": "bed",
+          "value": 1,
+          "radius": 2,
+          "falloff": 4
+        },
+        {
+          "channel": "moss",
+          "shape": "bank",
+          "value": 0.7
+        },
+        {
+          "channel": "boost",
+          "shape": "bank",
+          "value": 0.5
+        }
+      ],
+      "scatter": [
+        {
+          "primitive": "along_channel",
+          "models": [
+            "Forest_Rock_Small",
+            "Rock_Angular"
+          ],
+          "count": [
+            8,
+            14
+          ],
+          "size_falloff": 0.4
+        },
+        {
+          "primitive": "edge",
+          "models": [
+            "Fern_Clump",
+            [
+              "Moss_Clump",
+              0.6
+            ]
+          ],
+          "count": [
+            6,
+            12
+          ],
+          "spread": 1.5
+        },
+        {
+          "primitive": "edge",
+          "models": [
+            "Deadwood_Branch"
+          ],
+          "count": [
+            3,
+            6
+          ],
+          "spread": 1
+        }
+      ]
+    },
+    {
+      "name": "fallen_giant",
+      "scale": "micro",
+      "age": "recent",
+      "comment": "An old tree down: a trunk, its hollow, fungi and moss, the grass kept off (spec §3).",
+      "placement": {
+        "zones": [
+          "old_growth",
+          "swamp_forest",
+          "wet_hollow",
+          "windthrow"
+        ],
+        "density_per_km2": 3,
+        "min_spacing": 110,
+        "align": "random",
+        "scale": [
+          0.8,
+          1.3
+        ]
+      },
+      "terrain": [
+        {
+          "op": "depress",
+          "height": 0.4,
+          "radius": [
+            8,
+            3
+          ],
+          "exponent": 2,
+          "edge_noise": 0.2,
+          "blend": 3
+        }
+      ],
+      "masks": [
+        {
+          "channel": "moss",
+          "shape": "footprint",
+          "radius": 6,
+          "value": 0.9
+        },
+        {
+          "channel": "litter",
+          "shape": "footprint",
+          "radius": 10,
+          "value": 0.7
+        },
+        {
+          "channel": "suppress",
+          "shape": "footprint",
+          "radius": 4,
+          "value": 0.6
+        }
+      ],
+      "scatter": [
+        {
+          "primitive": "line",
+          "models": [
+            "Dead_Trunk",
+            [
+              "Deadwood_Log",
+              0.6
+            ]
+          ],
+          "count": [
+            1,
+            2
+          ],
+          "radius": 10,
+          "spread": 0.2,
+          "scale": [
+            1.0,
+            1.4
+          ]
+        },
+        {
+          "primitive": "cluster",
+          "models": [
+            "Mushroom_Common",
+            "Red_Mushrooms"
+          ],
+          "count": [
+            4,
+            9
+          ],
+          "radius": 5
+        },
+        {
+          "primitive": "cluster",
+          "models": [
+            "Moss_Clump"
+          ],
+          "count": [
+            3,
+            6
+          ],
+          "radius": 6
+        },
+        {
+          "primitive": "cluster",
+          "models": [
+            "Deadwood_Branch",
+            "Stump_Old"
+          ],
+          "count": [
+            3,
+            6
+          ],
+          "radius": 9
+        }
+      ],
+      "composition": {
+        "negative_space": 6,
+        "elongation": 2
+      }
+    },
+    {
+      "name": "windthrow_patch",
+      "scale": "local",
+      "age": "recent",
+      "comment": "A storm's work on an exposed crest: trunks down along the wind, stumps, bare scarred ground.",
+      "placement": {
+        "zones": [
+          "windthrow"
+        ],
+        "density_per_km2": 6,
+        "min_spacing": 160,
+        "align": "wind",
+        "scale": [
+          0.8,
+          1.4
+        ]
+      },
+      "masks": [
+        {
+          "channel": "scar",
+          "shape": "footprint",
+          "radius": 20,
+          "falloff": 10,
+          "value": 0.8
+        },
+        {
+          "channel": "litter",
+          "shape": "footprint",
+          "radius": 24,
+          "value": 0.7
+        }
+      ],
+      "scatter": [
+        {
+          "primitive": "cluster",
+          "models": [
+            "Dead_Trunk",
+            "Deadwood_Log"
+          ],
+          "count": [
+            5,
+            10
+          ],
+          "radius": 22
+        },
+        {
+          "primitive": "cluster",
+          "models": [
+            "Stump_Old",
+            "Deadwood_Stump"
+          ],
+          "count": [
+            4,
+            8
+          ],
+          "radius": 20
+        },
+        {
+          "primitive": "cluster",
+          "models": [
+            "Deadwood_Branch"
+          ],
+          "count": [
+            8,
+            14
+          ],
+          "radius": 24
+        }
+      ],
+      "composition": {
+        "elongation": 2.2
+      }
+    }
+  ]
+}

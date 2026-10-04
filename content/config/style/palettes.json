@@ -1,9 +1,244 @@
 {
-  "comment": "Surface style regions (engine/environment/style.hpp), read by assets/shaders/game/style_surface.hlsli. Every row is a change from the unstyled colour; zeros draw as before. Regions are matched by the ground category and zone under the camera. Natural regions are proposed in doc/plan_procedural_environment_2026-10-03.md part J and wait for approval.",
-  "rows": ["shadow_tint", "highlight_tint", "shaping", "macro", "print"],
-  "default": "neutral",
+  "comment": "Surface style regions (engine/environment/style.hpp), read by assets/shaders/game/style_surface.hlsli: rows are changes from the unstyled colour (fantasy_80s_art_asset_style_spec \u00a73, \u00a76, \u00a78). A region applies where its zones are under the camera; the default everywhere else.",
+  "rows": [
+    "shadow_tint",
+    "highlight_tint",
+    "shaping",
+    "macro",
+    "print"
+  ],
+  "default": "painted",
   "blend_seconds": 4,
   "regions": [
-    {"name": "neutral", "rows": {}}
+    {
+      "name": "painted",
+      "rows": {
+        "shadow_tint": [
+          0.82,
+          0.86,
+          1.1,
+          0.22
+        ],
+        "highlight_tint": [
+          1.08,
+          1.0,
+          0.86,
+          0.18
+        ],
+        "shaping": [
+          0,
+          0,
+          -0.04,
+          0.6
+        ],
+        "macro": [
+          0.05,
+          90,
+          0.035,
+          0.0
+        ],
+        "print": [
+          0.1,
+          24
+        ]
+      }
+    },
+    {
+      "name": "temperate_forest",
+      "match": {
+        "zones": [
+          "old_growth",
+          "open_woodland",
+          "forest_edge",
+          "clearing",
+          "windthrow",
+          "wet_hollow",
+          "stream_bank"
+        ]
+      },
+      "rows": {
+        "shadow_tint": [
+          0.74,
+          0.9,
+          1.02,
+          0.28
+        ],
+        "highlight_tint": [
+          1.12,
+          1.02,
+          0.8,
+          0.22
+        ],
+        "shaping": [
+          0.02,
+          0,
+          0.04,
+          0.5
+        ],
+        "macro": [
+          0.07,
+          70,
+          0.04,
+          0.0
+        ]
+      }
+    },
+    {
+      "name": "open_country",
+      "match": {
+        "zones": [
+          "meadow",
+          "scrub",
+          "heath",
+          "steppe",
+          "dry_wash"
+        ]
+      },
+      "rows": {
+        "shadow_tint": [
+          0.86,
+          0.86,
+          1.08,
+          0.2
+        ],
+        "highlight_tint": [
+          1.12,
+          1.02,
+          0.82,
+          0.25
+        ],
+        "shaping": [
+          0.03,
+          0.01,
+          0.0,
+          0.6
+        ],
+        "macro": [
+          0.06,
+          120,
+          0.05,
+          0.0
+        ]
+      }
+    },
+    {
+      "name": "wetland",
+      "match": {
+        "zones": [
+          "floodplain",
+          "swamp_forest",
+          "bog",
+          "fen",
+          "quagmire",
+          "marsh",
+          "river_marsh"
+        ]
+      },
+      "rows": {
+        "shadow_tint": [
+          0.86,
+          0.92,
+          0.8,
+          0.3
+        ],
+        "highlight_tint": [
+          1.02,
+          1.02,
+          0.92,
+          0.15
+        ],
+        "shaping": [
+          -0.08,
+          -0.02,
+          -0.06,
+          0.4
+        ],
+        "macro": [
+          0.09,
+          60,
+          0.03,
+          0.0
+        ],
+        "print": [
+          0.12,
+          22
+        ]
+      }
+    },
+    {
+      "name": "mountains",
+      "match": {
+        "zones": [
+          "rocky_slope",
+          "cliff_foot",
+          "scree",
+          "outcrop",
+          "alpine_meadow",
+          "tundra"
+        ]
+      },
+      "rows": {
+        "shadow_tint": [
+          0.84,
+          0.82,
+          1.14,
+          0.32
+        ],
+        "highlight_tint": [
+          1.1,
+          1.0,
+          0.84,
+          0.22
+        ],
+        "shaping": [
+          -0.02,
+          0,
+          -0.04,
+          1.0
+        ],
+        "macro": [
+          0.06,
+          150,
+          0.04,
+          0.0
+        ]
+      }
+    },
+    {
+      "name": "coast",
+      "match": {
+        "zones": [
+          "shore",
+          "dunes",
+          "salt_marsh"
+        ]
+      },
+      "rows": {
+        "shadow_tint": [
+          0.82,
+          0.9,
+          1.1,
+          0.22
+        ],
+        "highlight_tint": [
+          1.08,
+          1.04,
+          0.92,
+          0.2
+        ],
+        "shaping": [
+          0,
+          0.02,
+          -0.02,
+          0.5
+        ],
+        "macro": [
+          0.04,
+          100,
+          0.02,
+          0.0
+        ]
+      }
+    }
   ]
 }

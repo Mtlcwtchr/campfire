@@ -225,10 +225,11 @@ bool keptClear(const FeatureLayer& features, double x, double y) {
 }
 
 MaskValues masksAt(const FeatureLayer* features, const ZoneField* zones, const ZoneMasks& zoneMasks,
-                   const HeightAt& height, double x, double y, EnvironmentZone* zoneOut) {
+                   const HeightAt& height, double x, double y, EnvironmentZone* zoneOut, const EnvironmentZone* known) {
     MaskValues values{};
     EnvironmentZone zone;
-    if (zones) zone = zones->at(x, y);
+    if (known) zone = *known;
+    else if (zones) zone = zones->at(x, y);
     if (zoneMasks) zoneMasks(x, y, zone, values);
     if (features) {
         const core::WorldPos p{quantised(x), quantised(y)};
@@ -261,14 +262,23 @@ void cover(const CoverContext& ctx, double x0, double y0, double x1, double y1, 
                 const double x = (double(c) + rng.unit()) * cell, y = (double(r) + rng.unit()) * cell;
                 if (x < x0 || x >= x1 || y < y0 || y >= y1) continue;
                 const double draw = rng.unit();
-                FieldSample f;
-                if (ctx.fields) ctx.fields->sample(x, y, f);
+                // The zone first, off its cached page; the fields and the masks
+                // only when the rule's modifiers read them.
                 EnvironmentZone zone;
-                const auto masks = masksAt(ctx.features, ctx.zones, ctx.zoneMasks, ctx.height, x, y, &zone);
+                if (ctx.zones) zone = ctx.zones->at(x, y);
                 const float share = rule.anyZone ? 1.0f : zone.weights.of(rule.zoneId);
                 if (share <= 0) continue;
-                const CoverInputs inputs{&f, &zone.scalars, &masks};
-                const double contour = f.get(field::Aspect, 0) + kPi * 0.5;
+                bool wantsFields = false, wantsMasks = false;
+                for (const auto& m : rule.modifiers) {
+                    wantsFields |= m.source == CoverModifier::Source::Field;
+                    wantsMasks |= m.source == CoverModifier::Source::Mask;
+                }
+                FieldSample f;
+                if (wantsFields && ctx.fields) ctx.fields->sample(x, y, f);
+                MaskValues masks{};
+                if (wantsMasks) masks = masksAt(ctx.features, nullptr, ctx.zoneMasks, ctx.height, x, y, nullptr, &zone);
+                const CoverInputs inputs{wantsFields ? &f : nullptr, &zone.scalars, &masks};
+                const double contour = (wantsFields ? f.get(field::Aspect, 0) : 0.0) + kPi * 0.5;
                 const double p = share * ruleDensity(rule, inputs) / rule.density *
                                  coverPatch(ctx.seed + ri, rule, x, y, contour);
                 if (draw >= p) continue;

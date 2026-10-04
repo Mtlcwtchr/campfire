@@ -224,6 +224,12 @@ std::shared_ptr<const BakedPage> PageStore::page(TileKey key) {
         // the ground this page reaches would carry the old ground into it.
         if (parent && edits && edits->revisionIn(area) > parent->groundRevision) parent.reset();
         if (parent && parent->environment != environmentId) parent.reset();
+        // A parent too coarse to carry the features this page does: its
+        // samples are a different ground here, and are not reused.
+        if (parent && environment && environment->catalogue().movesGround()) {
+            const double widest = environment->catalogue().widestGround();
+            if (double(sampleMetresAtLevel(parent->base.key.level)) > widest && double(spacing) <= widest) parent.reset();
+        }
 
         // Baked outside the residency lock. A bake is tens of milliseconds and
         // every other page in the store would otherwise wait on it; the cost of

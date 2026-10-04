@@ -1,0 +1,296 @@
+{
+  "comment": "Asset records (engine/environment/asset_meta.hpp) for the scene models, from content/config/scene_model_sources.json (Poly Haven, CC0) and the Megascans ids. Models whose source is not recorded anywhere are left out on purpose: content_validator lists them until someone records them.",
+  "assets": [
+    {
+      "name": "Cliff_Face_Grey",
+      "source": "https://polyhaven.com/a/rock_face_01",
+      "author": "Poly Haven",
+      "license": "CC0-1.0",
+      "modifications": [
+        "decimated",
+        "prepared by tools/prepare_environment_models.py"
+      ],
+      "category": "cliff",
+      "tags": [
+        "cliff"
+      ]
+    },
+    {
+      "name": "Cliff_Face_Warm",
+      "source": "https://polyhaven.com/a/rock_face_02",
+      "author": "Poly Haven",
+      "license": "CC0-1.0",
+      "modifications": [
+        "decimated",
+        "prepared by tools/prepare_environment_models.py"
+      ],
+      "category": "cliff",
+      "tags": [
+        "cliff"
+      ]
+    },
+    {
+      "name": "Moss_Clump",
+      "source": "https://polyhaven.com/a/moss_01",
+      "author": "Poly Haven",
+      "license": "CC0-1.0",
+      "modifications": [
+        "decimated",
+        "prepared by tools/prepare_environment_models.py"
+      ],
+      "category": "ground_cover",
+      "tags": [
+        "ground_cover"
+      ]
+    },
+    {
+      "name": "Fern_Clump",
+      "source": "https://polyhaven.com/a/fern_02",
+      "author": "Poly Haven",
+      "license": "CC0-1.0",
+      "modifications": [
+        "decimated",
+        "prepared by tools/prepare_environment_models.py"
+      ],
+      "category": "undergrowth",
+      "tags": [
+        "undergrowth"
+      ]
+    },
+    {
+      "name": "Island_Tree_A",
+      "source": "https://polyhaven.com/a/island_tree_01",
+      "author": "Poly Haven",
+      "license": "CC0-1.0",
+      "modifications": [
+        "decimated",
+        "prepared by tools/prepare_environment_models.py"
+      ],
+      "category": "tree_broadleaf",
+      "tags": [
+        "tree_broadleaf"
+      ]
+    },
+    {
+      "name": "Island_Tree_B",
+      "source": "https://polyhaven.com/a/island_tree_02",
+      "author": "Poly Haven",
+      "license": "CC0-1.0",
+      "modifications": [
+        "decimated",
+        "prepared by tools/prepare_environment_models.py"
+      ],
+      "category": "tree_broadleaf",
+      "tags": [
+        "tree_broadleaf"
+      ]
+    },
+    {
+      "name": "Small_Tree",
+      "source": "https://polyhaven.com/a/tree_small_02",
+      "author": "Poly Haven",
+      "license": "CC0-1.0",
+      "modifications": [
+        "decimated",
+        "prepared by tools/prepare_environment_models.py"
+      ],
+      "category": "tree_broadleaf",
+      "tags": [
+        "tree_broadleaf"
+      ]
+    },
+    {
+      "name": "Jacaranda_Tree",
+      "source": "https://polyhaven.com/a/jacaranda_tree",
+      "author": "Poly Haven",
+      "license": "CC0-1.0",
+      "modifications": [
+        "decimated",
+        "prepared by tools/prepare_environment_models.py"
+      ],
+      "category": "tree_broadleaf",
+      "tags": [
+        "tree_broadleaf"
+      ]
+    },
+    {
+      "name": "Pine_Tree",
+      "source": "https://polyhaven.com/a/pine_tree_01",
+      "author": "Poly Haven",
+      "license": "CC0-1.0",
+      "modifications": [
+        "decimated",
+        "prepared by tools/prepare_environment_models.py"
+      ],
+      "category": "tree_conifer",
+      "tags": [
+        "tree_conifer"
+      ]
+    },
+    {
+      "name": "Shrub_Leafy",
+      "source": "https://polyhaven.com/a/shrub_02",
+      "author": "Poly Haven",
+      "license": "CC0-1.0",
+      "modifications": [
+        "decimated",
+        "prepared by tools/prepare_environment_models.py"
+      ],
+      "category": "shrub",
+      "tags": [
+        "shrub"
+      ]
+    },
+    {
+      "name": "Shrub_Round",
+      "source": "https://polyhaven.com/a/shrub_03",
+      "author": "Poly Haven",
+      "license": "CC0-1.0",
+      "modifications": [
+        "decimated",
+        "prepared by tools/prepare_environment_models.py"
+      ],
+      "category": "shrub",
+      "tags": [
+        "shrub"
+      ]
+    },
+    {
+      "name": "Rooibos_Bush",
+      "source": "https://polyhaven.com/a/wild_rooibos_bush",
+      "author": "Poly Haven",
+      "license": "CC0-1.0",
+      "modifications": [
+        "decimated",
+        "prepared by tools/prepare_environment_models.py"
+      ],
+      "category": "shrub",
+      "tags": [
+        "shrub"
+      ]
+    },
+    {
+      "name": "Boulder_Round",
+      "source": "https://polyhaven.com/a/boulder_01",
+      "author": "Poly Haven",
+      "license": "CC0-1.0",
+      "modifications": [
+        "decimated",
+        "prepared by tools/prepare_environment_models.py"
+      ],
+      "category": "rock",
+      "tags": [
+        "rock"
+      ]
+    },
+    {
+      "name": "Rock_Angular",
+      "source": "https://polyhaven.com/a/rock_07",
+      "author": "Poly Haven",
+      "license": "CC0-1.0",
+      "modifications": [
+        "decimated",
+        "prepared by tools/prepare_environment_models.py"
+      ],
+      "category": "rock",
+      "tags": [
+        "rock"
+      ]
+    },
+    {
+      "name": "Forest_Rock_Small",
+      "source": "Quixel Megascans: ms_forest_rock_small",
+      "author": "Quixel",
+      "license": "Quixel-Megascans",
+      "redistribution": "Megascans licence: in-game use only, no redistribution of the source files",
+      "modifications": [
+        "prepared by tools/prepare_environment_models.py"
+      ],
+      "category": "rock"
+    },
+    {
+      "name": "Dead_Trunk",
+      "source": "https://polyhaven.com/a/dead_tree_trunk",
+      "author": "Poly Haven",
+      "license": "CC0-1.0",
+      "modifications": [
+        "decimated",
+        "prepared by tools/prepare_environment_models.py"
+      ],
+      "category": "deadwood",
+      "tags": [
+        "deadwood"
+      ]
+    },
+    {
+      "name": "Stump_Old",
+      "source": "https://polyhaven.com/a/tree_stump_01",
+      "author": "Poly Haven",
+      "license": "CC0-1.0",
+      "modifications": [
+        "decimated",
+        "prepared by tools/prepare_environment_models.py"
+      ],
+      "category": "deadwood",
+      "tags": [
+        "deadwood"
+      ]
+    },
+    {
+      "name": "Red_Mushrooms",
+      "source": "Quixel Megascans: ms_red_mushrooms",
+      "author": "Quixel",
+      "license": "Quixel-Megascans",
+      "redistribution": "Megascans licence: in-game use only, no redistribution of the source files",
+      "modifications": [
+        "prepared by tools/prepare_environment_models.py"
+      ],
+      "category": "mushroom"
+    },
+    {
+      "name": "Amber_Oak",
+      "source": "https://polyhaven.com/a/island_tree_01",
+      "author": "Poly Haven",
+      "license": "CC0-1.0",
+      "modifications": [
+        "decimated",
+        "prepared by tools/prepare_environment_models.py",
+        "leaves recoloured"
+      ],
+      "category": "tree_broadleaf",
+      "tags": [
+        "tree_broadleaf"
+      ]
+    },
+    {
+      "name": "Blossom_Birch",
+      "source": "https://polyhaven.com/a/tree_small_02",
+      "author": "Poly Haven",
+      "license": "CC0-1.0",
+      "modifications": [
+        "decimated",
+        "prepared by tools/prepare_environment_models.py",
+        "leaves recoloured"
+      ],
+      "category": "tree_broadleaf",
+      "tags": [
+        "tree_broadleaf"
+      ]
+    },
+    {
+      "name": "Dark_Oak",
+      "source": "https://polyhaven.com/a/island_tree_02",
+      "author": "Poly Haven",
+      "license": "CC0-1.0",
+      "modifications": [
+        "decimated",
+        "prepared by tools/prepare_environment_models.py",
+        "leaves recoloured"
+      ],
+      "category": "tree_broadleaf",
+      "tags": [
+        "tree_broadleaf"
+      ]
+    }
+  ]
+}
