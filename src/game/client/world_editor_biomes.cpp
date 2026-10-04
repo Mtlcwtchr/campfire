@@ -11,6 +11,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "game/environment/world_environment.hpp"
 #include "engine/biomes/detail_edits.hpp"
 #include "engine/biomes/registry.hpp"
 #include "engine/core/rng.hpp"
@@ -218,20 +219,24 @@ void WorldEditor::biomePointer(double x, double y, bool valid, bool paint, bool 
 
 void WorldEditor::applyBiomeStroke() {
     const auto registry = eb::active();
-    if (!registry || biomeDabs_.empty()) return;
+    if (biomeDabs_.empty()) return;
+    const bool features = biomeLayer_ == kPaintedFeatures;
+    if (!registry && !features) return;
     if (!layout_.imported) { status("nothing imported: the category brush paints over an import"); return; }
     const auto layer = eb::Layer(std::clamp(biomeLayer_, 0, 3));
-    const std::uint32_t id = biomeErase_ ? 0 : biomeIds_[std::size_t(layer)];
+    const std::uint32_t id = biomeErase_ ? 0 : biomeIds_[std::size_t(features ? kPaintedFeatures : int(layer))];
     std::vector<ws::CategoricalDab> dabs;
     for (const auto& d : biomeDabs_) dabs.push_back({d[0], d[1], d[2]});
     std::string why;
     const ws::WorldExtent world{double(layout_.widthMetres()), double(layout_.heightMetres()), 256, 32768};
-    const auto report = ws::paintCategorical(sourceRoot(), world, eb::kLayerNames[std::size_t(layer)], id, dabs,
-                                             registry->legend(layer), true, &why);
+    const char* name = features ? "features" : eb::kLayerNames[std::size_t(layer)];
+    const auto report = ws::paintCategorical(sourceRoot(), world, name, id, dabs,
+                                             features ? world::environment::paintedLegend() : registry->legend(layer),
+                                             true, &why);
     biomeDabs_.clear();
     if (!report) { status("could not paint: " + why); return; }
     reopenSource();
-    status(std::string(eb::kLayerNames[std::size_t(layer)]) + " " + std::to_string(id) + ": " +
+    status(std::string(name) + " " + std::to_string(id) + ": " +
            std::to_string(report->chunksWritten) + " chunk(s) painted" + (autoBuild_ ? ", building ..." : "; Build (Enter) shows it"));
     if (autoBuild_ && report->chunksWritten) wanted_ = true;
     dirty_ = true;

@@ -73,11 +73,13 @@ std::shared_ptr<Environment> Environment::build(EnvironmentSetup setup, std::sha
     ctx.drainage = env->setup_.drainage;
     ctx.seed = env->setup_.seed;
     ctx.removed = env->setup_.removed;
+    ctx.painted = env->setup_.painted;
     env->planner_ = std::make_shared<FeaturePlanner>(std::move(ctx));
     env->features_ = std::make_shared<FeatureLayer>(env->planner_);
     if (env->catalogue_->movesGround() || env->writesMasks()) {
         std::uint64_t h = mix64(env->setup_.seed ^ 0xe7f1ULL) ^ mix64(env->setup_.gameVersion + 1) ^
-                          mix64(env->setup_.removedVersion ^ 0x7e3dULL);
+                          mix64(env->setup_.removedVersion ^ 0x7e3dULL) ^
+                          mix64(env->setup_.painted ? env->setup_.painted->fingerprint() : 0x5a17ULL);
         const auto add = [&](std::string_view text) {
             for (unsigned char c : text) h = mix64(h ^ c);
             h = mix64(h ^ 0xffULL);

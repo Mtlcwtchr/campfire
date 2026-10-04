@@ -1,15 +1,104 @@
 {
-  "comment": "Presets for tools/stylize_textures.py (fantasy_80s_art_asset_style_spec §6). Draft: tune on real assets before use.",
+  "comment": "Presets for tools/stylize_textures.py (fantasy_80s_art_asset_style_spec \u00a76). Draft: tune on real assets before use.",
   "presets": {
     "painted_base": {
       "steps": [
-        {"op": "microcontrast", "radius": 3.0, "keep": 0.55},
-        {"op": "palette", "shadow": [0.42, 0.45, 0.62], "highlight": [1.0, 0.92, 0.74],
-         "shadow_strength": 0.3, "highlight_strength": 0.25, "saturation": 0.95},
-        {"op": "macro", "scale": 160, "value": 0.1, "warmth": 0.05},
-        {"op": "posterize", "levels": 14, "amount": 0.3},
-        {"op": "normal", "radius": 8.0, "large": 1.0, "fine": 0.45},
-        {"op": "roughness", "radius": 6.0, "levels": 5}
+        {
+          "op": "microcontrast",
+          "radius": 3.0,
+          "keep": 0.55
+        },
+        {
+          "op": "gradient_map",
+          "amount": 0.25,
+          "detail": 0.6
+        },
+        {
+          "op": "palette",
+          "shadow": [
+            0.42,
+            0.45,
+            0.62
+          ],
+          "highlight": [
+            1.0,
+            0.92,
+            0.74
+          ],
+          "shadow_strength": 0.3,
+          "highlight_strength": 0.25,
+          "saturation": 0.95
+        },
+        {
+          "op": "macro",
+          "scale": 160,
+          "value": 0.1,
+          "warmth": 0.05
+        },
+        {
+          "op": "posterize",
+          "levels": 14,
+          "amount": 0.3
+        },
+        {
+          "op": "normal",
+          "radius": 8.0,
+          "large": 1.0,
+          "fine": 0.45
+        },
+        {
+          "op": "roughness",
+          "radius": 6.0,
+          "levels": 5
+        }
+      ],
+      "variants": []
+    },
+    "megalith_painted": {
+      "steps": [
+        {
+          "op": "microcontrast",
+          "radius": 4.0,
+          "keep": 0.45
+        },
+        {
+          "op": "gradient_map",
+          "amount": 0.35,
+          "detail": 0.6
+        },
+        {
+          "op": "palette",
+          "shadow": [
+            0.45,
+            0.48,
+            0.66
+          ],
+          "highlight": [
+            1.0,
+            0.9,
+            0.7
+          ],
+          "shadow_strength": 0.35,
+          "highlight_strength": 0.3,
+          "saturation": 0.9
+        },
+        {
+          "op": "macro",
+          "scale": 120,
+          "value": 0.12,
+          "warmth": 0.06
+        },
+        {
+          "op": "posterize",
+          "levels": 12,
+          "amount": 0.35
+        },
+        {
+          "op": "normal",
+          "radius": 10.0,
+          "large": 1.0,
+          "fine": 0.35
+        }
       ],
       "variants": []
     }

@@ -955,6 +955,7 @@ WorldMapData generateLayoutWorld(const WorldLayout& layout, ComposeReport* repor
     if (layout.imported) {
         world.categories = layout.imported->categories();
         world.details = layout.imported->details();
+        world.features = layout.imported->features();
         authoredStandIn(world, layout);
     }
     out.composeMs = millis(composing);

@@ -29,6 +29,7 @@
 #include "engine/environment/catalogue.hpp"
 #include "engine/environment/drainage.hpp"
 #include "engine/environment/fields.hpp"
+#include "engine/environment/painted_layer.hpp"
 #include "engine/environment/terrain_ops.hpp"
 #include "engine/environment/zones.hpp"
 
@@ -48,6 +49,8 @@ struct PlannerContext {
     // Features a person removed by hand: an instance whose id this answers
     // true for (at its anchor) is not placed, and moves no ground. Null: none.
     std::function<bool(std::uint64_t id, double x, double y)> removed;
+    // What a person painted (painted_layer.hpp), or null.
+    std::shared_ptr<const PaintedLayer> painted;
 };
 
 using InstanceList = std::vector<FeatureInstance>;

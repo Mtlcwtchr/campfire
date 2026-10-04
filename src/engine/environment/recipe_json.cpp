@@ -118,7 +118,8 @@ std::vector<ModelChoice> readModels(const Reader& r, const json& j) {
 void readPlacement(Reader r, const json& j, Placement& p) {
     r.where += ".placement";
     r.keys(j, {"zones", "exclude_zones", "min_zone_weight", "fields", "source", "channel_classes",
-               "density_per_km2", "min_spacing", "clearance", "chance", "length", "scale", "align", "avoid_water"});
+               "density_per_km2", "min_spacing", "clearance", "chance", "length", "scale", "align", "avoid_water",
+               "painted", "away_from_painted"});
     r.names(j, "zones", p.zones);
     r.names(j, "exclude_zones", p.excludeZones);
     r.number(j, "min_zone_weight", p.minZoneWeight);
@@ -159,6 +160,10 @@ void readPlacement(Reader r, const json& j, Placement& p) {
     r.span(j, "scale", p.scaleMin, p.scaleMax);
     r.choice(j, "align", p.align, kAlignNames);
     r.flag(j, "avoid_water", p.avoidWater);
+    r.names(j, "painted", p.painted);
+    r.flag(j, "away_from_painted", p.awayFromPainted);
+    if (p.source == PlacementSource::Painted && p.painted.empty())
+        r.problem("source painted needs \"painted\": the legend names it stands on");
 }
 
 TerrainOp readOp(Reader r, const json& j) {
@@ -381,6 +386,8 @@ std::string recipeToJson(const FeatureRecipe& r) {
     p["scale"] = {r.placement.scaleMin, r.placement.scaleMax};
     p["align"] = kAlignNames[int(r.placement.align)];
     p["avoid_water"] = r.placement.avoidWater;
+    if (!r.placement.painted.empty()) p["painted"] = r.placement.painted;
+    if (r.placement.awayFromPainted) p["away_from_painted"] = true;
     for (const auto& op : r.terrain) {
         json o;
         o["op"] = kTerrainOpNames[int(op.kind)];

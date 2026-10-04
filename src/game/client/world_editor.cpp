@@ -1,4 +1,5 @@
 #include "game/client/world_editor.hpp"
+#include "game/environment/world_environment.hpp"
 
 #include "engine/biomes/registry.hpp"
 
@@ -857,10 +858,24 @@ bool WorldEditor::draw(ui::Ui& ui) {
         // The categories' own lists: which layer, which id; the details' tool and prop.
         const auto registry = engine::biomes::active();
         if (layer_ == kCategoriesLayer) {
-            std::vector<std::string> layers{"Ground category", "Forest biome", "Water type", "Decor biome"};
+            std::vector<std::string> layers{"Ground category", "Forest biome", "Water type", "Decor biome",
+                                            "Painted features"};
             const int picked = dropdown(4, biomeLayerBox_, layers, biomeLayer_);
             if (picked >= 0 && picked != biomeLayer_) { biomeLayer_ = picked; changed = true; }
-            if (registry) {
+            if (biomeLayer_ == kPaintedFeatures) {
+                // The painted feature layer: its legend is the environment's
+                // (content/config/environment/painted.json), not the biomes'.
+                std::vector<std::string> names;
+                std::vector<std::uint32_t> ids;
+                for (const auto& [name, id] : world::environment::paintedLegend()) {
+                    ids.push_back(id);
+                    names.push_back(std::to_string(id) + "  " + name);
+                }
+                const auto at = std::find(ids.begin(), ids.end(), biomeIds_[std::size_t(biomeLayer_)]);
+                const int chosen = at == ids.end() ? 0 : int(at - ids.begin());
+                const int pickedId = dropdown(5, biomeIdBox_, names, chosen);
+                if (pickedId >= 0 && pickedId != chosen) { biomeIds_[std::size_t(biomeLayer_)] = ids[std::size_t(pickedId)]; changed = true; }
+            } else if (registry) {
                 std::vector<std::string> names;
                 std::vector<std::uint32_t> ids;
                 if (biomeLayer_ != 0) { names.push_back("as the category says (0)"); ids.push_back(0); }

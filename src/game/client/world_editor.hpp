@@ -292,7 +292,8 @@ private:
     void applyBiomeStroke();
     void applyDetailStroke();
     int biomeLayer_ = 0;                 // engine::biomes::Layer
-    std::array<std::uint32_t, 4> biomeIds_{1, 1, 1, 1};   // the id each layer paints
+    std::array<std::uint32_t, 5> biomeIds_{1, 1, 1, 1, 1};   // the id each layer paints
+    static constexpr int kPaintedFeatures = 4;              // the fifth: the environment's painted layer
     float biomeRadiusKm_ = 3;
     int detailTool_ = 0;                 // thicker, thinner, pin, remove
     int detailProp_ = 0;

@@ -23,6 +23,7 @@
 // to decimetres, masks to bytes - so that everything after is integer and the
 // same on every machine.
 #include <array>
+#include "engine/environment/painted_layer.hpp"
 #include <cstdint>
 #include <filesystem>
 #include <map>
@@ -115,6 +116,11 @@ public:
     // pinned instances, removed ones, density brushed. Read once; empty when
     // there are none.
     std::shared_ptr<const engine::biomes::DetailEdits> details() const;
+    // The painted feature layer (raster "features", engine/environment
+    // painted_layer.hpp): where a person said a kind of place stands - a
+    // megalith site, a ruin field - with the legend's names. Null when the
+    // source has none.
+    std::shared_ptr<const engine::environment::PaintedLayer> features() const;
 
 private:
     ImportedSource() = default;
@@ -129,6 +135,8 @@ private:
     mutable std::map<std::tuple<std::int32_t, std::int32_t, bool>, std::shared_ptr<const ImportedGround>> grounds_;
     mutable bool categoriesRead_ = false;
     mutable std::shared_ptr<const engine::biomes::CategoryField> categories_;
+    mutable bool featuresRead_ = false;
+    mutable std::shared_ptr<const engine::environment::PaintedLayer> features_;
     mutable std::shared_ptr<const engine::biomes::DetailEdits> details_;
 };
 

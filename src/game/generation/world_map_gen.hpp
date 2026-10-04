@@ -22,6 +22,8 @@
 #include "engine/core/geometry.hpp"
 #include "game/generation/local_map_gen.hpp"
 
+namespace engine::environment { class PaintedLayer; }
+
 namespace generation {
 
 class HybridTerrain;
@@ -212,6 +214,8 @@ struct WorldMapData {
     // 256 m, land only. Null: none painted - the climate names what it can
     // by the registry's derive rules, the rest is the default category.
     std::shared_ptr<const engine::biomes::CategoryField> categories;
+    // The painted feature layer (world_import.hpp ImportedSource::features).
+    std::shared_ptr<const engine::environment::PaintedLayer> features;
     // The hand edits to the details they place (source/details): kept apart
     // from the maps, so repainting an id re-derives the rest.
     std::shared_ptr<const engine::biomes::DetailEdits> details;

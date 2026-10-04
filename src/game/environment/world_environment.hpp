@@ -10,7 +10,9 @@
 //
 // The zones are natural_zones.hpp; fantasy regions are not decided yet.
 #include <cstdint>
+#include <map>
 #include <memory>
+#include <string>
 #include <span>
 #include <vector>
 
@@ -54,6 +56,11 @@ private:
     std::uint64_t id_;
 };
 
+
+// The painted feature layer's legend, name to id
+// (content/config/environment/painted.json): what the editor's brush offers
+// and what the world source's raster "features" is labelled with.
+std::map<std::string, std::uint32_t> paintedLegend();
 
 // The environment of one world. `macro` is the snapshot's resolved macro
 // layer (shared so no field over the map works it out again).

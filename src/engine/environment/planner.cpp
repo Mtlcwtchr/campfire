@@ -53,6 +53,13 @@ void FeaturePlanner::clear() {
 
 bool FeaturePlanner::passes(const FeatureRecipe& r, double x, double y) const {
     const auto& p = r.placement;
+    // What was painted decides first, and costs a lookup.
+    if (p.source == PlacementSource::Painted) {
+        const auto id = context_.painted ? context_.painted->at(x, y) : 0;
+        const auto* name = id ? context_.painted->name(id) : nullptr;
+        if (!name || std::find(p.painted.begin(), p.painted.end(), *name) == p.painted.end()) return false;
+    }
+    if (p.awayFromPainted && context_.painted && context_.painted->at(x, y) != 0) return false;
     // The zone first: it is read off a cached page, while the fields at a
     // point cost a dozen height and climate queries, and most candidates of
     // a zone-bound recipe fall outside its zones.

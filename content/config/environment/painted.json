@@ -1,0 +1,16 @@
+{
+  "comment": "The painted feature layer's legend (engine/environment/painted_layer.hpp): raster \"features\" of the world source, painted with the editor's category brush (layer \"Painted features\"). Recipes with source \"painted\" stand on these names. Megalith sites for the 1960s-80s fantasy look (doc/references/artstyle).",
+  "layer": "features",
+  "ids": {
+    "1": "stone_circle",
+    "2": "menhir_alley",
+    "3": "dolmen_field",
+    "4": "trilithon_gate",
+    "5": "cyclopean_ruin",
+    "6": "giant_stair",
+    "7": "colossus_head",
+    "8": "colossus_hand",
+    "9": "needle_field",
+    "10": "portal_tower"
+  }
+}

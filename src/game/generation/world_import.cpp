@@ -290,6 +290,30 @@ std::shared_ptr<const engine::biomes::CategoryField> ImportedSource::categories(
     return categories_;
 }
 
+std::shared_ptr<const engine::environment::PaintedLayer> ImportedSource::features() const {
+    const std::lock_guard<std::mutex> lock(guard_);
+    if (featuresRead_) return features_;
+    featuresRead_ = true;
+    const auto* r = source_->schema().raster("features");
+    if (!r || r->kind != ws::RasterKind::Categorical || r->channels.size() != 1) return nullptr;
+    auto layer = std::make_shared<engine::environment::PaintedLayer>(source_->schema().world.sampleMetres);
+    for (const auto& [id, name] : r->ids) if (id > 0 && id < 256) layer->legend[std::uint8_t(id)] = name;
+    for (const auto& [key, record] : source_->chunks()) {
+        if (!record.layers.count(r->name)) continue;
+        const auto chunk = source_->read(key);
+        if (!chunk) continue;
+        const ws::Tile tile = source_->tile(*chunk, r->name);
+        const auto side = std::int64_t(source_->chunkSamples());
+        for (std::int64_t y = 0; y < side; ++y)
+            for (std::int64_t x = 0; x < side; ++x)
+                if (const auto id = std::uint8_t(std::min<std::uint16_t>(tile.at(x, y, 0), 255)))
+                    layer->set(key.x * side + x, key.y * side + y, id);
+    }
+    if (layer->empty()) return nullptr;
+    features_ = std::move(layer);
+    return features_;
+}
+
 std::shared_ptr<const engine::biomes::DetailEdits> ImportedSource::details() const {
     const std::lock_guard<std::mutex> lock(guard_);
     if (!details_) {

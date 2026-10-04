@@ -45,8 +45,9 @@ enum class PlacementSource : std::uint8_t {
     Ridge,       // along crests (large TPI, convex)
     CliffFoot,   // at the foot of steep ground
     Edge,        // on the border between two zones
+    Painted,     // where the painted layer holds one of `painted` (painted_layer.hpp)
 };
-inline constexpr const char* kSourceNames[] = {"point", "channel", "ridge", "cliff_foot", "edge"};
+inline constexpr const char* kSourceNames[] = {"point", "channel", "ridge", "cliff_foot", "edge", "painted"};
 
 // What a feature lines itself up with.
 enum class Align : std::uint8_t { None, Slope, Contour, Flow, Wind, Random };
@@ -82,6 +83,8 @@ struct Placement {
     double scaleMin = 1.0, scaleMax = 1.0;
     Align align = Align::None;
     bool avoidWater = true;
+    std::vector<std::string> painted;        // names of the painted layer's legend (source painted)
+    bool awayFromPainted = false;            // keep off anything painted: what was drawn wins
 };
 
 enum class TerrainOpKind : std::uint8_t { CarveProfile, Step, Raise, Depress, Terrace, SmoothTo };

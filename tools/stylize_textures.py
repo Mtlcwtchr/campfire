@@ -131,6 +131,30 @@ def op_macro(img, p):
     return img
 
 
+def op_gradient_map(img, p):
+    """Value through a colour ramp, darks to lights: the references' own
+    ramp (content/config/style/reference.json, "ramp") or one given. `amount`
+    of the ramp's colour, the rest the texture's; its contrast kept by
+    remapping the texture's own value range onto the ramp's."""
+    ramp = p.get("ramp")
+    if ramp is None:
+        reference = json.loads((ROOT / p.get("reference", "content/config/style/reference.json")).read_text())
+        source = reference["folder"] if p.get("picture") is None else reference["each"][p["picture"]]
+        ramp = source["ramp"]
+    ramp = np.asarray(ramp, dtype=np.float32)
+    rgb = img[..., :3]
+    lum = luminance(rgb)
+    lo, hi = np.quantile(lum, 0.02), np.quantile(lum, 0.98)
+    t = np.clip((lum - lo) / max(hi - lo, 1e-4), 0, 1) * (len(ramp) - 1)
+    i = np.clip(np.floor(t).astype(int), 0, len(ramp) - 2)
+    f = (t - i)[..., None]
+    mapped = ramp[i] * (1 - f) + ramp[i + 1] * f
+    # Keep the texture's own light within the ramp's colour: detail survives.
+    mapped *= (lum / np.maximum(luminance(mapped), 1e-3))[..., None] ** p.get("detail", 0.5)
+    img[..., :3] = rgb + (np.clip(mapped, 0, 1) - rgb) * p.get("amount", 0.5)
+    return img
+
+
 def op_posterize(img, p):
     """A light partial quantisation: `levels` steps mixed in by `amount`."""
     levels = max(2, int(p.get("levels", 12)))
@@ -152,11 +176,11 @@ def op_roughness(img, p):
 
 OPERATIONS = {
     "microcontrast": op_microcontrast, "normal": op_normal, "palette": op_palette,
-    "macro": op_macro, "posterize": op_posterize, "roughness": op_roughness,
+    "macro": op_macro, "posterize": op_posterize, "roughness": op_roughness, "gradient_map": op_gradient_map,
 }
 # Which operations make sense for which kind of map.
 KINDS = {
-    "albedo": {"microcontrast", "palette", "macro", "posterize"},
+    "albedo": {"microcontrast", "palette", "macro", "posterize", "gradient_map"},
     "normal": {"normal"},
     "roughness": {"roughness"},
 }

@@ -1,0 +1,780 @@
+{
+  "comment": "Megaliths for the 1960s-80s fantasy look (doc/references/artstyle): one recipe a site of the painted feature layer (content/config/environment/painted.json), and lone stones where nothing was painted. Models: tools/blender/megaliths.py.",
+  "recipes": [
+    {
+      "name": "stone_circle_site",
+      "scale": "local",
+      "age": "ancient",
+      "placement": {
+        "source": "painted",
+        "painted": [
+          "stone_circle"
+        ],
+        "density_per_km2": 6,
+        "min_spacing": 500,
+        "align": "random",
+        "fields": {
+          "slope": [
+            0,
+            0.45
+          ]
+        }
+      },
+      "comment": "A ring of standing stones on levelled ground, a few fallen, the grass worn inside.",
+      "terrain": [
+        {
+          "op": "smooth_to",
+          "radius": [
+            26,
+            26
+          ],
+          "exponent": 4,
+          "blend": 12
+        }
+      ],
+      "masks": [
+        {
+          "channel": "suppress",
+          "shape": "footprint",
+          "radius": 18,
+          "value": 0.5
+        },
+        {
+          "channel": "scar",
+          "shape": "ring",
+          "radius": 16,
+          "falloff": 4,
+          "value": 0.5
+        }
+      ],
+      "scatter": [
+        {
+          "primitive": "ring",
+          "models": [
+            [
+              "Megalith_Menhir_A",
+              1
+            ],
+            [
+              "Megalith_Menhir_B",
+              1
+            ],
+            [
+              "Megalith_Menhir_C",
+              1
+            ]
+          ],
+          "count": [
+            9,
+            15
+          ],
+          "radius": 16,
+          "scale": [
+            0.8,
+            1.15
+          ],
+          "min_spacing": 4,
+          "tag": "megalith"
+        },
+        {
+          "primitive": "cluster",
+          "models": [
+            "Megalith_Fallen_A"
+          ],
+          "count": [
+            1,
+            3
+          ],
+          "radius": 18,
+          "min_spacing": 5,
+          "tag": "megalith"
+        }
+      ],
+      "composition": {
+        "negative_space": 24,
+        "reveal_width": 10,
+        "reveal_length": 60
+      }
+    },
+    {
+      "name": "menhir_alley_site",
+      "scale": "local",
+      "age": "ancient",
+      "placement": {
+        "source": "painted",
+        "painted": [
+          "menhir_alley"
+        ],
+        "density_per_km2": 6,
+        "min_spacing": 500,
+        "align": "contour",
+        "fields": {
+          "slope": [
+            0,
+            0.45
+          ]
+        }
+      },
+      "comment": "An avenue of stones marching along the hillside.",
+      "scatter": [
+        {
+          "primitive": "line",
+          "models": [
+            [
+              "Megalith_Menhir_A",
+              1
+            ],
+            [
+              "Megalith_Menhir_B",
+              1
+            ],
+            [
+              "Megalith_Menhir_C",
+              1
+            ]
+          ],
+          "count": [
+            10,
+            18
+          ],
+          "radius": 140,
+          "spread": 0.6,
+          "scale": [
+            0.7,
+            1.1
+          ],
+          "min_spacing": 7,
+          "tag": "megalith"
+        },
+        {
+          "primitive": "line",
+          "models": [
+            [
+              "Megalith_Menhir_A",
+              1
+            ],
+            [
+              "Megalith_Menhir_B",
+              1
+            ],
+            [
+              "Megalith_Menhir_C",
+              1
+            ]
+          ],
+          "count": [
+            8,
+            14
+          ],
+          "radius": 140,
+          "spread": 0.6,
+          "scale": [
+            0.6,
+            1.0
+          ],
+          "min_spacing": 7,
+          "tag": "megalith"
+        }
+      ],
+      "composition": {
+        "elongation": 4,
+        "negative_space": 8
+      }
+    },
+    {
+      "name": "dolmen_field_site",
+      "scale": "local",
+      "age": "ancient",
+      "placement": {
+        "source": "painted",
+        "painted": [
+          "dolmen_field"
+        ],
+        "density_per_km2": 6,
+        "min_spacing": 500,
+        "align": "random",
+        "fields": {
+          "slope": [
+            0,
+            0.45
+          ]
+        }
+      },
+      "comment": "Table stones and toppled slabs scattered over a low rise.",
+      "terrain": [
+        {
+          "op": "raise",
+          "height": 2.5,
+          "radius": [
+            40,
+            30
+          ],
+          "exponent": 2,
+          "blend": 15
+        }
+      ],
+      "scatter": [
+        {
+          "primitive": "cluster",
+          "models": [
+            "Megalith_Capstone_A"
+          ],
+          "count": [
+            3,
+            6
+          ],
+          "radius": 40,
+          "min_spacing": 12,
+          "tag": "megalith"
+        },
+        {
+          "primitive": "cluster",
+          "models": [
+            "Megalith_Fallen_A",
+            [
+              "Megalith_Menhir_C",
+              0.5
+            ]
+          ],
+          "count": [
+            3,
+            7
+          ],
+          "radius": 45,
+          "min_spacing": 8,
+          "tag": "megalith"
+        }
+      ],
+      "composition": {
+        "negative_space": 10
+      }
+    },
+    {
+      "name": "trilithon_gate_site",
+      "scale": "local",
+      "age": "ancient",
+      "placement": {
+        "source": "painted",
+        "painted": [
+          "trilithon_gate"
+        ],
+        "density_per_km2": 6,
+        "min_spacing": 500,
+        "align": "contour",
+        "fields": {
+          "slope": [
+            0,
+            0.45
+          ]
+        }
+      },
+      "comment": "Gates of standing stone in a row, opening on nothing.",
+      "terrain": [
+        {
+          "op": "smooth_to",
+          "radius": [
+            34,
+            14
+          ],
+          "exponent": 4,
+          "blend": 10
+        }
+      ],
+      "scatter": [
+        {
+          "primitive": "line",
+          "models": [
+            "Megalith_Portal_A",
+            "Megalith_Portal_B"
+          ],
+          "count": [
+            3,
+            5
+          ],
+          "radius": 50,
+          "spread": 0.1,
+          "scale": [
+            0.55,
+            0.7
+          ],
+          "min_spacing": 12,
+          "tag": "megalith"
+        },
+        {
+          "primitive": "cluster",
+          "models": [
+            "Megalith_Lintel_A",
+            "Megalith_Fallen_A"
+          ],
+          "count": [
+            2,
+            4
+          ],
+          "radius": 30,
+          "min_spacing": 6,
+          "tag": "megalith"
+        }
+      ]
+    },
+    {
+      "name": "cyclopean_ruin_site",
+      "scale": "local",
+      "age": "ancient",
+      "placement": {
+        "source": "painted",
+        "painted": [
+          "cyclopean_ruin"
+        ],
+        "density_per_km2": 6,
+        "min_spacing": 500,
+        "align": "contour",
+        "fields": {
+          "slope": [
+            0,
+            0.8
+          ]
+        }
+      },
+      "comment": "Terraces walled with stones no people could lift, and a stair between them.",
+      "terrain": [
+        {
+          "op": "terrace",
+          "radius": [
+            60,
+            45
+          ],
+          "exponent": 6,
+          "terrace_step": 4,
+          "terrace_sharpness": 0.75,
+          "blend": 15
+        }
+      ],
+      "masks": [
+        {
+          "channel": "rock",
+          "shape": "footprint",
+          "radius": 10,
+          "value": 0.5
+        },
+        {
+          "channel": "moss",
+          "shape": "footprint",
+          "value": 0.4
+        }
+      ],
+      "scatter": [
+        {
+          "primitive": "edge",
+          "models": [
+            "Megalith_Cyclopean_A",
+            "Megalith_Cyclopean_B"
+          ],
+          "count": [
+            10,
+            20
+          ],
+          "radius": 60,
+          "min_spacing": 4,
+          "tag": "megalith"
+        },
+        {
+          "primitive": "cluster",
+          "models": [
+            "Megalith_Cyclopean_A",
+            "Megalith_Cyclopean_B"
+          ],
+          "count": [
+            6,
+            12
+          ],
+          "radius": 50,
+          "min_spacing": 4,
+          "tag": "megalith"
+        }
+      ],
+      "meshes": [
+        {
+          "model": "Megalith_Stair_A",
+          "attach": "anchor",
+          "count": 1,
+          "sink": 0.3
+        }
+      ]
+    },
+    {
+      "name": "giant_stair_site",
+      "scale": "local",
+      "age": "ancient",
+      "placement": {
+        "source": "painted",
+        "painted": [
+          "giant_stair"
+        ],
+        "density_per_km2": 6,
+        "min_spacing": 500,
+        "align": "slope",
+        "fields": {
+          "slope": [
+            0,
+            1.0
+          ]
+        }
+      },
+      "comment": "A flight of giant steps climbing out of the ground towards nothing.",
+      "meshes": [
+        {
+          "model": "Megalith_Stair_A",
+          "attach": "anchor",
+          "count": 1,
+          "sink": 0.4
+        }
+      ],
+      "masks": [
+        {
+          "channel": "talus",
+          "shape": "fan",
+          "length": 25,
+          "value": 0.6
+        }
+      ],
+      "scatter": [
+        {
+          "primitive": "rock_hierarchy",
+          "models": [
+            "Megalith_Cyclopean_A",
+            "Rock_Angular",
+            "Forest_Rock_Small"
+          ],
+          "radius": 30,
+          "spread": 0.8
+        }
+      ]
+    },
+    {
+      "name": "colossus_head_site",
+      "scale": "local",
+      "age": "ancient",
+      "placement": {
+        "source": "painted",
+        "painted": [
+          "colossus_head"
+        ],
+        "density_per_km2": 6,
+        "min_spacing": 500,
+        "align": "random",
+        "fields": {
+          "slope": [
+            0,
+            0.6
+          ]
+        }
+      },
+      "comment": "A carved head the ground has half taken back, looking out over its country.",
+      "terrain": [
+        {
+          "op": "smooth_to",
+          "radius": [
+            14,
+            14
+          ],
+          "exponent": 3,
+          "blend": 10
+        }
+      ],
+      "meshes": [
+        {
+          "model": "Megalith_Head_A",
+          "attach": "anchor",
+          "count": 1,
+          "sink": 0.5,
+          "scale": [
+            0.9,
+            1.3
+          ]
+        }
+      ],
+      "masks": [
+        {
+          "channel": "talus",
+          "shape": "ring",
+          "radius": 9,
+          "falloff": 6,
+          "value": 0.7
+        },
+        {
+          "channel": "moss",
+          "shape": "footprint",
+          "radius": 6,
+          "value": 0.5
+        }
+      ],
+      "scatter": [
+        {
+          "primitive": "rock_hierarchy",
+          "models": [
+            "Rock_Angular",
+            "Boulder_Round",
+            "Forest_Rock_Small"
+          ],
+          "radius": 20,
+          "spread": 3.1
+        }
+      ],
+      "composition": {
+        "negative_space": 14,
+        "reveal_width": 12,
+        "reveal_length": 80
+      }
+    },
+    {
+      "name": "colossus_hand_site",
+      "scale": "local",
+      "age": "ancient",
+      "placement": {
+        "source": "painted",
+        "painted": [
+          "colossus_hand"
+        ],
+        "density_per_km2": 6,
+        "min_spacing": 500,
+        "align": "random",
+        "fields": {
+          "slope": [
+            0,
+            0.6
+          ]
+        }
+      },
+      "comment": "A stone hand rising from the ground, fingers curled against the sky.",
+      "meshes": [
+        {
+          "model": "Megalith_Hand_A",
+          "attach": "anchor",
+          "count": 1,
+          "sink": 0.4,
+          "scale": [
+            0.9,
+            1.4
+          ]
+        }
+      ],
+      "masks": [
+        {
+          "channel": "talus",
+          "shape": "ring",
+          "radius": 6,
+          "falloff": 5,
+          "value": 0.6
+        }
+      ],
+      "scatter": [
+        {
+          "primitive": "cluster",
+          "models": [
+            "Megalith_Fallen_A",
+            "Boulder_Round"
+          ],
+          "count": [
+            2,
+            4
+          ],
+          "radius": 16,
+          "min_spacing": 5,
+          "tag": "megalith"
+        }
+      ],
+      "composition": {
+        "negative_space": 10
+      }
+    },
+    {
+      "name": "needle_field_site",
+      "scale": "local",
+      "age": "ancient",
+      "placement": {
+        "source": "painted",
+        "painted": [
+          "needle_field"
+        ],
+        "density_per_km2": 6,
+        "min_spacing": 500,
+        "align": "random",
+        "fields": {
+          "slope": [
+            0,
+            1.2
+          ]
+        }
+      },
+      "comment": "Black basalt needles standing out of the ground in a crowd.",
+      "scatter": [
+        {
+          "primitive": "cluster",
+          "models": [
+            "Megalith_Needle_A",
+            "Megalith_Needle_B"
+          ],
+          "count": [
+            3,
+            8
+          ],
+          "radius": 70,
+          "scale": [
+            0.7,
+            1.4
+          ],
+          "min_spacing": 12,
+          "tag": "megalith"
+        },
+        {
+          "primitive": "rock_hierarchy",
+          "models": [
+            "Boulder_Round",
+            "Rock_Angular",
+            "Forest_Rock_Small"
+          ],
+          "radius": 60,
+          "spread": 3.1
+        }
+      ],
+      "masks": [
+        {
+          "channel": "rock",
+          "shape": "footprint",
+          "radius": 30,
+          "value": 0.4
+        },
+        {
+          "channel": "talus",
+          "shape": "footprint",
+          "radius": 40,
+          "value": 0.5
+        }
+      ],
+      "composition": {
+        "elongation": 1.6
+      }
+    },
+    {
+      "name": "portal_tower_site",
+      "scale": "local",
+      "age": "ancient",
+      "placement": {
+        "source": "painted",
+        "painted": [
+          "portal_tower"
+        ],
+        "density_per_km2": 6,
+        "min_spacing": 500,
+        "align": "random",
+        "fields": {
+          "slope": [
+            0,
+            0.45
+          ]
+        }
+      },
+      "comment": "The tall gate-tower on its own hill, a path running through it.",
+      "terrain": [
+        {
+          "op": "raise",
+          "height": 10,
+          "radius": [
+            45,
+            45
+          ],
+          "exponent": 2,
+          "blend": 25
+        },
+        {
+          "op": "smooth_to",
+          "radius": [
+            10,
+            10
+          ],
+          "exponent": 4,
+          "blend": 6
+        }
+      ],
+      "meshes": [
+        {
+          "model": "Megalith_Portal_A",
+          "attach": "anchor",
+          "count": 1,
+          "sink": 0.3,
+          "scale": [
+            1.0,
+            1.3
+          ]
+        }
+      ],
+      "masks": [
+        {
+          "channel": "scar",
+          "shape": "corridor",
+          "radius": 2,
+          "length": 60,
+          "falloff": 2,
+          "value": 0.7
+        }
+      ],
+      "composition": {
+        "negative_space": 20,
+        "reveal_width": 8,
+        "reveal_length": 120
+      }
+    },
+    {
+      "name": "lone_menhir",
+      "scale": "local",
+      "age": "geological",
+      "comment": "A single stone on a crest, anywhere nobody painted a site.",
+      "placement": {
+        "source": "ridge",
+        "density_per_km2": 0.6,
+        "min_spacing": 900,
+        "away_from_painted": true,
+        "align": "random",
+        "fields": {
+          "slope": [
+            0,
+            0.5
+          ]
+        }
+      },
+      "scatter": [
+        {
+          "primitive": "cluster",
+          "models": [
+            [
+              "Megalith_Menhir_A",
+              1
+            ],
+            [
+              "Megalith_Menhir_B",
+              1
+            ],
+            [
+              "Megalith_Menhir_C",
+              1
+            ]
+          ],
+          "count": [
+            1,
+            2
+          ],
+          "radius": 5,
+          "scale": [
+            0.8,
+            1.2
+          ],
+          "min_spacing": 3,
+          "tag": "megalith"
+        }
+      ],
+      "composition": {
+        "negative_space": 6
+      }
+    }
+  ]
+}

@@ -44,6 +44,8 @@ struct EnvironmentSetup {
     // Features removed by hand (PlannerContext::removed), and a number that
     // changes when they do (it is part of the fingerprint).
     std::uint64_t removedVersion = 0;
+    // The painted layer recipes may stand on (PlannerContext::painted).
+    std::shared_ptr<const PaintedLayer> painted;
     std::function<bool(std::uint64_t id, double x, double y)> removed;
 };
 

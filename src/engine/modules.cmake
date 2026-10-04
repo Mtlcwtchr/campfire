@@ -102,7 +102,8 @@ add_library(asr_environment STATIC
         ${CMAKE_CURRENT_LIST_DIR}/environment/feature_mesh.cpp
         ${CMAKE_CURRENT_LIST_DIR}/environment/style.cpp
         ${CMAKE_CURRENT_LIST_DIR}/environment/asset_meta.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/environment/environment.cpp)
+        ${CMAKE_CURRENT_LIST_DIR}/environment/environment.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/environment/painted_layer.cpp)
 target_include_directories(asr_environment PUBLIC ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(asr_environment PUBLIC asr_core nlohmann_json PRIVATE asr_warnings)
 add_library(Campfire::Environment ALIAS asr_environment)

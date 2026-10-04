@@ -1,6 +1,9 @@
 #include "game/environment/world_environment.hpp"
 
 #include <algorithm>
+#include <fstream>
+
+#include <nlohmann/json.hpp>
 #include <atomic>
 #include <cmath>
 #include <unordered_map>
@@ -165,6 +168,16 @@ void WorldFields::sampleGrid(double x0, double y0, double step, int columns, int
         }
 }
 
+std::map<std::string, std::uint32_t> paintedLegend() {
+    std::map<std::string, std::uint32_t> out;
+    std::ifstream in(env::defaultContentDirectory() / "painted.json");
+    const auto j = nlohmann::json::parse(in, nullptr, false, true);
+    if (j.is_discarded() || !j.contains("ids") || !j["ids"].is_object()) return out;
+    for (const auto& [key, value] : j["ids"].items())
+        if (value.is_string()) out[value.get<std::string>()] = std::uint32_t(std::stoul(key));
+    return out;
+}
+
 std::shared_ptr<const env::Environment> buildWorldEnvironment(
         const generation::WorldMapData& map, std::shared_ptr<const MacroWorld::Resolved> macro,
         const ClimateField& climate, std::vector<env::EnvironmentProblem>* problems) {
@@ -191,6 +204,7 @@ std::shared_ptr<const env::Environment> buildWorldEnvironment(
     };
     setup.seed = map.seed;
     setup.gameVersion = kGameEnvironmentVersion;
+    setup.painted = map.features;
     // A feature removed by hand is filed with the other removed details
     // (engine/biomes/detail_edits.hpp), under its instance id.
     if (map.details && !map.details->empty()) {

@@ -4,6 +4,7 @@
 #include "engine/biomes/detail_edits.hpp"
 #include "engine/biomes/registry.hpp"
 #include "engine/core/progress.hpp"
+#include "engine/environment/feature_mesh.hpp"
 #include "engine/environment/scatter.hpp"
 #include "game/environment/world_environment.hpp"
 
@@ -269,6 +270,25 @@ decor::Scatter WorldSnapshot::scatter(decor::ScatterBounds bounds, const ecology
         env->planner().instancesIn({{fx(double(bounds.minX)), fx(double(bounds.minY))},
                                     {fx(double(bounds.maxX)), fx(double(bounds.maxY))}}, instances);
         for (const auto& in : instances) e::dress(env->catalogue(), in, groundAt, placed);
+        // The features' own meshes (feature_mesh.hpp): monoliths, cliff faces,
+        // root plates - catalogue models stood where the recipe says, on the
+        // ground the recipe's own operations shaped for them.
+        {
+            std::vector<e::MeshPlacement> meshes;
+            for (const auto& in : instances) e::placeMeshes(env->catalogue(), in, groundAt, meshes);
+            for (const auto& m : meshes) {
+                if (m.model == 0xffffffffu) continue;   // a procedural form: baked to a model by tools/feature_forms
+                e::PlacedObject o;
+                o.id = m.seed;
+                o.x = m.x; o.y = m.y; o.z = m.z;
+                o.scale = m.scale;
+                o.yaw = m.yaw;
+                o.sink = m.sink;
+                o.model = m.model;
+                o.recipe = m.recipe;
+                placed.push_back(o);
+            }
+        }
         e::CoverContext under;
         under.catalogue = &env->catalogue();
         under.fields = env->setup().fields.get();

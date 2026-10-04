@@ -172,7 +172,7 @@ add_library(asr_generation STATIC
         src/game/generation/world_map_gen.cpp)
 target_include_directories(asr_generation PUBLIC src)
 target_compile_definitions(asr_generation PRIVATE ASR_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-target_link_libraries(asr_generation PUBLIC asr_core asr_content asr_terrain_generator asr_biomes EnTT::EnTT
+target_link_libraries(asr_generation PUBLIC asr_core asr_content asr_terrain_generator asr_biomes asr_environment EnTT::EnTT
         PRIVATE asr_world_source nlohmann_json asr_warnings)
 
 # ---------------------------------------------------------------------------
